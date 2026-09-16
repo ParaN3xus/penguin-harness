@@ -68,7 +68,7 @@ Interactive REPL; each input line starts a Task. Takes the same options as `run`
 | `--verbose` | Show full tool output; by default long tool outputs are collapsed (see below) |
 | `--server <url>` | Target server (see Server connection) |
 
-With `--resume`, the Workspace and model are locked by the original Session and cannot be overridden via `--workspace` / `--model-id` / `--provider`. `--thinking` is still accepted: it re-pins the existing Session, effective from its next LLM request (mid-context changes cost the provider's cached context — compacting first is recommended). On exit, a copy-pastable `penguin chat --resume <sessionId>` command is printed.
+With `--resume`, the Workspace and model follow the original Session and cannot be overridden via `--workspace` / `--model-id` / `--provider`; to change the model, use `/switch-model` inside the resumed chat. `--thinking` is still accepted: it re-pins the existing Session, effective from its next LLM request (mid-context changes cost the provider's cached context — compacting first is recommended). On exit, a copy-pastable `penguin chat --resume <sessionId>` command is printed.
 
 In-REPL commands:
 
@@ -79,6 +79,8 @@ In-REPL commands:
 | `/clear` | Start a fresh blank Session in place; the old Session stays on disk and can be resumed with `--resume` |
 | `/thinking` | Show this Session's thinking level: the level it is pinned to (by `--thinking` or `/thinking`), else the Agent's configured level |
 | `/thinking <level>` | Pin the Session's thinking level (`low` / `medium` / `high` / `xhigh` / `max`); never written back to the Agent config. Soft-limited: it applies from the next request, mid-context included — the reply advises `/compact` first, since the change invalidates the provider's cached context; subagent sessions spawned from then on inherit the pinned level |
+| `/switch-model` | Show this Session's current model |
+| `/switch-model <provider> <model_id>` | Switch this Session's model in place: the context is always summarized on the current model first (even when the Agent's compaction mode is discard), and the conversation then continues on the new model; if compaction fails or is interrupted, the Session stays on its current model. A Session that has not run yet switches without compacting. The target must already be in the Project's model config (`penguin config model list`); the two arguments are whitespace-separated, and a model id may contain `/` |
 | `/verbose` | Toggle between collapsed and full tool output |
 | `/exit`, `/quit` | Quit |
 
