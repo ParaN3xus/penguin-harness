@@ -339,6 +339,7 @@ Trace 下载对任意成员开放；导入仅限 owner（同 Agent 快照导入�
 | POST | /abort | 中断当前 Task：已触发返回 202，无任务返回 204 |
 | POST | /retry-now | 重连倒计时上的「立即重试」：跳过进行中的退避等待、立刻发起下一次重试（重试计数不变）→ 200 `{skipped}`——`skipped:false` 表示当前没有等待可跳过（良性空操作，非错误） |
 | POST | /compact | 触发上下文压缩：202；无可压缩内容返回 409，具体原因由 code 承载——`compaction_not_configured`（该 Agent 没有配置压缩）、`nothing_to_compact`（当前上下文尚未完成一轮对话）、`already_compacted`（上次压缩后还没有新的对话）。服务重启后恢复的 Session 依据 Trace 判断可压缩性，因此已有对话无需先跑一次 Task 即可压缩 |
+| POST | /switch-model | 在本 Session 内切换模型：`{provider, modelId}`（完整二元组，只给一半 400）。先用当前模型压缩上下文（无论 Agent 的 `compaction.mode` 为何都走 summarize），成功后在目标模型上开启下一个上下文——按压缩的方式流式进行：202，Session 状态为 `compacting`，成对的 `compaction_begin` / `compaction_end` 携带 `reason: "model_switch"` 与 `next_provider` / `next_model_id`，只有 `status: completed` 的 `compaction_end` 才表示已切换，此后 `GET /` 返回新的 `provider` / `modelId`；压缩失败或被中断则保持原模型。从未运行过的 Session 没有上下文可压缩：切换在请求内完成，返回 200 与更新后的 `{session}`，不产生任何事件。409 按原因给 code：`task_in_progress` / `compacting`（忙）、`same_model`、`model_not_configured`（目标不在 Project 模型表中）、`model_unavailable`（目标无法构造，如缺少凭据）、`compaction_not_configured`。切换的压缩请求计入原模型的用量，之后的 Task 计入新模型 |
 | GET | /processes | 对话启动的后台进程（超过 yield 窗口转入后台的 `exec_command`）。仅来自活跃运行时——被回收或从未装载的会话如实返回空列表。检测到进程所服务地址时行内附 `serviceUrl`（取输出打印的最后一个本机 URL，否则按进程组做监听端口探测，每次拉取时刷新） |
 | POST | /processes/:processId/kill | 停止一个后台进程（对整个进程组先 SIGTERM、宽限期后 SIGKILL），条目随之从列表消失；已不存在时 404 `process_not_found` |
 | DELETE | /processes/:processId | 从列表移除一个**已退出**的进程条目：仍在运行时 409 `process_running`（应改用停止），已不存在时 404 `process_not_found`。条目连同该进程已捕获的输出一起离开运行时注册表，此后对该 `process_id` 调用 `input_command` 会失败 |
@@ -482,7 +483,7 @@ interface ApprovalDecisionRequest {
 }
 ```
 
-Web 的 `/model` 模型切换没有专用接口：它按 `/agent` 交接的方式复用上面的普通接口——先用会话创建接口在同一 Agent 下新建 Session（选定新模型并沿用源 Workspace），再 POST /tasks 发送以 `[model_switch_from]` 源块开头的首条消息（源会话 id、其 `tracePath`、Workspace 与原模型二元组），模型需要早前历史时自行读取该 Trace 文件。
+切换模型有两条路。**在本会话内切换**走上面的 `POST /switch-model`：同一个 Session 先压缩再换模型，会话 id 与历史不变。Web 的 `/model` 交接则是**用另一个模型开一个新会话**，没有专用接口：它按 `/agent` 交接的方式复用上面的普通接口——先用会话创建接口在同一 Agent 下新建 Session（选定新模型并沿用源 Workspace），再 POST /tasks 发送以 `[model_switch_from]` 源块开头的首条消息（源会话 id、其 `tracePath`、Workspace 与原模型二元组），模型需要早前历史时自行读取该 Trace 文件；源会话保持不变。
 
 ## 流式接口（SSE）
 
