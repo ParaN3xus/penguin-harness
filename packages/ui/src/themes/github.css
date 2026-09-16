@@ -1,0 +1,18 @@
+/**
+ * Primer (`github`) — the default theme. Stub: W0a fills every token with the app's current
+ * computed values.
+ *
+ * Shape every theme file follows: one `@layer ui-theme` block, a light section and a dark
+ * section, every name in tokens.ts in its group order, plus the gray bridge that re-points
+ * Tailwind's `--color-gray-*` / `--color-white` so the app's existing palette classes follow the
+ * theme. This file is the default, so it also matches <html> without a `data-theme` attribute.
+ */
+@layer ui-theme {
+  :root,
+  :root[data-theme="github"] {
+  }
+
+  :root.dark,
+  :root[data-theme="github"].dark {
+  }
+}
