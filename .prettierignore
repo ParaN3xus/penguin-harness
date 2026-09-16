@@ -11,6 +11,10 @@ packages/desktop/stage/
 packages/desktop/out/
 packages/desktop/skills/
 
+# font licence texts mirrored verbatim from their packages (scripts/sync-font-licenses.mjs
+# rewrites them; a formatter pass would read as drift)
+packages/ui/src/fonts/LICENSES/
+
 # docs-only area (mostly Chinese; not machine-formatted)
 specs/
 *.md

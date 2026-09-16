@@ -25,11 +25,22 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "sync:font-licenses": "node scripts/sync-font-licenses.mjs"
   },
   "peerDependencies": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@fontsource-variable/ibm-plex-sans": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/mona-sans": "^5.3.0",
+    "@fontsource-variable/noto-sans-sc": "^5.3.0",
+    "@fontsource/commit-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans-condensed": "^5.3.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

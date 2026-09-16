@@ -1,5 +1,32 @@
 /**
- * Font faces for every theme. Stub: W0b adds one file per theme (Latin + Latin-ext faces) and
- * the shared CJK face, imported from here. Declaring a face downloads nothing until some text
- * names its family, so every theme's faces are declared unconditionally.
+ * Font faces for every theme, bundled with the app so the desktop build renders offline.
+ *
+ * Declaring a face downloads nothing: a browser fetches a face only when some element's
+ * `font-family` names it and its text falls inside the face's `unicode-range`. Each theme file
+ * under `themes/` names only its own families, so a session downloads the active theme's Latin
+ * faces plus the Noto Sans SC slices its CJK text touches — which is why every theme's faces are
+ * declared unconditionally here.
+ *
+ * | theme           | sans                        | mono                          | display                          |
+ * | --------------- | --------------------------- | ----------------------------- | -------------------------------- |
+ * | Primer `github` | Mona Sans Variable (W1a)    | JetBrains Mono Variable (W1a) | —                                |
+ * | Frost `modern`  | Geist Variable              | Geist Mono Variable           | —                                |
+ * | Console `geek`  | IBM Plex Sans Variable      | Commit Mono 400 / 700         | IBM Plex Sans Condensed 500 / 600 |
+ * | all             | CJK: Noto Sans SC Variable (101 unicode-range slices)                                           |
+ *
+ * All are SIL Open Font License 1.1, shipped through fontsource packages. The licence texts are
+ * mirrored into `LICENSES/` by `scripts/sync-font-licenses.mjs` and emitted beside the build as
+ * `fonts-licenses/<package>.txt` by the `penguinUi()` Vite plugin.
+ *
+ * The Latin faces are hand-declared (latin + latin-ext only, normal style, woff2) instead of
+ * importing fontsource's stylesheets, which would also bundle the cyrillic, greek and vietnamese
+ * slices and the woff fallbacks. Their `url()`s are paths relative to the file that holds them,
+ * into this package's own node_modules: a bare `@fontsource…` specifier would be resolved from the
+ * CONSUMER's stylesheet (Tailwind inlines every `@import` and leaves bare `url()`s untouched), and
+ * the consumer does not depend on fontsource. A relative path is rebased by Tailwind and resolves
+ * from here.
  */
+@import "./github.css";
+@import "./modern.css";
+@import "./geek.css";
+@import "./cjk.css";

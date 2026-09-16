@@ -1,5 +1,644 @@
 /**
- * Frost (`modern`). Stub: W0b fills every token in tokens.ts, light and dark, in the shape
- * `themes/github.css` sets — `:root[data-theme="modern"]` and `:root[data-theme="modern"].dark`
- * inside `@layer ui-theme`, gray bridge included.
+ * Frost (`modern`) — rounded shapes, frosted-glass overlays, a warm off-white canvas and
+ * regular-weight display type. Reference: sierra.ai.
+ *
+ * Status of each group:
+ * - Light palette, glass recipe, radii, motion and the display type treatment are measured on
+ *   sierra.ai (its Tailwind theme and computed styles). Sierra ships no dark mode: the whole dark
+ *   section is a proposal on the same warm-neutral hue.
+ * - Semantic tones use Sierra's hues, tuned until every tone reads at 4.5:1 as text on its own
+ *   tint and 3:1 as a mark on every surface (proposal). Chart and code colours are proposals.
+ * - Fonts: Geist and Geist Mono stand in for Sierra's commercial GT America (`fonts/modern.css`).
+ * - Type scale, line-heights and control padding-block are the values every theme shares, so
+ *   switching themes never reflows a layout vertically; this theme changes radius, colour, font,
+ *   shadow, tracking, weight and padding-inline only.
+ *
+ * Shape of the file (the same in every theme): one `@layer ui-theme` block holding a light
+ * section and a dark section — each defines every name in tokens.ts, in its group order, after the
+ * gray bridge that re-points Tailwind's `--color-gray-*` / `--color-white` so the app's existing
+ * palette classes follow the theme — and then this theme's recipes for the declared style hooks.
  */
+@layer ui-theme {
+  :root[data-theme="modern"] {
+    /* Tailwind bridge: the app's gray classes land on the warm ramp. white = the card surface. */
+    --color-white: var(--ui-surface);
+    --color-gray-50: #f6f5f3;
+    --color-gray-100: #eeeeee;
+    --color-gray-200: #e4e0dc;
+    --color-gray-300: #c1bcb7;
+    --color-gray-400: #898683;
+    --color-gray-500: #696764;
+    --color-gray-600: #625e5b;
+    --color-gray-700: #4a4745;
+    --color-gray-800: #3b3937;
+    --color-gray-900: #302e2d;
+    --color-gray-950: #222222;
+
+    /* Colour — surfaces */
+    --ui-canvas: #f6f5f3;
+    --ui-surface: #ffffff;
+    --ui-surface-muted: #eeeeee;
+    --ui-inset: #f6f5f3;
+    --ui-overlay: #ffffff;
+    --ui-overlay-backdrop: rgb(48 46 45 / 0.28);
+
+    /* Colour — text */
+    --ui-fg: #302e2d;
+    --ui-fg-muted: #696764;
+    --ui-fg-subtle: #898683;
+    --ui-fg-on-emphasis: #ffffff;
+    --ui-fg-link: #345eb2;
+    --ui-fg-link-hover: #26468a;
+
+    /* Colour — lines */
+    --ui-line: #e4e0dc;
+    --ui-line-muted: #eeeeee;
+    --ui-line-emphasis: #c1bcb7;
+    --ui-divider: #ebe8e4;
+
+    /* Colour — accent */
+    --ui-accent: #006838;
+    --ui-accent-hover: #05351d;
+    --ui-accent-active: #03281a;
+    --ui-accent-fg: #ffffff;
+    --ui-accent-muted: #e4eee6;
+    --ui-accent-line: rgb(0 104 56 / 0.35);
+
+    /* Colour — semantic tones */
+    --ui-tone-success-fg: #007a3a;
+    --ui-tone-success-bg: #e4eee6;
+    --ui-tone-success-line: rgb(126 209 133 / 0.5);
+    --ui-tone-success-emphasis: #007a3a;
+    --ui-tone-success-emphasis-fg: #ffffff;
+    --ui-tone-attention-fg: #806210;
+    --ui-tone-attention-bg: #faf3d9;
+    --ui-tone-attention-line: rgb(235 194 71 / 0.5);
+    --ui-tone-attention-emphasis: #ebc247;
+    --ui-tone-attention-emphasis-fg: #302e2d;
+    --ui-tone-danger-fg: #c72d06;
+    --ui-tone-danger-bg: #fdeae5;
+    --ui-tone-danger-line: rgb(233 78 42 / 0.5);
+    --ui-tone-danger-emphasis: #c72d06;
+    --ui-tone-danger-emphasis-fg: #ffffff;
+    --ui-tone-done-fg: #7644a6;
+    --ui-tone-done-bg: #f2ecf8;
+    --ui-tone-done-line: rgb(166 115 222 / 0.5);
+    --ui-tone-done-emphasis: #7644a6;
+    --ui-tone-done-emphasis-fg: #ffffff;
+    --ui-tone-neutral-fg: #625e5b;
+    --ui-tone-neutral-bg: #eeeeee;
+    --ui-tone-neutral-line: #e4e0dc;
+    --ui-tone-neutral-emphasis: #716f6c;
+    --ui-tone-neutral-emphasis-fg: #ffffff;
+    --ui-tone-info-fg: #345eb2;
+    --ui-tone-info-bg: #eaf1fb;
+    --ui-tone-info-line: rgb(52 94 178 / 0.3);
+    --ui-tone-info-emphasis: #345eb2;
+    --ui-tone-info-emphasis-fg: #ffffff;
+
+    /* Colour — charts */
+    --ui-chart-1: #345eb2;
+    --ui-chart-2: #d9772b;
+    --ui-chart-3: #2f8f5b;
+    --ui-chart-4: #7644a6;
+    --ui-chart-5: #c49a1c;
+    --ui-chart-6: #c2456b;
+    --ui-chart-cache-read: #a8c5ec;
+    --ui-chart-cache-write: #5d8ad3;
+    --ui-chart-output: #243f7a;
+    --ui-chart-grid: #eeeeee;
+    --ui-chart-axis: #898683;
+
+    /* Colour — code */
+    --ui-code-bg: #f6f5f3;
+    --ui-code-line: #eeeeee;
+    --ui-code-gutter: #898683;
+    --ui-code-selection: rgb(52 94 178 / 0.16);
+    --ui-diff-add-bg: #e7f3ea;
+    --ui-diff-add-word: #c2e5ca;
+    --ui-diff-del-bg: #fcebe6;
+    --ui-diff-del-word: #f6c9bb;
+    --ui-diff-hunk-bg: #ebf1fa;
+
+    /* Shape */
+    --ui-radius-xs: 0.25rem;
+    --ui-radius-sm: 0.5rem;
+    --ui-radius-md: 0.75rem;
+    --ui-radius-lg: 1rem;
+    --ui-radius-xl: 1.5rem;
+    --ui-radius-pill: 9999px;
+    --ui-border-w: 1px;
+    --ui-border-w-thick: 2px;
+
+    /* Elevation. `flat` is a zero shadow rather than `none`: Tailwind composes shadows into a
+       comma list, where `none` would invalidate the whole declaration. */
+    --ui-shadow-flat: 0 0 #0000;
+    --ui-shadow-raised: 0 1px 2px rgb(48 46 45 / 0.06), 0 8px 24px -12px rgb(15 79 138 / 0.12);
+    --ui-shadow-overlay:
+      0 0 0 1px rgb(48 46 45 / 0.06), 0 4px 6px -1px rgb(0 0 0 / 0.08),
+      0 2px 4px -2px rgb(0 0 0 / 0.06), 0 16px 40px -16px rgb(48 46 45 / 0.18);
+    --ui-shadow-modal:
+      0 0 0 1px rgb(48 46 45 / 0.05), 0 2px 6px rgb(48 46 45 / 0.06),
+      0 24px 48px -16px rgb(15 79 138 / 0.22);
+    --ui-shadow-drawer: 0 0 0 1px rgb(48 46 45 / 0.05), 0 24px 64px -12px rgb(15 79 138 / 0.22);
+    --ui-glass-bg: rgb(255 255 255 / 0.72);
+    --ui-glass-blur: 24px;
+    --ui-glass-saturate: 1.4;
+    --ui-glass-line: rgb(255 255 255 / 0.55);
+    --ui-glass-highlight: rgb(255 255 255 / 0.6);
+
+    /* Typography — families. Latin face first, so ASCII always renders in the theme's face. */
+    --ui-font-cjk: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei";
+    --ui-font-sans: "Geist Variable", var(--ui-font-cjk), ui-sans-serif, system-ui, sans-serif;
+    --ui-font-mono:
+      "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+      var(--ui-font-cjk), monospace;
+    --ui-font-display: var(--ui-font-sans);
+
+    /* Typography — scale (shared by every theme) and roles */
+    --ui-text-body-size: 0.875rem;
+    --ui-text-body-lh: 1.5;
+    --ui-text-small-size: 0.75rem;
+    --ui-text-small-lh: 1.5;
+    --ui-text-caption-size: 0.75rem;
+    --ui-text-caption-lh: 1.25;
+    --ui-text-code-size: 0.8125rem;
+    --ui-text-code-lh: 1.5;
+    --ui-text-prose-size: 1rem;
+    --ui-text-prose-lh: 1.6;
+    --ui-h1-size: 2rem;
+    --ui-h1-lh: 1.25;
+    --ui-h1-weight: 400;
+    --ui-h1-tracking: -0.02em;
+    --ui-h1-transform: none;
+    --ui-h1-font: var(--ui-font-display);
+    --ui-h2-size: 1.5rem;
+    --ui-h2-lh: 1.3;
+    --ui-h2-weight: 400;
+    --ui-h2-tracking: -0.015em;
+    --ui-h2-transform: none;
+    --ui-h2-font: var(--ui-font-display);
+    --ui-h3-size: 1.25rem;
+    --ui-h3-lh: 1.4;
+    --ui-h3-weight: 500;
+    --ui-h3-tracking: -0.01em;
+    --ui-h3-transform: none;
+    --ui-h3-font: var(--ui-font-sans);
+    --ui-h4-size: 1rem;
+    --ui-h4-lh: 1.5;
+    --ui-h4-weight: 500;
+    --ui-h4-tracking: 0;
+    --ui-h4-transform: none;
+    --ui-h4-font: var(--ui-font-sans);
+    --ui-h5-size: 0.875rem;
+    --ui-h5-lh: 1.5;
+    --ui-h5-weight: 500;
+    --ui-h5-tracking: 0;
+    --ui-h5-transform: none;
+    --ui-h5-font: var(--ui-font-sans);
+    --ui-h6-size: 0.75rem;
+    --ui-h6-lh: 1.5;
+    --ui-h6-weight: 500;
+    --ui-h6-tracking: 0.05em;
+    --ui-h6-transform: uppercase;
+    --ui-h6-font: var(--ui-font-sans);
+    --ui-md-h1-size: 1.25rem;
+    --ui-md-h2-size: 1.125rem;
+    --ui-md-h3-size: 1rem;
+    --ui-weight-body: 400;
+    --ui-weight-medium: 500;
+    --ui-weight-strong: 500;
+    --ui-tracking-body: 0;
+    --ui-tracking-mono: 0;
+    --ui-tracking-label: 0.05em;
+
+    /* Density. padding-block, row and card paddings and stack gaps are shared; Frost's pills
+       take wider padding-inline. */
+    --ui-control-py-sm: 0.25rem;
+    --ui-control-py-md: 0.375rem;
+    --ui-control-py-lg: 0.5rem;
+    --ui-control-px-sm: 0.75rem;
+    --ui-control-px-md: 0.875rem;
+    --ui-control-px-lg: 1.125rem;
+    --ui-control-gap-sm: 0.375rem;
+    --ui-control-gap-md: 0.5rem;
+    --ui-row-py: 0.5rem;
+    --ui-row-px: 1rem;
+    --ui-menu-row-py: 0.375rem;
+    --ui-menu-row-px: 0.625rem;
+    --ui-card-p: 1rem;
+    --ui-panel-p: 1.25rem;
+    --ui-stack-1: 0.5rem;
+    --ui-stack-2: 1rem;
+    --ui-stack-3: 1.5rem;
+
+    /* Motion (Sierra: .25s cubic-bezier(.4,0,.2,1), reveals .5s) */
+    --ui-dur-fast: 150ms;
+    --ui-dur-base: 250ms;
+    --ui-dur-slow: 500ms;
+    --ui-ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ui-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ui-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ui-ease-overlay-in: cubic-bezier(0.16, 1, 0.3, 1);
+    --ui-ease-overlay-out: cubic-bezier(0.4, 0, 1, 1);
+    --ui-live-timing: linear;
+
+    /* Icons */
+    --ui-icon-stroke: 1.6;
+    --ui-icon-cap: round;
+    --ui-icon-join: round;
+
+    /* Focus, selection and scrollbar. The outline follows the element's radius, so pills get a
+       round halo; inputs draw theirs as a box-shadow. */
+    --ui-focus-ring: 3px solid color-mix(in srgb, var(--ui-accent) 32%, transparent);
+    --ui-focus-ring-offset: 1px;
+    --ui-focus-ring-input: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 22%, transparent);
+    --ui-selection-bg: rgb(52 94 178 / 0.2);
+    --ui-scrollbar-w: thin;
+    --ui-scrollbar-thumb: rgb(48 46 45 / 0.22);
+    --ui-scrollbar-thumb-hover: rgb(48 46 45 / 0.4);
+    --ui-scrollbar-track: transparent;
+    --ui-scrollbar-visibility: hover;
+  }
+
+  /* Dark: a proposal (sierra.ai has no dark mode) on the same warm hue, never blue-grey. */
+  :root[data-theme="modern"].dark {
+    /* Tailwind bridge: 950 canvas, 900 surface, 800 hover / panel line, 700 control line, then
+       the ink ramp up to 50. white stays literal: `dark:*-white/N` hairlines read it as ink. */
+    --color-white: #ffffff;
+    --color-gray-50: #f9f8f6;
+    --color-gray-100: #f3f1ee;
+    --color-gray-200: #e0dcd6;
+    --color-gray-300: #c7c2bb;
+    --color-gray-400: #a7a29c;
+    --color-gray-500: #7f7a74;
+    --color-gray-600: #5a5652;
+    --color-gray-700: #3a3734;
+    --color-gray-800: #2b2926;
+    --color-gray-900: #1e1d1b;
+    --color-gray-950: #161514;
+
+    /* Colour — surfaces */
+    --ui-canvas: #161514;
+    --ui-surface: #1e1d1b;
+    --ui-surface-muted: #262422;
+    --ui-inset: #121110;
+    --ui-overlay: #23221f;
+    --ui-overlay-backdrop: rgb(0 0 0 / 0.5);
+
+    /* Colour — text */
+    --ui-fg: #f3f1ee;
+    --ui-fg-muted: #a7a29c;
+    --ui-fg-subtle: #7f7a74;
+    --ui-fg-on-emphasis: #ffffff;
+    --ui-fg-link: #8bbff5;
+    --ui-fg-link-hover: #b8d7f9;
+
+    /* Colour — lines */
+    --ui-line: rgb(255 255 255 / 0.1);
+    --ui-line-muted: rgb(255 255 255 / 0.06);
+    --ui-line-emphasis: rgb(255 255 255 / 0.22);
+    --ui-divider: rgb(255 255 255 / 0.06);
+
+    /* Colour — accent. White on the lifted green is under 4.5:1, so the ink is the canvas. */
+    --ui-accent: #4aa45c;
+    --ui-accent-hover: #5fb573;
+    --ui-accent-active: #3d8f4e;
+    --ui-accent-fg: #0f0e0d;
+    --ui-accent-muted: rgb(74 164 92 / 0.16);
+    --ui-accent-line: rgb(74 164 92 / 0.45);
+
+    /* Colour — semantic tones */
+    --ui-tone-success-fg: #7ed185;
+    --ui-tone-success-bg: rgb(126 209 133 / 0.14);
+    --ui-tone-success-line: rgb(126 209 133 / 0.35);
+    --ui-tone-success-emphasis: #2a7a3f;
+    --ui-tone-success-emphasis-fg: #ffffff;
+    --ui-tone-attention-fg: #ebc247;
+    --ui-tone-attention-bg: rgb(235 194 71 / 0.14);
+    --ui-tone-attention-line: rgb(235 194 71 / 0.35);
+    --ui-tone-attention-emphasis: #ebc247;
+    --ui-tone-attention-emphasis-fg: #161514;
+    --ui-tone-danger-fg: #f0765a;
+    --ui-tone-danger-bg: rgb(233 78 42 / 0.16);
+    --ui-tone-danger-line: rgb(233 78 42 / 0.4);
+    --ui-tone-danger-emphasis: #c23a1c;
+    --ui-tone-danger-emphasis-fg: #ffffff;
+    --ui-tone-done-fg: #c9a8f0;
+    --ui-tone-done-bg: rgb(166 115 222 / 0.16);
+    --ui-tone-done-line: rgb(166 115 222 / 0.4);
+    --ui-tone-done-emphasis: #7f52b5;
+    --ui-tone-done-emphasis-fg: #ffffff;
+    --ui-tone-neutral-fg: #a7a29c;
+    --ui-tone-neutral-bg: rgb(255 255 255 / 0.06);
+    --ui-tone-neutral-line: rgb(255 255 255 / 0.12);
+    --ui-tone-neutral-emphasis: #5a5652;
+    --ui-tone-neutral-emphasis-fg: #ffffff;
+    --ui-tone-info-fg: #8bbff5;
+    --ui-tone-info-bg: rgb(139 191 245 / 0.14);
+    --ui-tone-info-line: rgb(139 191 245 / 0.35);
+    --ui-tone-info-emphasis: #3a6bc4;
+    --ui-tone-info-emphasis-fg: #ffffff;
+
+    /* Colour — charts */
+    --ui-chart-1: #8bbff5;
+    --ui-chart-2: #f0a45f;
+    --ui-chart-3: #7ed185;
+    --ui-chart-4: #c9a8f0;
+    --ui-chart-5: #ebc247;
+    --ui-chart-6: #f08aa8;
+    --ui-chart-cache-read: #c5dcf7;
+    --ui-chart-cache-write: #7fb0ee;
+    --ui-chart-output: #4a7fd0;
+    --ui-chart-grid: rgb(255 255 255 / 0.06);
+    --ui-chart-axis: #7f7a74;
+
+    /* Colour — code */
+    --ui-code-bg: #121110;
+    --ui-code-line: rgb(255 255 255 / 0.08);
+    --ui-code-gutter: #7f7a74;
+    --ui-code-selection: rgb(139 191 245 / 0.22);
+    --ui-diff-add-bg: rgb(126 209 133 / 0.1);
+    --ui-diff-add-word: rgb(126 209 133 / 0.28);
+    --ui-diff-del-bg: rgb(233 78 42 / 0.12);
+    --ui-diff-del-word: rgb(233 78 42 / 0.32);
+    --ui-diff-hunk-bg: rgb(139 191 245 / 0.1);
+
+    /* Shape */
+    --ui-radius-xs: 0.25rem;
+    --ui-radius-sm: 0.5rem;
+    --ui-radius-md: 0.75rem;
+    --ui-radius-lg: 1rem;
+    --ui-radius-xl: 1.5rem;
+    --ui-radius-pill: 9999px;
+    --ui-border-w: 1px;
+    --ui-border-w-thick: 2px;
+
+    /* Elevation: a faint top highlight and a deep shadow; overlays keep a 1px light ring or they
+       sink into the dark canvas. */
+    --ui-shadow-flat: 0 0 #0000;
+    --ui-shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+    --ui-shadow-overlay: 0 0 0 1px rgb(255 255 255 / 0.06), 0 12px 32px -8px rgb(0 0 0 / 0.6);
+    --ui-shadow-modal: 0 0 0 1px rgb(255 255 255 / 0.06), 0 24px 56px -16px rgb(0 0 0 / 0.7);
+    --ui-shadow-drawer: 0 0 0 1px rgb(255 255 255 / 0.06), 0 24px 64px -12px rgb(0 0 0 / 0.75);
+    --ui-glass-bg: rgb(30 29 27 / 0.66);
+    --ui-glass-blur: 24px;
+    --ui-glass-saturate: 1.4;
+    --ui-glass-line: rgb(255 255 255 / 0.08);
+    --ui-glass-highlight: rgb(255 255 255 / 0.06);
+
+    /* Typography — families */
+    --ui-font-cjk: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei";
+    --ui-font-sans: "Geist Variable", var(--ui-font-cjk), ui-sans-serif, system-ui, sans-serif;
+    --ui-font-mono:
+      "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+      var(--ui-font-cjk), monospace;
+    --ui-font-display: var(--ui-font-sans);
+
+    /* Typography — scale (shared by every theme) and roles */
+    --ui-text-body-size: 0.875rem;
+    --ui-text-body-lh: 1.5;
+    --ui-text-small-size: 0.75rem;
+    --ui-text-small-lh: 1.5;
+    --ui-text-caption-size: 0.75rem;
+    --ui-text-caption-lh: 1.25;
+    --ui-text-code-size: 0.8125rem;
+    --ui-text-code-lh: 1.5;
+    --ui-text-prose-size: 1rem;
+    --ui-text-prose-lh: 1.6;
+    --ui-h1-size: 2rem;
+    --ui-h1-lh: 1.25;
+    --ui-h1-weight: 400;
+    --ui-h1-tracking: -0.02em;
+    --ui-h1-transform: none;
+    --ui-h1-font: var(--ui-font-display);
+    --ui-h2-size: 1.5rem;
+    --ui-h2-lh: 1.3;
+    --ui-h2-weight: 400;
+    --ui-h2-tracking: -0.015em;
+    --ui-h2-transform: none;
+    --ui-h2-font: var(--ui-font-display);
+    --ui-h3-size: 1.25rem;
+    --ui-h3-lh: 1.4;
+    --ui-h3-weight: 500;
+    --ui-h3-tracking: -0.01em;
+    --ui-h3-transform: none;
+    --ui-h3-font: var(--ui-font-sans);
+    --ui-h4-size: 1rem;
+    --ui-h4-lh: 1.5;
+    --ui-h4-weight: 500;
+    --ui-h4-tracking: 0;
+    --ui-h4-transform: none;
+    --ui-h4-font: var(--ui-font-sans);
+    --ui-h5-size: 0.875rem;
+    --ui-h5-lh: 1.5;
+    --ui-h5-weight: 500;
+    --ui-h5-tracking: 0;
+    --ui-h5-transform: none;
+    --ui-h5-font: var(--ui-font-sans);
+    --ui-h6-size: 0.75rem;
+    --ui-h6-lh: 1.5;
+    --ui-h6-weight: 500;
+    --ui-h6-tracking: 0.05em;
+    --ui-h6-transform: uppercase;
+    --ui-h6-font: var(--ui-font-sans);
+    --ui-md-h1-size: 1.25rem;
+    --ui-md-h2-size: 1.125rem;
+    --ui-md-h3-size: 1rem;
+    --ui-weight-body: 400;
+    --ui-weight-medium: 500;
+    --ui-weight-strong: 500;
+    --ui-tracking-body: 0;
+    --ui-tracking-mono: 0;
+    --ui-tracking-label: 0.05em;
+
+    /* Density */
+    --ui-control-py-sm: 0.25rem;
+    --ui-control-py-md: 0.375rem;
+    --ui-control-py-lg: 0.5rem;
+    --ui-control-px-sm: 0.75rem;
+    --ui-control-px-md: 0.875rem;
+    --ui-control-px-lg: 1.125rem;
+    --ui-control-gap-sm: 0.375rem;
+    --ui-control-gap-md: 0.5rem;
+    --ui-row-py: 0.5rem;
+    --ui-row-px: 1rem;
+    --ui-menu-row-py: 0.375rem;
+    --ui-menu-row-px: 0.625rem;
+    --ui-card-p: 1rem;
+    --ui-panel-p: 1.25rem;
+    --ui-stack-1: 0.5rem;
+    --ui-stack-2: 1rem;
+    --ui-stack-3: 1.5rem;
+
+    /* Motion */
+    --ui-dur-fast: 150ms;
+    --ui-dur-base: 250ms;
+    --ui-dur-slow: 500ms;
+    --ui-ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ui-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ui-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ui-ease-overlay-in: cubic-bezier(0.16, 1, 0.3, 1);
+    --ui-ease-overlay-out: cubic-bezier(0.4, 0, 1, 1);
+    --ui-live-timing: linear;
+
+    /* Icons */
+    --ui-icon-stroke: 1.6;
+    --ui-icon-cap: round;
+    --ui-icon-join: round;
+
+    /* Focus, selection and scrollbar */
+    --ui-focus-ring: 3px solid color-mix(in srgb, var(--ui-accent) 40%, transparent);
+    --ui-focus-ring-offset: 1px;
+    --ui-focus-ring-input: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 28%, transparent);
+    --ui-selection-bg: rgb(139 191 245 / 0.28);
+    --ui-scrollbar-w: thin;
+    --ui-scrollbar-thumb: rgb(243 241 238 / 0.18);
+    --ui-scrollbar-thumb-hover: rgb(243 241 238 / 0.32);
+    --ui-scrollbar-track: transparent;
+    --ui-scrollbar-visibility: hover;
+  }
+
+  /*
+   * Style hooks (the closed list). A component opts into a hook with its class; this theme
+   * decides what the hook does. These rules sit in `ui-theme`, after Tailwind's `utilities`, so a
+   * hook wins over the utilities its component also carries — that is what lets `.ui-live`
+   * re-time an `animate-spin` and `.ui-glass` replace a panel's opaque fill.
+   *
+   * Anatomy the recipes rely on: `.ui-frame` children are marked `data-slot="head" | "body" |
+   * "foot" | "pane"`; `.ui-underline-nav` holds `[role="tab"]` items selected by
+   * `aria-selected="true"`; `.ui-live` carries `data-live="caret" | "dot" | "spinner"`;
+   * `.ui-pill-hover` takes `data-shape="card"` on cards.
+   *
+   * Frost uses: glass, wash, eyebrow, display, live, frame, pill-hover, underline-nav.
+   * No-ops here: `.ui-grid`, `.ui-ticks` (Console's).
+   */
+
+  /* Frosted overlay: menus, popovers, tooltips, the modal card, sticky header, floating composer. */
+  :root[data-theme="modern"] .ui-glass {
+    background-color: var(--ui-glass-bg);
+    -webkit-backdrop-filter: blur(var(--ui-glass-blur)) saturate(var(--ui-glass-saturate));
+    backdrop-filter: blur(var(--ui-glass-blur)) saturate(var(--ui-glass-saturate));
+    border-color: var(--ui-glass-line);
+    box-shadow:
+      inset 0 1px 0 var(--ui-glass-highlight),
+      var(--ui-shadow-overlay);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    :root[data-theme="modern"] .ui-glass {
+      background-color: color-mix(in srgb, var(--ui-overlay) 96%, transparent);
+    }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    :root[data-theme="modern"] .ui-glass {
+      background-color: color-mix(in srgb, var(--ui-overlay) 96%, transparent);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+
+  /* The ambient wash glass needs behind it (without one, glass reads as flat white). Static. */
+  :root[data-theme="modern"] .ui-wash {
+    background-color: var(--ui-canvas);
+    background-image:
+      radial-gradient(
+        48rem 32rem at 8% -12%,
+        color-mix(in srgb, var(--ui-accent) 9%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        56rem 36rem at 100% 108%,
+        color-mix(in srgb, var(--ui-tone-info-fg) 12%, transparent),
+        transparent 70%
+      );
+  }
+  /* Dark keeps the warm hue: the sky blob would read as blue-grey on the brown-black canvas. */
+  :root[data-theme="modern"].dark .ui-wash {
+    background-image:
+      radial-gradient(
+        48rem 32rem at 8% -12%,
+        color-mix(in srgb, var(--ui-accent) 10%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        56rem 36rem at 100% 108%,
+        color-mix(in srgb, var(--ui-tone-attention-fg) 5%, transparent),
+        transparent 70%
+      );
+  }
+
+  :root[data-theme="modern"] .ui-eyebrow {
+    font-size: var(--ui-text-caption-size);
+    line-height: var(--ui-text-caption-lh);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: var(--ui-tracking-label);
+    color: var(--ui-fg-muted);
+  }
+
+  /* Regular-weight display type with tight tracking. */
+  :root[data-theme="modern"] .ui-display {
+    font-weight: 400;
+    letter-spacing: -0.02em;
+  }
+
+  :root[data-theme="modern"] .ui-live {
+    animation-timing-function: var(--ui-live-timing);
+  }
+  :root[data-theme="modern"] .ui-live[data-live="caret"] {
+    animation-duration: 1.2s;
+  }
+
+  /* Tool cards and code blocks: rounded, the header inside the block, round header buttons. */
+  :root[data-theme="modern"] .ui-frame {
+    border-radius: var(--ui-radius-md);
+  }
+  :root[data-theme="modern"] .ui-frame > [data-slot="head"] {
+    background-color: transparent;
+    border-bottom-color: transparent;
+  }
+  :root[data-theme="modern"] .ui-frame > [data-slot="head"] :is(button, [role="button"]) {
+    border-radius: var(--ui-radius-pill);
+  }
+
+  /* Interactive controls are pills whose colour and radius ease; cards soften on hover. */
+  :root[data-theme="modern"] .ui-pill-hover {
+    border-radius: var(--ui-radius-pill);
+    transition-property: color, background-color, border-color, box-shadow, border-radius;
+    transition-duration: var(--ui-dur-base);
+    transition-timing-function: var(--ui-ease-in-out);
+  }
+  :root[data-theme="modern"] .ui-pill-hover[data-shape="card"] {
+    border-radius: var(--ui-radius-md);
+  }
+  :root[data-theme="modern"] .ui-pill-hover[data-shape="card"]:hover {
+    border-radius: var(--ui-radius-lg);
+  }
+
+  /* Tabs: a rounded accent bar under the selected tab. */
+  :root[data-theme="modern"] .ui-underline-nav [role="tab"] {
+    position: relative;
+  }
+  :root[data-theme="modern"] .ui-underline-nav [role="tab"]::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0.5rem;
+    bottom: -1px;
+    height: 2px;
+    border-radius: var(--ui-radius-pill);
+    background-color: transparent;
+    transition: background-color var(--ui-dur-fast) var(--ui-ease-out);
+    pointer-events: none;
+  }
+  :root[data-theme="modern"] .ui-underline-nav [role="tab"]:hover::after {
+    background-color: var(--ui-line);
+  }
+  :root[data-theme="modern"] .ui-underline-nav [role="tab"][aria-selected="true"]::after {
+    background-color: var(--ui-accent);
+  }
+
+  /* Scrollbar thumbs show only while the pointer is over their scroller (--ui-scrollbar-visibility). */
+  :root[data-theme="modern"] :not(:hover) {
+    scrollbar-color: transparent var(--ui-scrollbar-track);
+  }
+}
