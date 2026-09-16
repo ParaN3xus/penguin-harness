@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    "jsx": "react-jsx",
+    "useDefineForClassFields": true,
+    "paths": {
+      "@prismshadow/penguin-ui": ["../ui/src/index.ts"],
+      "@prismshadow/penguin-ui/*": ["../ui/src/*"]
+    }
+  },
+  "include": ["src", "test", "vite.config.ts", "vitest.config.ts"]
+}
