@@ -1721,6 +1721,19 @@ export const zh = {
     thinkingSwitchApplied: (to: string): string => `上下文已压缩，思考等级已切换为「${to}」。`,
     /** Compaction ended without completing — the switch still applies, so say both. */
     thinkingSwitchCompactFailed: "压缩未成功完成，思考等级已照常切换。",
+    /** In-conversation model switch (the session toolbar's model picker). Title is the confirm dialog's accessible name only. Unlike the thinking level there is no "switch anyway": a switch always compacts on the current model first, and a failed compaction keeps it. */
+    modelSwitchInSessionTitle: "切换模型",
+    modelSwitchInSessionConfirm: "压缩并切换",
+    modelSwitchInSessionBody: (from: string, to: string): string =>
+      `将先用当前模型「${from}」压缩上下文，成功后以「${to}」继续本对话；压缩失败则保持「${from}」。`,
+    /** Body when the transcript is empty: there is no context to compact, so the switch is immediate. */
+    modelSwitchInSessionDirectBody: (to: string): string =>
+      `当前上下文没有内容，将直接切换到「${to}」。`,
+    /** Toast once the server accepted a compacting switch: the row in the conversation carries it from here. */
+    modelSwitchInSessionStarted: (from: string, to: string): string =>
+      `正在用「${from}」压缩上下文，完成后切换到「${to}」。`,
+    /** Toast when the switch completed inside the request (the Session had never run). */
+    modelSwitchInSessionApplied: (to: string): string => `已切换到「${to}」。`,
     workspaceUseThis: "使用此目录",
     workspaceUp: "上级目录",
     workspaceNoSubdirs: "无子目录",
@@ -2229,19 +2242,22 @@ Benchmark：
     skillsAutoMessage: (names: string[]): string => `使用 ${names.join("、")} 技能`,
     handoffFrom: (agent: string) => `由 ${agent} 的对话交接而来`,
     handoffBack: (title?: string) => (title ? `回到原对话：${title}` : "回到原对话"),
-    /** `/model` switch: command description, picker title, the staged target's description and remove button, the switch-origin banner, and the empty-body auto message. */
-    switchModel: "切换模型，发送时开启新会话延续本对话",
-    switchModelTitle: "切换模型",
-    modelSwitchTargetTitle: (model: string) => `发送后换用 ${model} 延续本对话`,
-    modelSwitchRemove: "移除切换模型",
+    /** `/model` handoff: command description, picker title and footnote, the staged target's description and remove button, the origin banner, and the empty-body auto message. Every surface says that it opens a NEW conversation and leaves this one as it is — switching inside this conversation is the toolbar's model picker (`modelSwitchInSession*`). */
+    switchModel: "换模型开新会话：发送时用所选模型新开一个会话延续本对话，本会话保持不变",
+    switchModelTitle: "换模型开新会话",
+    /** Footnote under the `/model` picker's list: where the in-conversation switch lives instead. */
+    switchModelNote: "要在本会话内切换模型，用工具栏的模型选择器（会先压缩上下文）",
+    modelSwitchTargetTitle: (model: string) =>
+      `发送后用 ${model} 新开一个会话延续本对话，本会话保持不变`,
+    modelSwitchRemove: "移除换模型目标",
     /** Why Send is disabled with a model switch staged: the fork branches off a Trace this Session is still writing. */
-    modelSwitchBusyHint: "本轮结束后才能切换模型：新会话要从当前会话的记录接续",
+    modelSwitchBusyHint: "本轮结束后才能换模型开新会话：新会话要从当前会话的记录接续",
     modelSwitchFrom: (prevModel?: string) =>
-      prevModel ? `已切换模型（原为 ${prevModel}），延续原会话` : "已切换模型，延续原会话",
+      prevModel
+        ? `换模型新开的会话（原模型 ${prevModel}），延续原会话`
+        : "换模型新开的会话，延续原会话",
     /** First message body auto-sent when `/model` is staged and the composer is empty (same convention as skillsAutoMessage). */
     modelSwitchAutoMessage: "换用新模型继续这段对话",
-    /** Toast when the session-state (locked) model display is clicked: points at the `/model` command. */
-    modelLockedHint: "输入 /model 切换模型",
     scheduledFrom: (name: string) => `由定时任务「${name}」触发`,
     /** `[org_trigger]` banner: what the organization scheduler sent this desk or ticket session, folded into one line. */
     orgTriggerFrom: (org: string): string => `由组织「${org}」触发`,
@@ -2284,6 +2300,17 @@ Benchmark：
     compactionDone: (mode: string): string => (mode === "discard" ? "清空完毕" : "压缩完毕"),
     /** The summarize row's second body section (the first reuses `thinking`): the summary the compaction request wrote. */
     compactionResult: "压缩结果",
+    /** A model switch's compaction row (`reason: model_switch`): the title names the switch and its state, the detail line the models — `A → B` while it runs and once it switched, the model it stays on when it did not. */
+    modelSwitchRunning: (mode: string): string =>
+      `切换模型：${mode === "discard" ? "清空中" : "压缩中"}`,
+    modelSwitchDone: "已切换模型",
+    modelSwitchFailed: "切换模型失败",
+    /** Failed-row detail; `from` is absent when the loaded history no longer shows which model the context ran on. */
+    modelSwitchKept: (status: string, from?: string, errorMessage?: string): string => {
+      const model = from ?? "原模型";
+      if (status === "aborted") return `已中断，仍使用 ${model}`;
+      return errorMessage !== undefined ? `仍使用 ${model}：${errorMessage}` : `仍使用 ${model}`;
+    },
     compactionFailed: (status: string, errorMessage?: string): string => {
       if (status === "aborted") return "已中断，保留当前上下文";
       const detail = errorMessage !== undefined ? `（${errorMessage}）` : "";
@@ -4087,6 +4114,9 @@ Benchmark：
       // own explanation here — collapsing them into one sentence would tell a user who just
       // compacted that they have never spoken.
       compaction_not_configured: "该 Agent 没有配置上下文压缩。",
+      same_model: "本会话已在使用该模型。",
+      model_not_configured: "所选模型不在本 Project 的模型配置中。",
+      model_unavailable: "所选模型暂不可用（例如还没有 API key），请先在「模型」页配置。",
       nothing_to_compact: "当前上下文还没有可压缩的内容（尚未完成一轮对话）。",
       already_compacted: "刚刚压缩过，之后还没有新的对话，无需重复压缩。",
       version_conflict: "快照版本不高于当前版本。",

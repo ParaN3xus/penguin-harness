@@ -443,6 +443,78 @@ describe("approvals and events", () => {
     expect(banner.errorMessage).toBe("the response contained no usable summary");
   });
 
+  it("a model_switch compaction carries its reason, the target model, and the model it leaves", () => {
+    const m = createStreamModel();
+    // The running context's session_meta names the model the switch leaves.
+    pushMessage(m, sessionMeta({ ...meta("s1").payload, provider: "anthropic", model_id: "a-1" }));
+    pushMessage(
+      m,
+      compactionBegin({
+        reason: "model_switch",
+        mode: "summarize",
+        context: 1000,
+        turns: 3,
+        next: { provider: "openai", model_id: "b-2" },
+      }),
+    );
+    const banner = items(m)[0] as CompactionItem;
+    expect(banner).toMatchObject({
+      kind: "compaction",
+      reason: "model_switch",
+      running: true,
+      nextProvider: "openai",
+      nextModelId: "b-2",
+      prevProvider: "anthropic",
+      prevModelId: "a-1",
+    });
+    pushMessage(
+      m,
+      compactionEnd({
+        reason: "model_switch",
+        mode: "summarize",
+        status: "completed",
+        next: { provider: "openai", model_id: "b-2" },
+      }),
+    );
+    // The next context's meta arrives after the end: it moves the context model, not the row.
+    pushMessage(m, sessionMeta({ ...meta("s1").payload, provider: "openai", model_id: "b-2" }));
+    expect(banner).toMatchObject({ running: false, status: "completed", prevModelId: "a-1" });
+    expect(m.contextModel).toEqual({ provider: "openai", modelId: "b-2" });
+  });
+
+  it("an ordinary compaction names no models, and a switch without a loaded meta names only its target", () => {
+    const m = createStreamModel();
+    pushMessage(m, meta("s1"));
+    pushMessage(m, compactionBegin({ reason: "manual", mode: "summarize", context: 1, turns: 1 }));
+    const manual = items(m)[0] as CompactionItem;
+    expect(manual.reason).toBe("manual");
+    for (const key of ["nextProvider", "nextModelId", "prevProvider", "prevModelId"]) {
+      expect(manual).not.toHaveProperty(key);
+    }
+
+    // A window that starts after the context's session_meta, joined mid-stream (end only).
+    const joined = createStreamModel();
+    pushMessage(
+      joined,
+      compactionEnd({
+        reason: "model_switch",
+        mode: "summarize",
+        status: "fatal",
+        errorMessage: "too large",
+        next: { provider: "openai", model_id: "b-2" },
+      }),
+    );
+    const row = items(joined)[0] as CompactionItem;
+    expect(row).toMatchObject({
+      reason: "model_switch",
+      running: false,
+      status: "fatal",
+      nextModelId: "b-2",
+      errorMessage: "too large",
+    });
+    expect(row).not.toHaveProperty("prevModelId");
+  });
+
   it("compaction wall time is derived from the begin/end message timestamps", () => {
     const m = createStreamModel();
     pushMessage(

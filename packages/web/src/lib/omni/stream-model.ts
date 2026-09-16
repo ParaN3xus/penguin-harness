@@ -307,6 +307,21 @@ export interface CompactionItem {
   id: number;
   reason: CompactionReason;
   mode: CompactionMode;
+  /**
+   * `reason: "model_switch"` only: the model the next context opens on, from the events'
+   * `next_provider` / `next_model_id` (the end's pair wins when both carry one). The row names
+   * the target with it; a switch happened only when the row also settled `completed`.
+   */
+  nextProvider?: string;
+  nextModelId?: string;
+  /**
+   * `reason: "model_switch"` only: the model the context ran on when the switch began — the
+   * latest main-session `session_meta` seen before the begin (see StreamModel.contextModel).
+   * Absent when the loaded window started after that meta, so the row cannot name the model it
+   * left and says so generically instead.
+   */
+  prevProvider?: string;
+  prevModelId?: string;
   /** True between begin and end (renders a "compaction in progress" banner). */
   running: boolean;
   status?: StopReason;
@@ -476,6 +491,13 @@ export interface StreamModel {
   /** Absolute `agent_state` path from session_meta (null until it arrives); the Memory root `<agent_state>/memory/` for the Task summary's memory-change rows. */
   agentState: string | null;
   /**
+   * The model the running context was opened on, from the latest `session_meta` (null until one
+   * arrives). A Session's model can change between contexts — each context's meta records its
+   * own — so this follows rotations; a model switch's compaction row captures it as the model
+   * it is leaving. Display only: the Session DTO stays the authority for the current model.
+   */
+  contextModel: { provider: string; modelId: string } | null;
+  /**
    * Elapsed-time stamps for the subagents panel's topology nodes (nested models only — the main
    * session's timing is covered by task stats). Stamped in routeNested: the `firstSeen` pair when
    * the nested model is created, the `lastActivity` pair on every message routed into its subtree
@@ -611,6 +633,7 @@ function newModel(nested: boolean, localDecisions: Set<string>): StreamModel {
     nested,
     meta: null,
     agentState: null,
+    contextModel: null,
     stats: createTaskStatsTracker(),
     openText: null,
     openThinking: null,
@@ -740,7 +763,9 @@ export function pushMessage(
   // child, on which model); the main session takes the rest of its identity/config from the
   // Session DTO. A rewritten session_meta (file rotation) overwrites with the same values.
   if (msg.type === "session_meta") {
-    model.agentState = (msg.payload as SessionMetaPayload).agent_state;
+    const p = msg.payload as SessionMetaPayload;
+    model.agentState = p.agent_state;
+    model.contextModel = { provider: p.provider, modelId: p.model_id };
   }
   if (msg.type === "session_meta" && model.nested) {
     const p = msg.payload as SessionMetaPayload;
@@ -1688,6 +1713,7 @@ function handleEvent(model: StreamModel, p: EventPayload, tsMs?: number, nowMs?:
         reason: p.reason,
         mode: p.mode,
         running: true,
+        ...modelSwitchFields(model, p),
         ...(tsMs !== undefined ? { beginTsMs: tsMs } : {}),
       });
       return;
@@ -1700,6 +1726,9 @@ function handleEvent(model: StreamModel, p: EventPayload, tsMs?: number, nowMs?:
         item.running = false;
         item.status = p.status;
         if (p.error_message !== undefined) item.errorMessage = p.error_message;
+        // The end's target is the authoritative one; a begin that carried none keeps its own.
+        if (p.next_provider !== undefined) item.nextProvider = p.next_provider;
+        if (p.next_model_id !== undefined) item.nextModelId = p.next_model_id;
         if (tsMs !== undefined && item.beginTsMs !== undefined) {
           item.durationMs = Math.max(0, tsMs - item.beginTsMs);
         }
@@ -1735,6 +1764,7 @@ function handleEvent(model: StreamModel, p: EventPayload, tsMs?: number, nowMs?:
           mode: p.mode,
           running: false,
           status: p.status,
+          ...modelSwitchFields(model, p),
           ...(p.error_message !== undefined ? { errorMessage: p.error_message } : {}),
         };
         model.items.push(created);
@@ -1857,6 +1887,25 @@ function findLastMcpConnect(model: StreamModel): McpConnectItem | null {
     if (item.kind === "mcp_connect") return item;
   }
   return null;
+}
+
+/**
+ * The model-switch fields a compaction row takes from its begin (or, on a mid-stream join, its
+ * end): the target the event names, and the model the context was on when it arrived. Empty for
+ * every other reason — an ordinary compaction names no models.
+ */
+function modelSwitchFields(
+  model: StreamModel,
+  p: { reason: CompactionReason; next_provider?: string; next_model_id?: string },
+): Pick<CompactionItem, "nextProvider" | "nextModelId" | "prevProvider" | "prevModelId"> {
+  if (p.reason !== "model_switch") return {};
+  return {
+    ...(p.next_provider !== undefined ? { nextProvider: p.next_provider } : {}),
+    ...(p.next_model_id !== undefined ? { nextModelId: p.next_model_id } : {}),
+    ...(model.contextModel !== null
+      ? { prevProvider: model.contextModel.provider, prevModelId: model.contextModel.modelId }
+      : {}),
+  };
 }
 
 function findLastRunningCompaction(model: StreamModel): CompactionItem | null {
