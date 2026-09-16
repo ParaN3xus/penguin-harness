@@ -1724,6 +1724,8 @@ export const zh = {
     /** In-conversation model switch (the session toolbar's model picker). Title is the confirm dialog's accessible name only. Unlike the thinking level there is no "switch anyway": a switch always compacts on the current model first, and a failed compaction keeps it. */
     modelSwitchInSessionTitle: "切换模型",
     modelSwitchInSessionConfirm: "压缩并切换",
+    /** Confirm label when the transcript is empty: nothing to compact, so it only switches. */
+    modelSwitchInSessionDirectConfirm: "切换",
     modelSwitchInSessionBody: (from: string, to: string): string =>
       `将先用当前模型「${from}」压缩上下文，成功后以「${to}」继续本对话；压缩失败则保持「${from}」。`,
     /** Body when the transcript is empty: there is no context to compact, so the switch is immediate. */

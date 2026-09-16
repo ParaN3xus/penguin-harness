@@ -1730,6 +1730,8 @@ export const en: Strings = {
       "The compaction did not finish; the thinking level was switched anyway.",
     modelSwitchInSessionTitle: "Switch model",
     modelSwitchInSessionConfirm: "Compact and switch",
+    /** Confirm label when the transcript is empty: nothing to compact, so it only switches. */
+    modelSwitchInSessionDirectConfirm: "Switch",
     modelSwitchInSessionBody: (from: string, to: string): string =>
       `The context is compacted on the current model "${from}" first, and this conversation then continues on "${to}". If the compaction fails, it stays on "${from}".`,
     modelSwitchInSessionDirectBody: (to: string): string =>

@@ -2456,14 +2456,18 @@ export function ChatPage() {
       {/* In-conversation model switch confirmation (the session toolbar's model picker), two
           choices only: compact and switch, or cancel. There is no "switch anyway" — a switch
           always compacts on the current model first, and a failed compaction keeps it. An empty
-          transcript has nothing to compact, and the body says the switch is immediate. The
+          transcript has nothing to compact: the body says the switch is immediate and the confirm reads "switch". The
           session can start running while the dialog is up (a queued follow-up, a schedule): the
           confirm is then disabled and the body says why, exactly like the thinking dialog. */}
       <ConfirmModal
         open={modelSwitchAsk !== null}
         title={S.chat.modelSwitchInSessionTitle}
         tone="primary"
-        confirmLabel={S.chat.modelSwitchInSessionConfirm}
+        confirmLabel={
+          modelSwitchAsk?.direct
+            ? S.chat.modelSwitchInSessionDirectConfirm
+            : S.chat.modelSwitchInSessionConfirm
+        }
         confirmDisabled={stream.taskState !== "idle"}
         busy={modelSwitchPosting}
         onConfirm={() => void confirmModelSwitch()}
