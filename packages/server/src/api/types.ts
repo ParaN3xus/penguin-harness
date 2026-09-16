@@ -1313,9 +1313,12 @@ export interface SessionInfo {
   sessionId: string;
   projectId: string;
   agentId: string;
-  /** Provider group of the session's model (paired with `modelId` to form a model reference). */
+  /**
+   * Provider group of the session's **current** model (paired with `modelId` to form a model
+   * reference). It moves with each in-session switch (`POST /api/sessions/:id/switch-model`).
+   */
   provider: string;
-  /** Upstream model_id of the session's model (the request id sent to AgentHub). */
+  /** Upstream model_id of the session's current model (the request id sent to AgentHub). */
   modelId: string;
   workspace: string;
   approvalMode: ApprovalMode;
@@ -1692,6 +1695,27 @@ export interface GoalStateView {
 export interface GoalResponse {
   /** The Session's most recent goal run; null if it never ran one. */
   goal: GoalStateView | null;
+}
+
+/**
+ * `POST /api/sessions/:sessionId/switch-model`: switch this Session to another model in place.
+ * The switch compacts first on the current model (always summarize), then opens the next model
+ * context on the target. It answers 202 with a {@link TaskCreateResponse} and streams like a
+ * manual compaction — the Session status is `compacting`, and the paired `compaction_begin` /
+ * `compaction_end` events carry `reason: "model_switch"` plus `next_provider` / `next_model_id`.
+ * Only a `compaction_end` with `status: "completed"` means the switch happened; any other status
+ * leaves the Session on its current model. Refusals are 409 with a code per reason:
+ * `task_in_progress` / `compacting` (busy), `same_model`, `model_not_configured` (the target is not in the
+ * Project config), `model_unavailable` (the target cannot be constructed, e.g. no credential),
+ * `compaction_not_configured`. A Session that never ran has no context to compact: its switch
+ * completes inside the request, which then answers 200 with a {@link SessionResponse} carrying
+ * the updated model instead of 202 — no events are streamed for it.
+ */
+export interface SessionSwitchModelRequest {
+  /** Provider group of the target model. */
+  provider: string;
+  /** Upstream model_id of the target model. */
+  modelId: string;
 }
 
 export interface TaskCreateResponse {
