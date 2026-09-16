@@ -3,6 +3,7 @@
 - **Date:** 2026-09-16
 - **Type:** feature
 - **Scope:** `core`, `server`, `web`, `cli`, `docs`
+- **PR:** [#748](https://github.com/Prism-Shadow/penguin-harness/pull/748)
 
 [中文版](2026-09-16-in-session-model-switch.zh.md)
 
