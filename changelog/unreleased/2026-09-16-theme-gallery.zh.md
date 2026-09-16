@@ -3,6 +3,7 @@
 - **Date:** 2026-09-16
 - **Type:** process
 - **Scope:** `ui-gallery`, `ui`, `tooling`, `ci`
+- **PR:** [#764](https://github.com/Prism-Shadow/penguin-harness/pull/764)
 
 [English](2026-09-16-theme-gallery.md)
 
