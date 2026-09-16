@@ -24,7 +24,8 @@ import { COMPANY_MODE_ICON, CloseIcon, NAV_ICONS } from "../ui/icons";
 import { useCompany } from "../../state/company";
 import { COMPANY_NAV_ICONS } from "../../features/company/company-nav-icons";
 import { ChannelRailRows } from "../../features/company/channel-sidebar";
-import { DeskRailRows } from "../../features/company/org-session-groups";
+import { DeskRailRows, TempSessionRailRow } from "../../features/company/org-session-groups";
+import { useTempSessionTracker } from "../../features/company/temp-session";
 import {
   COMPANY_NAV_KEYS,
   isOrgRoute,
@@ -301,6 +302,7 @@ function CollapsedRail({ onExpand }: { onExpand: () => void }) {
             <span aria-hidden className="my-0.5 h-px w-5 shrink-0 bg-gray-200 dark:bg-gray-800" />
             <ChannelRailRows projectId={navOrg.projectId} orgId={navOrg.orgId} />
             <span aria-hidden className="my-0.5 h-px w-5 shrink-0 bg-gray-200 dark:bg-gray-800" />
+            <TempSessionRailRow projectId={navOrg.projectId} orgId={navOrg.orgId} />
             <DeskRailRows projectId={navOrg.projectId} orgId={navOrg.orgId} />
           </>
         )}
@@ -369,6 +371,9 @@ export function AppLayout() {
   useCompletionNotifications();
   // Desktop shell only: keeps the tray menu in the language this window is in.
   useTrayLocale();
+  // Company mode's temporary sidebar row follows the location from here, the one component on
+  // screen for every route, so a navigation made while the sidebar is collapsed still counts.
+  useTempSessionTracker();
   // The single eager owner of the update checks (use-update-badges.ts): one request per
   // browser session, so a dot can be there on a fresh load instead of waiting for someone to
   // open the sidebar menu. Every other anchor reads the same caches passively.
