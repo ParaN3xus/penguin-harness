@@ -102,20 +102,23 @@ export interface ToolDefinition {
 /**
  * Session metadata: the runtime configuration of one **model context**. One `session_meta`
  * opens every Trace file — the Session's first, and each file a compaction's rotation starts.
- * The model reference, the paths and the origin are fixed for the Session's lifetime; the
- * assembled system prompt is fixed per context — a context is assembled from the Agent State
- * as it is when it opens (the template, `AGENTS.md` and the other placeholders re-read), so
- * each file's meta carries the prompt its context actually ran with; the context's toolset
- * follows as the `tool_list_ready` record. Everything that shapes the request prefix — model,
- * prompt, toolset — holds from a context's open to its close; the thinking level is not part
- * of it (a per-request parameter, deliberately not recorded — see the note in the body).
+ * The paths and the origin are fixed for the Session's lifetime; the model reference and the
+ * assembled system prompt are fixed per context — a context is assembled from the Agent State
+ * as it is when it opens (the template, `AGENTS.md` and the other placeholders re-read), on the
+ * model the Session is running at that point (an in-session model switch opens its new
+ * context on another one — see `Session.switchModel`), so each file's meta carries the prompt
+ * and the model its context actually ran with; the context's toolset follows as the
+ * `tool_list_ready` record. Everything that shapes the request prefix — model, prompt,
+ * toolset — holds from a context's open to its close; the thinking level is not part of it (a
+ * per-request parameter, deliberately not recorded — see the note in the body).
  */
 export interface SessionMetaPayload {
   session_id: string;
-  /** The session model's provider group (paired with `model_id` to form a model reference). */
+  /** This context's model: the provider group (paired with `model_id` to form a model reference). */
   provider: string;
-  /** The session model's upstream model_id (the request id sent to AgentHub; paired with `provider`). */
+  /** This context's model: the upstream model_id (the request id sent to AgentHub; paired with `provider`). */
   model_id: string;
+  /** The context window of this context's model, or `"unknown"` when its entry configures none. */
   model_context_window: number | string;
   /** The system prompt this context runs with (the assembled result, placeholders already substituted). */
   system_prompt: string;
@@ -397,8 +400,13 @@ export interface RequestEndPayload extends RetryDetail {
   status: StopReason;
 }
 
-/** Compaction trigger reason: context threshold / turn-count threshold / user-initiated request. */
-export type CompactionReason = "context" | "turns" | "manual";
+/**
+ * Compaction trigger reason: context threshold / turn-count threshold / user-initiated
+ * request / a user's in-session model switch (the compaction that closes the old model's
+ * context, always in summarize mode when there is anything to summarize — see
+ * `Session.switchModel`; its events name the target in `next_provider` / `next_model_id`).
+ */
+export type CompactionReason = "context" | "turns" | "manual" | "model_switch";
 
 /** Context compaction mode: summary relay / direct discard. */
 export type CompactionMode = "summarize" | "discard";
@@ -423,6 +431,10 @@ export interface CompactionBeginPayload {
   context: number;
   /** Session cumulative turn count. */
   turns: number;
+  /** `reason: "model_switch"` only: the provider group of the model the next context opens on (paired with `next_model_id`). */
+  next_provider?: string;
+  /** `reason: "model_switch"` only: the upstream model_id the next context opens on (paired with `next_provider`). */
+  next_model_id?: string;
 }
 
 /**
@@ -436,8 +448,16 @@ export interface CompactionEndPayload extends RetryDetail {
   type: "compaction_end";
   reason: CompactionReason;
   mode: CompactionMode;
-  /** Compaction result; non-`completed` means compaction was abandoned and the original context was kept. */
+  /** Compaction result; non-`completed` means compaction was abandoned and the original context was kept (a `model_switch` then stays on the model it was on). */
   status: StopReason;
+  /**
+   * `reason: "model_switch"` only: the model the next context opens on. On a `completed` end
+   * this pair is what a resume reads when this end is the file's last record — the new
+   * context's own file is only opened at its first message, so until then the closing end is
+   * the durable record of the switch (see trace/resume.ts).
+   */
+  next_provider?: string;
+  next_model_id?: string;
 }
 
 /** A hook's decision: at the stop point `continue` keeps the run going (its injected input follows as the next user message) and `stop` lets the run end; at the pre_tool_use point `allow` approves the call without asking and `deny` refuses it. */
