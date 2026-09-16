@@ -8,11 +8,15 @@
  * transparently, no special config needed.
  * The vitest config is kept separate in vitest.config.ts (its embedded vite 5 types conflict with this
  * package's vite 7 plugin types, hence the separate file to avoid the clash).
+ *
+ * `penguinUi()` points `@prismshadow/penguin-ui` (JS and CSS imports alike) at the shared UI
+ * package's live source. It is imported by relative path on purpose — see its module doc.
  */
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
+import { penguinUi } from "../ui/src/vite-plugin";
 
 /**
  * Resolves the `/api` proxy target: PENGUIN_API_PROXY replaces it outright, otherwise the
@@ -66,7 +70,7 @@ function katexWoff2Only(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), katexWoff2Only()],
+  plugins: [penguinUi(), react(), tailwindcss(), katexWoff2Only()],
   // The highlighting worker loads its themes and each grammar with a dynamic import, so its
   // bundle has to be code-split — and Vite's default worker format, IIFE, cannot be. Without this
   // the build fails outright rather than shipping something subtly wrong, which is the good case.
