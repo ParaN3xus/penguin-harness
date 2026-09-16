@@ -14,7 +14,7 @@ PenguinHarness 的全部运行数据都落在本地文件系统：配置是可�
 | Project | 组织 Agent 的顶层单位，持有模型与凭证配置；Web 多用户部署中，用户与 Project 是多对多关系 |
 | Agent | 执行主体，恰好拥有一份 Agent State（持久化目录）；一个 Agent 可服务多个 Workspace |
 | Workspace | 一次运行的工作目录，是模型可见的唯一文件范围；显式指定的 `workspaceDir` 必须已存在，未指定时自动创建临时 Workspace `workspaces/tmp-<8hex>` |
-| Session | 同一（Agent、Workspace）下的一段连续对话；模型与 Workspace 在 Session 创建时锁定，id 形如 `session-YYYY-MM-DD-HH-mm-ss-<8hex>` |
+| Session | 同一（Agent、Workspace）下的一段连续对话；Workspace 在 Session 创建时锁定，模型在创建时选定、可在会话内切换（见下文「会话内切换模型」），id 形如 `session-YYYY-MM-DD-HH-mm-ss-<8hex>` |
 | Task | 由一条 Prompt 发起的一个执行目标，由一个或多个连续的 Request 组成 |
 | Request | 一次 LLM API 调用：上下文与工具定义送入，流式输出返回 |
 
@@ -80,18 +80,22 @@ Trace 是 append-only 的 JSON Lines 文件，每行一个 OmniMessage 信封（
 Trace 是恢复的唯一事实来源，没有独立的会话数据库需要与之对齐。`resumeSession` 的流程：
 
 1. 定位该 Session 索引最大的 Trace 文件；
-2. 从文件内的 `session_meta` 读取运行配置——模型与 Workspace（二者在 Session 生命周期内不可变）以及该上下文开启时的系统提示词与思考等级；
+2. 从文件内的 `session_meta` 读取运行配置——Workspace（在 Session 生命周期内不可变）、该上下文所用的模型，以及该上下文开启时的系统提示词与思考等级；
 3. 将已提交的历史回放进一份全新的 LLM 上下文；
 4. 重建 carry-over（未送达的工具输出、中断标记）与轮数、Token 计数器；
 5. 继续追加写入同一个 Trace 文件。
 
 恢复的前提是 Workspace 与模型仍然存在。恢复保证的是结构合法性：只回放已提交的轮次，`tool_call` 与 `tool_call_output` 配对完整；未完成的模型输出（thinking、文本）允许丢失。异常退出留下的截断末行会被容忍并忽略；文件中间的损坏行（如写入器追加串行化之前受损的存量文件）会被跳过并在 stderr 给出诊断，其余可解析的记录全部保留。实现见 `packages/core/src/trace/resume.ts`。
 
-特殊情形：若最新 Trace 文件以一次完成的压缩收尾，则该上下文已整体关闭——恢复从空上下文开始；summarize 模式下会重建 `[context_summary]` 摘要，前置到恢复后第一轮输入中（旧 Trace 中早期的尖括号 `<summary>` 形式仍可识别）。这个空上下文与压缩开启的上下文一样开启：按当前 Agent State 整体装配——提示词、工具集、vault 与运行参数——而不是沿用已关闭文件里记录的提示词（见[上下文压缩](/agent-loop)）。未关闭的上下文则相反：提示词沿用该文件记录的原文，工具、Environment 与 vault 只能取自当前 Agent State——Trace 不记录可执行配置。
+特殊情形：若最新 Trace 文件以一次完成的压缩收尾，则该上下文已整体关闭——恢复从空上下文开始（收尾的若是一次完成的模型切换，新上下文开在其 `next_provider` / `next_model_id` 指定的模型上）；summarize 模式下会重建 `[context_summary]` 摘要，前置到恢复后第一轮输入中（旧 Trace 中早期的尖括号 `<summary>` 形式仍可识别）。这个空上下文与压缩开启的上下文一样开启：按当前 Agent State 整体装配——提示词、工具集、vault 与运行参数——而不是沿用已关闭文件里记录的提示词（见[上下文压缩](/agent-loop)）。未关闭的上下文则相反：提示词沿用该文件记录的原文，工具、Environment 与 vault 只能取自当前 Agent State——Trace 不记录可执行配置。
 
-## 模型切换（/model）
+## 会话内切换模型
 
-Web 的 `/model` 命令按 `/agent` 交接的方式换模型：选中模型只是在输入框暂存，发送时才用普通的会话创建接口在同一 Agent 下新建一个 Session（选定新模型，**沿用源会话的 Workspace**，文件因此保持可达），首条消息以 `[model_switch_from]` 源块开头——携带源会话 id、其最新 Trace 文件的绝对路径、Workspace 与原模型二元组，用户输入的剩余文字紧随其后。历史**不注入**新上下文：部分模型回放历史时要求 thinking 与 `fidelity` 逐字一致，跨模型注入不可行——模型需要早前上下文时按路径自行读取源 Trace 文件（JSONL，每行一个消息信封）。源会话与其 Trace 不受任何影响。
+Web 活跃会话工具栏的模型选择器在同一 Session 内换模型。切换是一次上下文轮换：先用当前模型对上下文做 summarize 压缩（无视 Agent 的 `compaction.mode: discard`——摘要要带到新模型），成功后在目标模型上开启新上下文、轮转到新的 Trace 文件，其 `session_meta` 记录该上下文的模型；压缩失败、被中断，或摘要放不进目标模型的上下文窗口（以 `fatal` 结束），都保持原模型。这对 `compaction_begin` / `compaction_end` 事件带 `reason: "model_switch"` 与 `next_provider` / `next_model_id`，恢复据此选模型。目标模型须在 Project 配置中且可构造（凭据齐全），否则切换在发出任何请求前即被拒绝；从未运行过的 Session 没有上下文可压缩，直接切换、不写入任何内容。
+
+## 换模型开新会话（/model）
+
+Web 的 `/model` 命令**新开一个会话**在另一个模型上延续本对话，本会话保持不变。它按 `/agent` 交接的方式进行：选中模型只是在输入框暂存，发送时才用普通的会话创建接口在同一 Agent 下新建一个 Session（选定新模型，**沿用源会话的 Workspace**，文件因此保持可达），首条消息以 `[model_switch_from]` 源块开头——携带源会话 id、其最新 Trace 文件的绝对路径、Workspace 与原模型二元组，用户输入的剩余文字紧随其后。历史**不注入**新上下文：部分模型回放历史时要求 thinking 与 `fidelity` 逐字一致，跨模型注入不可行——模型需要早前上下文时按路径自行读取源 Trace 文件（JSONL，每行一个消息信封）。源会话与其 Trace 不受任何影响。
 
 ## 字段保真
 
