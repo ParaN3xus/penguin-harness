@@ -3,6 +3,7 @@
 - **Date:** 2026-09-16
 - **Type:** process
 - **Scope:** `server`, `core`, `model-catalog`
+- **PR:** [#744](https://github.com/Prism-Shadow/penguin-harness/pull/744)
 - **Breaking:** yes — a Project synced before this change keeps its discounted preset prices until Sync presets runs, and bills those rows at the old discount after the promotion ends
 
 [中文版](2026-09-16-backward-compatibility.zh.md)

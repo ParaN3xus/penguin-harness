@@ -3,6 +3,7 @@
 - **Date:** 2026-09-16
 - **Type:** process
 - **Scope:** `server`, `core`, `model-catalog`
+- **PR:** [#744](https://github.com/Prism-Shadow/penguin-harness/pull/744)
 - **Breaking:** yes — 此前同步过预置的 Project 在执行「同步预置」之前，仍保留预置时写入的折后价，促销结束后这些行也继续按旧折扣计费
 
 [English](2026-09-16-backward-compatibility.md)

@@ -3,6 +3,7 @@
 - **Date:** 2026-09-16
 - **Type:** feature
 - **Scope:** `core`, `server`, `web`, `model-catalog`, `docs`
+- **PR:** [#744](https://github.com/Prism-Shadow/penguin-harness/pull/744)
 - **Breaking:** yes — 改价不再重算已记录的用量；此前同步过预置的 Project 在执行「同步预置」之前，仍保留预置时写入的折后价
 
 [English](2026-09-16-usage-cost-at-record-time.md)

@@ -3,6 +3,7 @@
 - **Date:** 2026-09-16
 - **Type:** feature
 - **Scope:** `core`, `server`, `web`, `model-catalog`, `docs`
+- **PR:** [#744](https://github.com/Prism-Shadow/penguin-harness/pull/744)
 - **Breaking:** yes — a price change no longer re-prices usage already recorded, and a Project synced before this change keeps its discounted preset prices until Sync presets runs
 
 [中文版](2026-09-16-usage-cost-at-record-time.zh.md)
