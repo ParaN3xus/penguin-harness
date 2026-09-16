@@ -3,6 +3,7 @@
 - **Date:** 2026-09-16
 - **Type:** feature
 - **Scope:** `web`, `docs`
+- **PR:** [#752](https://github.com/Prism-Shadow/penguin-harness/pull/752)
 
 [English](2026-09-16-company-tickets-click.md)
 
