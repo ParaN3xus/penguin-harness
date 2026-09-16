@@ -31,7 +31,7 @@ function DemoCell({
   selection: Readonly<Record<string, string>>;
 }) {
   const { state, mode } = useGallery();
-  return <>{demo.render(selection, { lang: state.lang, mode, themeId: state.theme })}</>;
+  return <>{demo.render(selection, { lang: state.lang, mode })}</>;
 }
 
 function demoRenderable(demo: Demo, path: string): Renderable {

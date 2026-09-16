@@ -22,7 +22,7 @@
  * `data-state` attributes, never real pointer state, so screenshots reproduce them.
  */
 import type { ReactNode } from "react";
-import type { ThemeId, ThemeModeName, TokenName } from "./tokens";
+import type { ThemeModeName, TokenName } from "./tokens";
 
 /** Axis name → its values, first value = the default. */
 export type DemoAxes = Readonly<Record<string, readonly string[]>>;
@@ -30,11 +30,13 @@ export type DemoAxes = Readonly<Record<string, readonly string[]>>;
 /** One value per axis. */
 export type DemoSelection<A extends DemoAxes> = { readonly [K in keyof A]: A[K][number] };
 
-/** What the gallery tells a demo about the frame it renders in. */
+/**
+ * What the gallery tells a demo about the frame it renders in. The theme is deliberately absent: a
+ * demo renders the same markup in every theme, exactly like the component it shows.
+ */
 export interface DemoContext {
   lang: "en" | "zh";
   mode: ThemeModeName;
-  themeId: ThemeId;
 }
 
 export interface Demo<A extends DemoAxes = DemoAxes> {
