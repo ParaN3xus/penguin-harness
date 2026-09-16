@@ -3,6 +3,7 @@
 - **Date:** 2026-09-16
 - **Type:** feature
 - **Scope:** `core`, `server`, `web`, `skills`, `docs`
+- **PR:** [#756](https://github.com/Prism-Shadow/penguin-harness/pull/756)
 
 [中文版](2026-09-16-plugins-pin-agenthub.zh.md)
 
