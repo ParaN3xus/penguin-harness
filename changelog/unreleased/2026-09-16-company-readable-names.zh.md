@@ -3,6 +3,7 @@
 - **Date:** 2026-09-16
 - **Type:** feature
 - **Scope:** `web`
+- **PR:** [#753](https://github.com/Prism-Shadow/penguin-harness/pull/753)
 
 [English](2026-09-16-company-readable-names.md)
 
