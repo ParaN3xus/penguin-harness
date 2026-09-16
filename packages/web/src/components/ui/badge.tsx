@@ -26,10 +26,20 @@ const toneClass: Record<BadgeTone, string> = {
   red: toneSurface.danger,
 };
 
-export function Badge({ tone = "gray", children }: { tone?: BadgeTone; children: ReactNode }) {
+export function Badge({
+  tone = "gray",
+  title,
+  children,
+}: {
+  tone?: BadgeTone;
+  /** Native tooltip, for a badge whose label is a bare identifier that deserves one line of meaning. */
+  title?: string;
+  children: ReactNode;
+}) {
   return (
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${toneClass[tone]}`}
+      title={title}
     >
       {children}
     </span>

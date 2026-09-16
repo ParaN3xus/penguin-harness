@@ -8,8 +8,10 @@ description: Call model APIs through @prismshadow/agenthub — streaming text ge
 `@prismshadow/agenthub` is a unified TypeScript client for model APIs: streaming text, image generation, speech synthesis and embeddings behind one entry point.
 
 ```bash
-npm install @prismshadow/agenthub
+npm install @prismshadow/agenthub@0.4.15
 ```
+
+Install that exact version, not a range. This skill documents `@prismshadow/agenthub@0.4.15`: the client constructor, the streaming events and content items, the config parameters and the registry shapes below are that release's, and a later release may change them — stay on the pinned version until this skill moves.
 
 The main entry point is `AutoLLMClient`:
 
@@ -23,7 +25,7 @@ const client = new AutoLLMClient({ model: "<model_id>", apiKey: "<key>", baseUrl
 
 ## Before you start
 
-If the user's message only invokes this skill (e.g. "use agenthub-models skill") without a concrete task, ask the user what they want to build. Do not write code until the requirement is clear.
+If the user's message only invokes this skill (e.g. "use unified-llm-api skill") without a concrete task, ask the user what they want to build. Do not write code until the requirement is clear.
 
 **Important prerequisite — set the key up first, then develop.** When the script is an AI app you are building for the user, have them add the model API key in **this agent's key vault** (gear icon on its card, Agents page → settings → key vault tab) *before* you start, so the credential is in your shell environment. If the app stores its own model config, keep its Penguin data root **inside the CWD workspace** (`--root ./penguin_data`), never `~/.penguin`. Model ids can come from the penguin CLI catalog and the id table below.
 
@@ -125,7 +127,7 @@ for await (const event of client.streamingResponseStateful({
 }
 ```
 
-- Each `event` is a `UniEvent`: `event_type` is `start` | `delta` | `stop`, and `content_items` carry the increments.
+- Each `event` is a `UniEvent`: `event_type` is `start` | `delta` | `stop`, and `content_items` carry the increments. These are the shapes of `@prismshadow/agenthub@0.4.15`, the version pinned above.
 - `config` accepts `max_tokens`, `temperature`, `system_prompt`, `thinking_level` (the `ThinkingLevel` enum, `NONE` to `MAX`), `tool_choice`, `prompt_caching`, `fast_mode` and `tools`.
 - `streamingResponseStateful` keeps conversation history inside the client; manage it with `getHistory()` / `setHistory(history)` / `clearHistory()`. The stateless variant is `streamingResponse({ messages, config })`.
 

@@ -25,6 +25,7 @@ plugins/<plugin>/
 | `category` | `office-productivity`、`software-development`、`ai-app-development`、`agent-company` 之一；缺失或未知归入「其他」 |
 | `preinstall` | 可选；`false` 表示不进入 `default_agent` 的预装集合，仅可从插件库手动安装 |
 | `hooks.stop` / `hooks.pre_tool_use` / `hooks.user_prompt` | 钩子包在各[钩子点](/agent-loop#stop-hook)的命令：`[{ "command": "stop.mjs", "timeout": 60 }]`，路径相对 `hooks/`，超时以秒计 |
+| `libraries` | 可选；`{ "<npm 包名>": "X.Y.Z" }`——插件内容所针对的外部库及其精确版本，Skill 正文按这一版描述形状、安装命令也写这一版（`npm install <name>@X.Y.Z`）；loader 拒绝范围写法 |
 
 插件名即目录名（`^[A-Za-z0-9_-]+$`）；围绕他人产品构建的插件带 `use-` 前缀（如 `use-firecrawl`），名字说明用途而不冒用产品名。版本先比日期、再比序号，因此 `2026.08.29.10` 排在 `2026.08.29.9` 之后；清单里的版本就是插件携带的一切内容的版本，与该包的 npm 版本（跟随发行版本）是两回事。没有别的版本方案。
 

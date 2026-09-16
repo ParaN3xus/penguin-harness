@@ -221,11 +221,18 @@ export function PluginDetailModal({
             {localizedText(locale, plugin.description, plugin.descriptionZh)}
           </p>
           <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">{meta}</p>
-          {/* The hook points the package answers at: bare point names (`stop`, `user_prompt`) — identifiers, not copy. */}
-          {plugin.hooks.length > 0 && (
+          {/* The hook points the package answers at (`stop`, `user_prompt`) and the libraries the
+              content pins (`<name>@<version>`): bare identifiers, not copy — the pin
+              badge carries its one line of meaning as a tooltip. */}
+          {(plugin.hooks.length > 0 || plugin.libraries !== undefined) && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {plugin.hooks.map((event) => (
                 <Badge key={event}>{event}</Badge>
+              ))}
+              {Object.entries(plugin.libraries ?? {}).map(([name, version]) => (
+                <Badge key={name} title={S.plugins.detailLibraryTitle}>
+                  {`${name}@${version}`}
+                </Badge>
               ))}
             </div>
           )}

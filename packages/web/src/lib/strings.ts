@@ -1535,6 +1535,8 @@ export const zh = {
     /** Section labels of the plugin detail Modal. */
     detailSkills: "技能",
     detailHooks: "钩子",
+    /** Tooltip on a `name@version` badge: the plugin's content documents and installs that exact library version. */
+    detailLibraryTitle: "该插件的内容按这一版库编写，安装时请钉住这个版本",
     usedByAgents: (n: number): string => (n === 0 ? "未被使用" : `${n} 个 Agent 在用`),
     /** Title on a disabled quick-start button: it pre-selects one of the plugin's skills on the currently selected Agent, so the plugin has to be installed there first. */
     quickInvokeNeedsInstall: "先在当前 Agent 安装该插件后才能快捷调用",

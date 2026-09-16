@@ -96,6 +96,7 @@ export function toPluginItem(plugin: LibraryPlugin): PluginItem {
     version: plugin.version,
     skills: plugin.skills.map(({ icon: _icon, ...skill }) => toSkillItem(skill)),
     hooks: plugin.hooks ? hookEvents(plugin.hooks.manifest) : [],
+    ...(plugin.libraries !== undefined ? { libraries: plugin.libraries } : {}),
     ...(plugin.icon !== undefined ? { icon: plugin.icon } : {}),
   };
 }

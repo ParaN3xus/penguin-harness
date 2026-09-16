@@ -109,6 +109,8 @@ export interface LibraryPlugin {
   category?: string;
   /** Whether default_agent gets this plugin at creation (plugin.json `preinstall`, default true). */
   preinstall: boolean;
+  /** External libraries the content is written for, npm name → the exact version it pins (plugin.json `libraries`); absent when the plugin pins none. */
+  libraries?: Record<string, string>;
   /** Raw `icon.svg` beside plugin.json — every built-in plugin ships one. It is the icon of everything the plugin ships: stamped onto each skill and written beside an installed hook package. */
   icon?: string;
   skills: LibrarySkill[];
@@ -135,6 +137,18 @@ export const PLUGIN_VERSION_PATTERN = /^\d{4}\.\d{2}\.\d{2}\.\d+$/;
 
 /** The spelling used before this format, `2026-08-29.1`: still read wherever an installed copy carries it (see parsePluginVersion). */
 const LEGACY_PLUGIN_VERSION_PATTERN = /^\d{4}-\d{2}-\d{2}\.\d+$/;
+
+/**
+ * An exact release, `X.Y.Z` with an optional pre-release suffix (`0.5.0-rc.1`) — what a
+ * `libraries` pin must be. A range or a tag (`^0.4.15`, `~0.4.15`, `>=0.4.15`, `0.4.x`, `*`,
+ * `latest`) is refused: the pin names the release whose shapes the plugin's content
+ * describes, and a range would let an install drift onto a release those shapes no longer
+ * match.
+ */
+export const EXACT_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+/** An npm package name, scoped or not (`@prismshadow/agenthub`, `tsx`). */
+const NPM_PACKAGE_NAME_PATTERN = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
 
 /**
  * Reads either spelling of a version — the current `YYYY.MM.DD.N` and the legacy
@@ -376,7 +390,7 @@ function stampSkill(
 }
 
 /** The plugin.json shape: the single metadata holder of a plugin (see the module header). */
-interface PluginManifestFile {
+export interface PluginManifestFile {
   description: string;
   description_zh?: string;
   short_description?: string;
@@ -392,15 +406,50 @@ interface PluginManifestFile {
     pre_tool_use?: HookCommand[];
     user_prompt?: HookCommand[];
   };
+  /**
+   * External libraries the plugin's content is written for, npm name → exact version
+   * (EXACT_VERSION_PATTERN). A skill that teaches the model to install a library into the
+   * user's project documents that library's shapes as of one release; the pin is that release,
+   * and every install command or `name@version` mention in the plugin's files names it (core's
+   * plugin test holds the two together). Bumping the library means editing this entry, the
+   * prose, and the plugin's `version`.
+   */
+  libraries?: Record<string, string>;
+}
+
+/**
+ * Parses and validates a plugin.json: the version must be `YYYY.MM.DD.N`, and every
+ * `libraries` entry must pin an exact version under a valid npm name. The loader calls it with
+ * the manifest's path so an error names the file; exported for its tests.
+ */
+export function parsePluginManifest(raw: string, manifestFile: string): PluginManifestFile {
+  const manifest = JSON.parse(raw) as PluginManifestFile;
+  if (!PLUGIN_VERSION_PATTERN.test(manifest.version)) {
+    throw new Error(`${manifestFile}: version must be YYYY.MM.DD.N, got ${manifest.version}`);
+  }
+  const { libraries } = manifest;
+  if (libraries !== undefined) {
+    if (typeof libraries !== "object" || libraries === null || Array.isArray(libraries)) {
+      throw new Error(`${manifestFile}: libraries must be an object of npm name → exact version`);
+    }
+    for (const [name, version] of Object.entries(libraries)) {
+      if (!NPM_PACKAGE_NAME_PATTERN.test(name)) {
+        throw new Error(`${manifestFile}: libraries names an invalid npm package: ${name}`);
+      }
+      if (typeof version !== "string" || !EXACT_VERSION_PATTERN.test(version)) {
+        throw new Error(
+          `${manifestFile}: libraries["${name}"] must pin an exact version (X.Y.Z), got ${String(version)}`,
+        );
+      }
+    }
+  }
+  return manifest;
 }
 
 /** Reads one plugin directory. */
 function readPluginDir(name: string, dir: string): LibraryPlugin {
   const manifestFile = path.join(dir, "plugin.json");
-  const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as PluginManifestFile;
-  if (!PLUGIN_VERSION_PATTERN.test(manifest.version)) {
-    throw new Error(`${manifestFile}: version must be YYYY.MM.DD.N, got ${manifest.version}`);
-  }
+  const manifest = parsePluginManifest(fs.readFileSync(manifestFile, "utf8"), manifestFile);
   const {
     description,
     description_zh: descriptionZh,
@@ -449,6 +498,7 @@ function readPluginDir(name: string, dir: string): LibraryPlugin {
     version,
     ...(manifest.category !== undefined ? { category: manifest.category } : {}),
     preinstall: manifest.preinstall !== false,
+    ...(manifest.libraries !== undefined ? { libraries: manifest.libraries } : {}),
     ...(icon !== undefined ? { icon } : {}),
     skills: skills.map((skill) =>
       stampSkill(skill, {

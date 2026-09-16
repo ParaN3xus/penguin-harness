@@ -113,6 +113,11 @@ describe("skills api", () => {
     expect(plugins.find((p) => p.name === "humanizer")).toMatchObject({
       hooks: [],
     });
+    // The manifest's library pins travel with the listing; a plugin without any carries no field.
+    expect(plugins.find((p) => p.name === "agent-development")?.libraries).toEqual({
+      "@prismshadow/agenthub": expect.stringMatching(/^\d+\.\d+\.\d+/),
+    });
+    expect("libraries" in goal).toBe(false);
   });
 
   it("GET /api/plugins/:plugin/files: what a plugin ships, keyed by path — skills' installable files and hook scripts", async () => {

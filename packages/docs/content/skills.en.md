@@ -25,6 +25,7 @@ plugins/<plugin>/
 | `category` | One of `office-productivity`, `software-development`, `ai-app-development`, `agent-company`; missing or unknown lands in "Other" |
 | `preinstall` | Optional; `false` keeps the plugin out of `default_agent`'s preinstalled set — install it manually from the library |
 | `hooks.stop` / `hooks.pre_tool_use` / `hooks.user_prompt` | The hook package's commands per [hook point](/agent-loop#stop-hooks): `[{ "command": "stop.mjs", "timeout": 60 }]`, paths relative to `hooks/`, timeout in seconds |
+| `libraries` | Optional; `{ "<npm name>": "X.Y.Z" }` — external libraries the plugin's content is written for, each at the exact version its skills document and install (`npm install <name>@X.Y.Z`); the loader refuses a range |
 
 The plugin name is its directory name (`^[A-Za-z0-9_-]+$`); a plugin built around someone else's product carries a `use-` prefix (`use-firecrawl`), so the name says what it is for rather than claiming the product. Versions are compared by date, then by sequence number, so `2026.08.29.10` follows `2026.08.29.9`; the manifest's version is the version of everything the plugin ships, and is distinct from the package's npm version (which follows the release). There is no other version scheme.
 

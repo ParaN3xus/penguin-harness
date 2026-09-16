@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  EXACT_VERSION_PATTERN,
   PLUGIN_CATEGORIES,
   PLUGIN_VERSION_PATTERN,
   comparePluginVersions,
@@ -19,6 +20,7 @@ import {
   loadLibraryPlugins,
   loadPluginGroups,
   loadPreinstalledPlugins,
+  parsePluginManifest,
   parseSkillFrontmatter,
   workspacePluginRoot,
   type LibraryPlugin,
@@ -239,6 +241,133 @@ describe("parseSkillFrontmatter", () => {
     });
     expect(parseSkillFrontmatter("no frontmatter")).toBeNull();
     expect(parseSkillFrontmatter("---\ndescription: d\n---\n")).toBeNull();
+  });
+});
+
+describe("parsePluginManifest", () => {
+  const manifest = (fields: Record<string, unknown>): string =>
+    JSON.stringify({ description: "d", version: "2026.09.16.1", ...fields });
+
+  it("reads a manifest whose libraries pin exact versions, pre-release included", () => {
+    const parsed = parsePluginManifest(
+      manifest({ libraries: { "@prismshadow/agenthub": "0.4.15", tsx: "4.20.0-rc.1" } }),
+      "plugin.json",
+    );
+    expect(parsed.libraries).toEqual({ "@prismshadow/agenthub": "0.4.15", tsx: "4.20.0-rc.1" });
+    expect(parsePluginManifest(manifest({}), "plugin.json").libraries).toBeUndefined();
+  });
+
+  it("refuses a range, a tag or a non-version where an exact pin is required, naming the file", () => {
+    for (const bad of ["^0.4.15", "~0.4.15", ">=0.4.15", "0.4.x", "0.4", "*", "latest", "", 1]) {
+      expect(
+        () =>
+          parsePluginManifest(
+            manifest({ libraries: { "@prismshadow/agenthub": bad } }),
+            "p/plugin.json",
+          ),
+        String(bad),
+      ).toThrow(
+        /^p\/plugin\.json: libraries\["@prismshadow\/agenthub"\] must pin an exact version/,
+      );
+    }
+  });
+
+  it("refuses a name that is not an npm package, and a libraries field that is not an object", () => {
+    expect(() =>
+      parsePluginManifest(manifest({ libraries: { "Not A Package": "1.0.0" } }), "plugin.json"),
+    ).toThrow(/invalid npm package: Not A Package/);
+    expect(() =>
+      parsePluginManifest(manifest({ libraries: ["@prismshadow/agenthub@0.4.15"] }), "plugin.json"),
+    ).toThrow(/libraries must be an object/);
+  });
+
+  it("still requires the dated plugin version", () => {
+    expect(() => parsePluginManifest(manifest({ version: "1" }), "plugin.json")).toThrow(
+      /version must be YYYY\.MM\.DD\.N/,
+    );
+  });
+});
+
+/**
+ * Libraries whose wire shapes a shipped skill documents. A skill that teaches the model to
+ * install one into the user's project is correct for exactly the release it was written
+ * against — the streaming protocol can change between releases — so the plugin pins that
+ * release in plugin.json `libraries`, and every install command, dependency spec and
+ * `name@version` mention in its files names the same version. Bumping the pin without
+ * rewriting the prose, or the prose without the pin, fails here; the manifest entry is the
+ * one place to bump.
+ */
+const PINNED_LIBRARIES = ["@prismshadow/agenthub"];
+
+/** Every text a plugin ships, keyed by path relative to the plugin directory: the SKILL.md files, their auxiliary files and the hook scripts. */
+function pluginTexts(plugin: LibraryPlugin): Array<[string, string]> {
+  const texts: Array<[string, string]> = [];
+  for (const skill of plugin.skills) {
+    texts.push([`skills/${skill.name}/SKILL.md`, skill.content]);
+    for (const [rel, text] of Object.entries(skill.files ?? {})) {
+      texts.push([`skills/${skill.name}/${rel}`, text]);
+    }
+  }
+  for (const [rel, text] of Object.entries(plugin.hooks?.files ?? {})) {
+    texts.push([`hooks/${rel}`, text]);
+  }
+  return texts;
+}
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+describe("library pins", () => {
+  it("every declared pin is an exact version of a library the plugin's files mention", () => {
+    for (const plugin of loadLibraryPlugins()) {
+      for (const [lib, version] of Object.entries(plugin.libraries ?? {})) {
+        expect(version, `${plugin.name} pins ${lib}`).toMatch(EXACT_VERSION_PATTERN);
+        expect(
+          pluginTexts(plugin).some(([, text]) => text.includes(lib)),
+          `${plugin.name} pins ${lib} but none of its files mention it`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("a plugin whose files mention a pinned library declares the pin, and every install of it names that version", () => {
+    for (const plugin of loadLibraryPlugins()) {
+      const texts = pluginTexts(plugin);
+      for (const lib of PINNED_LIBRARIES) {
+        const mentions = texts.filter(([, text]) => text.includes(lib));
+        if (mentions.length === 0) continue;
+        const pin = plugin.libraries?.[lib];
+        expect(
+          pin,
+          `${plugin.name} mentions ${lib} without pinning it in plugin.json libraries`,
+        ).toBeDefined();
+        const name = escapeRegExp(lib);
+        // `npm install <lib>` and its siblings carry `@<pin>`; a bare name would install latest.
+        const install = new RegExp(
+          `\\b(?:npm (?:install|i|add)|pnpm add|yarn add)\\b[^\\n]*?${name}(@[^\\s\`"']*)?`,
+          "g",
+        );
+        // A dependency spec in a package.json snippet.
+        const spec = new RegExp(`"${name}":\\s*"([^"]*)"`, "g");
+        // Any `<lib>@<version>` spelling — the install command and the prose note alike.
+        const at = new RegExp(`${name}@([^\\s\`"'),]+)`, "g");
+        for (const [file, text] of mentions) {
+          const where = `${plugin.name}/${file}`;
+          for (const m of text.matchAll(install)) expect(m[1], `${where}: ${m[0]}`).toBe(`@${pin}`);
+          for (const m of text.matchAll(spec)) expect(m[1], `${where}: ${m[0]}`).toBe(pin);
+          for (const m of text.matchAll(at)) {
+            expect(m[1]!.replace(/\.$/, ""), `${where}: ${m[0]}`).toBe(pin);
+          }
+        }
+      }
+    }
+  });
+
+  it("agent-development pins agenthub, the library its unified-llm-api skill installs and documents", () => {
+    const pin = libraryPlugin("agent-development")!.libraries?.["@prismshadow/agenthub"];
+    expect(pin).toMatch(EXACT_VERSION_PATTERN);
+    const skill = librarySkill("unified-llm-api")!.skill;
+    expect(skill.content).toContain(`npm install @prismshadow/agenthub@${pin}`);
+    expect(skill.content).not.toMatch(/npm install @prismshadow\/agenthub(?!@)/);
   });
 });
 

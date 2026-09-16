@@ -3483,6 +3483,8 @@ export interface PluginItem {
   skills: SkillMetadataItem[];
   /** The hook points the plugin's hook package answers at (`[]` without one). */
   hooks: string[];
+  /** External libraries the plugin's content is written for, npm name → the exact version it pins (plugin.json `libraries`); absent when it pins none. */
+  libraries?: Record<string, string>;
   /** The plugin's raw icon.svg (beside plugin.json — every built-in plugin ships one), the icon of everything it ships; the frontend draws the puzzle-piece plugin glyph without it. */
   icon?: string;
 }

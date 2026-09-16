@@ -1535,6 +1535,8 @@ export const en: Strings = {
     /** Section labels of the plugin detail Modal. */
     detailSkills: "Skills",
     detailHooks: "Hooks",
+    detailLibraryTitle:
+      "The plugin's content is written for this library version — pin it when installing",
     usedByAgents: (n: number): string =>
       n === 0 ? "not used yet" : n === 1 ? "used by 1 agent" : `used by ${n} agents`,
     /** Title on a disabled quick-start button: it pre-selects one of the plugin's skills on the currently selected agent, so the plugin has to be installed there first. */
