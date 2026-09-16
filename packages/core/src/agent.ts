@@ -30,6 +30,7 @@ import {
   loadProjectConfig,
   listInstalledHooks,
   projectDir,
+  resolveBilledPricing,
   resolveSessionMemory,
   resolveModelRef,
   sessionScratchpadDir,
@@ -1184,6 +1185,9 @@ export class Agent {
     // uniqueness scope is the Session's whole render span, so same-named tool calls after
     // compaction don't collide with earlier cards' ids.
     const toolCallIds = new ToolCallIdAllocator();
+    // What a completed Request is billed at, stamped on its token_usage: the Project's price as
+    // it is on disk when the Request completes (see resolveBilledPricing).
+    const resolvePricing = (at: Date) => resolveBilledPricing(root, projectId, modelEntry, at);
     // The LLM object of one context: the Session-fixed model entry and credentials, plus the
     // context's prompt, toolset and model defaults. The model id sent to AgentHub is always
     // the entry's upstream `model_id` (client_type inference/passing follows it);
@@ -1213,6 +1217,7 @@ export class Agent {
         ...(context.requestTimeoutMs !== undefined
           ? { requestTimeoutMs: context.requestTimeoutMs }
           : {}),
+        resolvePricing,
       });
 
     // THE opening procedure — behind the first run's bootstrap and every post-compaction

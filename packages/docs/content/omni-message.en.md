@@ -257,6 +257,15 @@ interface TokenUsagePayload {
   type: "token_usage";
   session: TokenCounts;       // Session cumulative — authored by the engine (the LLM reports `request` only)
   request: TokenCounts;       // this Request
+  pricing?: TokenUsagePricing | null; // the rates this Request was billed at, fixed when it completed;
+                              // null = the model had no price; absent on older Traces
+}
+
+interface TokenUsagePricing {
+  unit: "usd_per_mtok";
+  cache_read: number;
+  cache_write: number;
+  output: number;
 }
 
 interface TokenCounts {

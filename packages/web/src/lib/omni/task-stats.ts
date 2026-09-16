@@ -32,6 +32,7 @@
  *
  * Pure logic module, no React dependency; driven by stream-model.ts.
  */
+import { billedPricing } from "@prismshadow/penguin-core/model-catalog";
 import type { TokenUsagePayload } from "@prismshadow/penguin-core/omnimessage";
 import { computeTps, formatTps, humanizeTokens } from "../format";
 
@@ -47,6 +48,35 @@ export interface BucketPricing {
   cacheRead: number;
   cacheWrite: number;
   output: number;
+}
+
+/**
+ * The rates a Request on `(provider, modelId)` completing at `now` is billed at, for the price
+ * the Project stores: core's billedPricing — the rule the server fixes each Request's cost by —
+ * in this bucket shape. The live figures priced with it are estimates the server's recorded cost
+ * replaces once a Task settles. undefined = no price stored.
+ */
+export function billedBucketPricing(
+  provider: string,
+  modelId: string,
+  stored: BucketPricing | null | undefined,
+  now: Date = new Date(),
+): BucketPricing | undefined {
+  if (!stored) return undefined;
+  const billed = billedPricing(
+    provider,
+    modelId,
+    {
+      unit: "usd_per_mtok",
+      cache_read: stored.cacheRead,
+      cache_write: stored.cacheWrite,
+      output: stored.output,
+    },
+    now,
+  );
+  return billed === undefined
+    ? undefined
+    : { cacheRead: billed.cache_read, cacheWrite: billed.cache_write, output: billed.output };
 }
 
 /**

@@ -34,7 +34,7 @@ import type {
 } from "../interfaces/index.js";
 import { atomicWriteFile } from "../internal/atomic-write.js";
 import { DEFAULT_COMMAND_POLICY_RULES } from "./command-policy-defaults.js";
-import { canonicalClientType, presetModelEntries } from "./model-catalog.js";
+import { billedPricing, canonicalClientType, presetModelEntries } from "./model-catalog.js";
 import { projectConfigPath } from "./paths.js";
 
 /** Model reference: a `(provider, model_id)` pair (never string-concatenated anywhere). */
@@ -655,6 +655,37 @@ function sameRef(a: ModelRef, b: ModelRef): boolean {
 /** Looks up a Model entry exactly by its `(provider, model_id)` paired reference; returns `undefined` if it doesn't exist. */
 export function getModel(cfg: ProjectConfig, ref: ModelRef): ModelEntry | undefined {
   return cfg.models.find((m) => m.provider === ref.provider && m.model_id === ref.model_id);
+}
+
+/**
+ * The rates a Request on the model `entry` names, completing at `at`, is billed at — what core
+ * stamps on that Request's `token_usage` (GenerativeModelConfig.resolvePricing). The price is
+ * the one the Project stores for the model on disk NOW, so a price edit or a preset sync made
+ * mid-Session bills the next Request and never one already recorded; the catalog discount live
+ * at `at` applies to it (billedPricing). `entry` — what the Session was created with — stands in
+ * when there is no file (a config held only in memory), when it cannot be read, or when it no
+ * longer names the model. `null` = the model has no price.
+ */
+export async function resolveBilledPricing(
+  root: string,
+  projectId: string,
+  entry: ModelEntry,
+  at: Date,
+): Promise<ModelPricing | null> {
+  let stored = entry.pricing;
+  try {
+    // No file means no newer price than the Session's own: loadProjectConfig would answer the
+    // built-in defaults instead, whose price for this model the user never chose.
+    await fs.access(projectConfigPath(root, projectId));
+    const fresh = getModel(await loadProjectConfig(root, projectId), {
+      provider: entry.provider,
+      model_id: entry.model_id,
+    });
+    if (fresh) stored = fresh.pricing;
+  } catch {
+    // Keep the Session's own entry.
+  }
+  return billedPricing(entry.provider, entry.model_id, stored, at) ?? null;
 }
 
 /**

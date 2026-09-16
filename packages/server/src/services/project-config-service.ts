@@ -84,7 +84,7 @@ import {
   classifyVisionProbe,
   classifyVisionProbeError,
 } from "./vision-detect.js";
-import type { PricingRates, TieredRates } from "./usage-service.js";
+import type { PricingRates } from "./usage-service.js";
 import { Component, Use } from "@prismshadow/penguin-core/kernel";
 import type { Config, Paths } from "../hmr/capabilities.js";
 import type { ProjectConfigStore } from "../mechanisms/projects.js";
@@ -154,43 +154,6 @@ function asArray(v: unknown): RawTable[] {
 
 function optNum(v: unknown): number | undefined {
   return typeof v === "number" && Number.isFinite(v) ? v : undefined;
-}
-
-/**
- * Both tiers of a price read from a Project's config.
- *
- * A scheduled row stores its PEAK price — the one number that is true whatever hour it is
- * written — and the reduced rate is derived here. Both are returned rather than one of them
- * chosen, because the caller prices a RANGE: a week that straddles a boundary holds Tokens of
- * both kinds, and each is billed at the rate it actually ran at. Choosing here would mean
- * pricing a finished week at whichever tier happened to be in force when someone opened the
- * page, which moves a settled number twice a day.
- *
- * The two tiers differ only while the stored price is still exactly the catalog's peak: once
- * the user has typed their own number, nothing here knows whether it is a peak rate, and
- * halving it would invent a discount. The models page's badge bails on the same condition, so
- * the card and the bill always agree about what this row costs.
- */
-function tieredRates(provider: string, modelId: string, rates: PricingRates): TieredRates {
-  const entry = catalogEntryFor(provider, modelId);
-  const schedule = entry?.offPeakDiscount;
-  if (schedule === undefined || entry?.pricing === undefined)
-    return { peak: rates, offPeak: rates };
-  const peak = entry.pricing;
-  const untouched =
-    rates.cacheRead === peak.cache_read &&
-    rates.cacheWrite === peak.cache_write &&
-    rates.output === peak.output;
-  if (!untouched) return { peak: rates, offPeak: rates };
-  const off = (v: number): number => Math.round(v * (1 - schedule.rate) * 1e6) / 1e6;
-  return {
-    peak: rates,
-    offPeak: {
-      cacheRead: off(rates.cacheRead),
-      cacheWrite: off(rates.cacheWrite),
-      output: off(rates.output),
-    },
-  };
 }
 
 function optStr(v: unknown): string | undefined {
@@ -642,12 +605,16 @@ export class ProjectConfigService implements ProjectConfigStore {
     return this.getCommandPolicy(projectId);
   }
 
-  /** Pricing lookup for usage-recorder: the current pricing for this paired reference (undefined if none -> cost is NULL). */
+  /**
+   * The price this Project stores for a paired reference, as it stands on disk (undefined when it
+   * stores none). The price a Request is billed at is derived from it (usage-service billedRates):
+   * the recorder fixes a Request's cost with it, and the Trace page prices turns with it.
+   */
   async getPricing(
     projectId: string,
     provider: string,
     modelId: string,
-  ): Promise<TieredRates | undefined> {
+  ): Promise<PricingRates | undefined> {
     const raw = await this.readRaw(projectId);
     const entry = asArray(raw.models).find((m) => entryMatches(m, provider, modelId));
     const pricing = entry ? asTable(entry.pricing) : {};
@@ -657,8 +624,7 @@ export class ProjectConfigService implements ProjectConfigStore {
     if (cacheRead === undefined && cacheWrite === undefined && output === undefined) {
       return undefined;
     }
-    const rates = { cacheRead: cacheRead ?? 0, cacheWrite: cacheWrite ?? 0, output: output ?? 0 };
-    return tieredRates(provider, modelId, rates);
+    return { cacheRead: cacheRead ?? 0, cacheWrite: cacheWrite ?? 0, output: output ?? 0 };
   }
 
   /**

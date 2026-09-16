@@ -54,8 +54,8 @@ import type { SessionRow } from "../db/repos/sessions.js";
 import type { TraceFileRow, TraceSessionRow } from "../db/repos/trace-index.js";
 import { HttpError } from "../http/errors.js";
 import { formatLocalDate } from "../internal/dates.js";
-import { ratesAt, requestCostUsd } from "./usage-service.js";
-import type { PricingLookup, TieredRates } from "./usage-service.js";
+import { billedRates, requestCostUsd } from "./usage-service.js";
+import type { PricingLookup, PricingRates } from "./usage-service.js";
 import type { ProjectConfigStore } from "../mechanisms/projects.js";
 import {
   cloneScanState,
@@ -266,10 +266,11 @@ export class TraceService implements Traces {
   @Use() private readonly sources?: SessionOrigins;
   @Use() private readonly projectConfig?: ProjectConfigStore;
   /**
-   * The Project's current price for a paired reference — the same lookup the cost center
-   * prices `usage_records` with, so the analysis' per-turn cost and the toolbar's figure come
-   * from one price table. Narrow tests wire their own or none; without a price the analysis
-   * carries no cost at all.
+   * The price the Project stores NOW for a paired reference. The analysis answers "what these
+   * Requests are worth at today's price": each Request is priced from it, through the discount
+   * live at its own timestamp (billedRates) — it never reads the rates the Request recorded, so
+   * after a price change it can differ from the cost center's fixed figures, which stay the bill.
+   * Narrow tests wire their own or none; without a price the analysis carries no cost at all.
    */
   private lookupPricing: PricingLookup = async (projectId, provider, modelId) =>
     this.projectConfig?.getPricing(projectId, provider, modelId);
@@ -857,16 +858,16 @@ export class TraceService implements Traces {
   }
 
   /**
-   * The price table the analysis costs a file's Requests against: the Project's current rates
-   * for the model named by the file's own `session_meta` head, in both tiers. Null when there
-   * is no lookup, when the model has no pricing, and for a head that names no provider — such
-   * a Trace is legacy data (core refuses to resume it), and the id alone can exist under
-   * several providers at different prices, so nothing is priced rather than a first match.
+   * The price the analysis costs a file's Requests against: the Project's current stored price
+   * for the model named by the file's own `session_meta` head. Null when there is no lookup,
+   * when the model has no pricing, and for a head that names no provider — such a Trace is
+   * legacy data (core refuses to resume it), and the id alone can exist under several providers
+   * at different prices, so nothing is priced rather than a first match.
    */
   private async filePricing(
     projectId: string,
     messages: OmniMessage[],
-  ): Promise<{ provider: string; modelId: string; rates: TieredRates } | null> {
+  ): Promise<{ provider: string; modelId: string; rates: PricingRates } | null> {
     const meta = messages.find(
       (m) => isSessionMeta(m) && (m.origin === undefined || m.origin.length === 0),
     );
@@ -1236,9 +1237,9 @@ export class TraceService implements Traces {
             t.tokens.cacheWrite += request?.cache_write ?? 0;
             t.tokens.output += request?.output ?? 0;
             if (pricing !== null) {
-              // Priced per Request, at the tier this Request's own timestamp fell in — the
-              // rule the cost center applies to the usage row this same event produced, so
-              // the two figures for one request are the same figure.
+              // Priced per Request at the current price, through the discount live at this
+              // Request's own timestamp — the rule the Request was billed by, applied to
+              // today's price (see lookupPricing).
               t.cost =
                 (t.cost ?? 0) +
                 requestCostUsd(
@@ -1247,7 +1248,7 @@ export class TraceService implements Traces {
                     cacheWrite: request?.cache_write ?? 0,
                     output: request?.output ?? 0,
                   },
-                  ratesAt(
+                  billedRates(
                     pricing.rates,
                     pricing.provider,
                     pricing.modelId,

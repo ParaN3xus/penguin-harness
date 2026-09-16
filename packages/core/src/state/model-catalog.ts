@@ -146,21 +146,28 @@ export interface ModelCatalogEntry {
   /**
    * Fraction off the list price the seller is currently running (0.5 = 50% off), applied to
    * every bucket. `pricing` stays the LIST price whatever promotion is live, so a lapsed
-   * promotion is one field to delete rather than three numbers to reconstruct;
-   * effectivePricing is the rate actually billed, and presetModelEntries writes THAT into a
-   * Project so the cost center charges what the seller charges.
+   * promotion is one field to delete rather than three numbers to reconstruct. A promotion is
+   * never baked into a Project either: `presetModelEntries` writes the list price, and
+   * `billedPricing` applies the rate when a Request completes — so a promotion that starts or
+   * ends reaches every Project on upgrade, with no sync to run.
    */
   discount?: number;
   /**
+   * The instant a `discount` stops applying, as an ISO 8601 UTC timestamp (exclusive: a
+   * Request completing at exactly this instant bills the list price). Unset: the promotion
+   * runs until the row stops declaring it. Only meaningful beside `discount`.
+   *
+   * A promotion that names its end lapses on time on its own; without it, a lapsed promotion
+   * keeps billing at the discount until a release deletes the field.
+   */
+  discountUntil?: string;
+  /**
    * A discount that is only live outside a weekly set of peak windows — a vendor billing
    * cheaper off-hours. `pricing` holds the PEAK price, the one billed inside the windows, and
-   * the rate applies everywhere else.
-   *
-   * Unlike `discount`, this one changes twice a day, so it is never baked into a Project:
-   * `presetModelEntries` writes the peak price and the rate is applied when a price is read.
-   * A number on disk that silently meant something different at 09:00 than at 08:00 would be
-   * unreadable, and re-syncing presets would rewrite prices by the clock. Mutually exclusive
-   * with `discount`; an entry declaring both is a catalog error.
+   * the rate applies everywhere else, decided by the instant a Request completes. Like
+   * `discount` it is never baked into a Project: a number on disk that meant something
+   * different at 09:00 than at 08:00 would be unreadable. Mutually exclusive with `discount`;
+   * an entry declaring both is a catalog error.
    */
   offPeakDiscount?: OffPeakDiscount;
   /** Whether image input (vision modality) is supported. */
@@ -395,6 +402,13 @@ export function offPeakAt(schedule: OffPeakDiscount, now: Date): boolean {
   return !schedule.peakHours.some(([from, to]) => hour >= from && hour < to);
 }
 
+/**
+ * The end of Google's launch discount on the Gemini 3.6 / 3.7 / 3.8 Flash rows, direct and on
+ * OpenRouter: Google halves all three rates "through 2026-12-31" and publishes the date alone,
+ * so the end is read as midnight at the close of that day in Pacific time (UTC-8 in January).
+ */
+const GEMINI_FLASH_LAUNCH_DISCOUNT_UNTIL = "2027-01-01T08:00:00Z";
+
 /** DeepSeek's official off-peak tier: half price outside Beijing weekday 09:00–12:00 and 14:00–18:00. */
 export const DEEPSEEK_OFF_PEAK: OffPeakDiscount = {
   rate: 0.5,
@@ -407,40 +421,28 @@ export const DEEPSEEK_OFF_PEAK: OffPeakDiscount = {
 };
 
 /**
- * The catalog's time-based schedules, each with the references that carry it.
- *
- * The cost center needs this to split an aggregation by tier before it prices anything: the
- * rate a request ran at is a fact about when it ran, and only the catalog knows which rows have
- * two rates at all. Grouped by schedule so a second vendor's windows cost one entry, not a
- * second query.
+ * The fraction off an entry's list price that is live at `at`: a scheduled discount outside its
+ * peak windows, a flat `discount` before its `discountUntil`, and 0 otherwise — inside the peak
+ * windows, after a promotion's end, and for an entry that declares neither. An unreadable
+ * instant takes no discount rather than inventing one.
  */
-export function offPeakScheduledRefs(): Array<{
-  schedule: OffPeakDiscount;
-  refs: Array<{ provider: string; modelId: string }>;
-}> {
-  const bySchedule = new Map<
-    OffPeakDiscount,
-    { schedule: OffPeakDiscount; refs: Array<{ provider: string; modelId: string }> }
-  >();
-  for (const entry of MODEL_CATALOG) {
-    const schedule = entry.offPeakDiscount;
-    if (schedule === undefined) continue;
-    const group = bySchedule.get(schedule) ?? { schedule, refs: [] };
-    group.refs.push({ provider: entry.provider, modelId: entry.modelId });
-    bySchedule.set(schedule, group);
+export function discountRateAt(entry: ModelCatalogEntry, at: Date): number {
+  if (Number.isNaN(at.getTime())) return 0;
+  if (entry.offPeakDiscount !== undefined) {
+    return offPeakAt(entry.offPeakDiscount, at) ? entry.offPeakDiscount.rate : 0;
   }
-  return [...bySchedule.values()];
+  if (entry.discount === undefined) return 0;
+  if (entry.discountUntil !== undefined && at.getTime() >= Date.parse(entry.discountUntil)) {
+    return 0;
+  }
+  return entry.discount;
 }
 
 /**
- * What the seller actually bills for an entry: its list `pricing` less any running `discount`,
- * on every bucket. Rounded to the six decimals cny() already stores at, so a promotional rate is
- * written into a Project as a price rather than as a float artifact. An entry with no discount
- * (or no pricing at all) is returned untouched.
- *
- * A row on a SCHEDULE is a deliberate exception: `presetModelEntries` writes its peak price,
- * because which tier a request ran in is decided from that request's own timestamp when the
- * usage is aggregated, not from what a Project happened to store.
+ * What the seller bills for an entry at `now`: its list `pricing` less the discount live at that
+ * instant (see discountRateAt), on every bucket. Rounded to the six decimals cny() already stores
+ * at, so a discounted rate is a price rather than a float artifact. An entry with no live
+ * discount (or no pricing at all) is returned untouched.
  */
 export function effectivePricing(
   entry: ModelCatalogEntry,
@@ -448,15 +450,8 @@ export function effectivePricing(
 ): ModelPricing | undefined {
   const { pricing } = entry;
   if (pricing === undefined) return pricing;
-  // A scheduled discount bills the list price during its peak windows and the reduced rate
-  // outside them; a flat one always bills the reduced rate.
-  const rate =
-    entry.offPeakDiscount !== undefined
-      ? offPeakAt(entry.offPeakDiscount, now)
-        ? entry.offPeakDiscount.rate
-        : 0
-      : entry.discount;
-  if (rate === undefined || rate === 0) return pricing;
+  const rate = discountRateAt(entry, now);
+  if (rate === 0) return pricing;
   const off = (v: number): number => Math.round(v * (1 - rate) * 1e6) / 1e6;
   return {
     unit: pricing.unit,
@@ -464,6 +459,34 @@ export function effectivePricing(
     cache_write: off(pricing.cache_write),
     output: off(pricing.output),
   };
+}
+
+/** Whether two prices are the same three numbers (the unit is always usd_per_mtok). */
+function samePricing(a: ModelPricing, b: ModelPricing): boolean {
+  return a.cache_read === b.cache_read && a.cache_write === b.cache_write && a.output === b.output;
+}
+
+/**
+ * The rates a Request on `(provider, modelId)` completing at `at` is billed at, for a Project
+ * that stores `stored` for that model — the single pricing rule behind the rates recorded on
+ * `token_usage`, the usage records the server fixes, the Trace page's per-turn cost and the
+ * models page's discount badge.
+ *
+ * A stored price that is still exactly the catalog row's own list (or peak) price follows the
+ * catalog: the discount live at `at` applies. Any other stored price is the user's own figure,
+ * and nothing knows whether it is a list price at all, so it is billed as it stands — applying
+ * a discount to it would invent one. `undefined` = the Project stores no price for the model.
+ */
+export function billedPricing(
+  provider: string,
+  modelId: string,
+  stored: ModelPricing | undefined,
+  at: Date = new Date(),
+): ModelPricing | undefined {
+  if (stored === undefined) return undefined;
+  const entry = catalogEntryFor(provider, modelId);
+  if (entry?.pricing === undefined || !samePricing(stored, entry.pricing)) return stored;
+  return effectivePricing(entry, at);
 }
 
 /**
@@ -574,15 +597,14 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
   // costs correctly compute to 0. GPT models are uniformly vision-capable (OpenAI
   // product-line policy) even where the gateway page omits the modality.
   //
-  // Discounts: what these rows record is what OpenRouter actually BILLS, so a gateway
-  // promotion is stored at its discounted rate (unlike the direct-vendor rows, which keep the
-  // list price). The Gemini 3.x Flash rows are the exception: the promotion they sit on is
-  // Google's own dated launch discount rather than the gateway's, so they keep the list price
-  // and declare it in `discount`, exactly as their direct-vendor twins do. The endpoints API
-  // exposes the running promotion as `pricing.discount` on the default endpoint; rows sitting
-  // on one say so and name the rate to restore, because a lapsed promotion silently doubles
-  // the real cost — that is exactly how the gpt-5.6-terra and gpt-5.6-luna rows drifted 2x
-  // low before the 2026-08-18 re-read. --
+  // Discounts: these rows record OpenRouter's LIST price, as every other group does, and a
+  // promotion the gateway is running is declared beside it in `discount` — with
+  // `discountUntil` when its end is published — rather than written into `pricing`. The
+  // endpoints API exposes the running promotion as `pricing.discount` on the default
+  // endpoint. A lapsed promotion nobody removes keeps billing at the discount, understating
+  // the real cost 2x — which is how the gpt-5.6-terra and gpt-5.6-luna rows drifted low
+  // before the 2026-08-18 re-read, back when a promotion was stored as the price itself. The
+  // Gemini 3.x Flash rows sit on Google's own dated launch discount, passed straight through. --
   {
     modelId: "anthropic/claude-fable-5",
     displayName: "Claude Fable 5",
@@ -718,6 +740,7 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     contextWindow: 1048576,
     pricing: usd(0.15, 1.5, 7.5),
     discount: 0.5,
+    discountUntil: GEMINI_FLASH_LAUNCH_DISCOUNT_UNTIL,
     supportsVision: true,
     clientType: "openai-responses",
     baseUrl: OPENROUTER_BASE_URL,
@@ -734,6 +757,7 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     contextWindow: 1048576,
     pricing: usd(0.15, 1.5, 7.5),
     discount: 0.5,
+    discountUntil: GEMINI_FLASH_LAUNCH_DISCOUNT_UNTIL,
     supportsVision: true,
     clientType: "openai-responses",
     baseUrl: OPENROUTER_BASE_URL,
@@ -753,6 +777,7 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     contextWindow: 1048576,
     pricing: usd(0.15, 1.5, 7.5),
     discount: 0.5,
+    discountUntil: GEMINI_FLASH_LAUNCH_DISCOUNT_UNTIL,
     supportsVision: true,
     clientType: "openai-responses",
     baseUrl: OPENROUTER_BASE_URL,
@@ -855,12 +880,13 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
   },
   {
     // Running a `discount: 0.5` promotion as of 2026-08-18, so OpenRouter bills half the
-    // $0.50/$6.25/$30 list price — restore the list rates when the promotion ends.
+    // $0.50/$6.25/$30 list price; no end is published, so `discount` goes when it lapses.
     modelId: "openai/gpt-5.6-sol",
     displayName: "GPT-5.6 Sol",
     provider: "openrouter",
     contextWindow: 1050000,
-    pricing: usd(0.25, 3.125, 15),
+    pricing: usd(0.5, 6.25, 30),
+    discount: 0.5,
     supportsVision: true,
     clientType: "openai-responses",
     baseUrl: OPENROUTER_BASE_URL,
@@ -1071,16 +1097,18 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     baseUrl: OPENROUTER_BASE_URL,
   },
   {
-    // The gateway listing of the direct glm-5.3-flash row below, sitting on a 50%-off ZAI
+    // The gateway listing of the direct glm-5.3-flash row below, which sat on a 50%-off Z.AI
     // promotion through 2026-09-09 16:00 UTC (Z.AI's own price list names the same window as
-    // 24:00 on 2026-09-09, UTC+8). Stored at the discounted rate the gateway actually bills;
-    // when it lapses, restore 0.03 / 0.15 / 0.5. The listing takes text, images and video,
-    // and the generic Responses client it pins carries image parts through.
+    // 24:00 on 2026-09-09, UTC+8). The promotion and its end are declared, so the row bills
+    // the 0.03 / 0.15 / 0.5 list price from that instant on. The listing takes text, images
+    // and video, and the generic Responses client it pins carries image parts through.
     modelId: "z-ai/glm-5.3-flash",
     displayName: "GLM-5.3 Flash",
     provider: "openrouter",
     contextWindow: 1048576,
-    pricing: usd(0.015, 0.075, 0.25),
+    pricing: usd(0.03, 0.15, 0.5),
+    discount: 0.5,
+    discountUntil: "2026-09-09T16:00:00Z",
     supportsVision: true,
     clientType: "openai-responses",
     baseUrl: OPENROUTER_BASE_URL,
@@ -1266,8 +1294,9 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
   // Discounts: every row here stores the official LIST price, the convention of the two Qwen
   // groups below, and a promoted row declares its rate in `discount` rather than having its
   // price rewritten — a promotion that lapses is then one field to delete, with the rate to
-  // return to still on the row. effectivePricing() applies it and presetModelEntries writes
-  // that billed rate into a Project, so the cost center charges what the gateway charges.
+  // return to still on the row. Presets write the list price into a Project and billedPricing()
+  // applies the rate when a Request completes, so the cost center charges what the gateway
+  // charges — and stops discounting the moment a release removes the promotion.
   // Nine rows are promoted (rates re-confirmed 2026-09-10): deepseek-v4-flash-0731,
   // deepseek-v4-pro-0813 and kimi-k3 at 20% off; glm-5.3, glm-5.3-flash and qwen3.8-max at
   // 10%; the three Doubao Seed rows (seed-2.1-pro, seed-2.1-turbo, seed-evolving) at 50%.
@@ -1638,15 +1667,15 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
   {
     // Same list price and same launch discount as the gemini-3.7-flash and gemini-3.6-flash
     // rows below: Google halves all three rates through 2026-12-31. Like those rows this one
-    // declares the promotion in `discount`, so the list price stays on file while a Project is
-    // preset with — and the cost center bills — the 0.075/0.75/3.75 Google actually charges
-    // today. One field to delete when the promotion lapses.
+    // declares the promotion in `discount` and its end in `discountUntil`, so the list price
+    // stays on file and a Request bills the 0.075/0.75/3.75 Google actually charges until then.
     modelId: "gemini-3.8-flash",
     displayName: "Gemini 3.8 Flash",
     provider: "google",
     contextWindow: 1048576,
     pricing: usd(0.15, 1.5, 7.5),
     discount: 0.5,
+    discountUntil: GEMINI_FLASH_LAUNCH_DISCOUNT_UNTIL,
     supportsVision: true,
   },
   {
@@ -1660,6 +1689,7 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     contextWindow: 1048576,
     pricing: usd(0.15, 1.5, 7.5),
     discount: 0.5,
+    discountUntil: GEMINI_FLASH_LAUNCH_DISCOUNT_UNTIL,
     supportsVision: true,
   },
   {
@@ -1671,6 +1701,7 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     contextWindow: 1048576,
     pricing: usd(0.15, 1.5, 7.5),
     discount: 0.5,
+    discountUntil: GEMINI_FLASH_LAUNCH_DISCOUNT_UNTIL,
     supportsVision: true,
   },
   {
@@ -2274,18 +2305,14 @@ export function fastModeProtocol(
  * rest — and inline a preset base_url. The direct MiniMax M3 entry also pins its protocol and
  * endpoint. No secrets are included, so only an API key is needed.
  *
- * Pricing is written as the EFFECTIVE rate (effectivePricing: list less any running
- * discount), not the list price the catalog records. A Project's stored pricing is the only
- * thing the cost center ever prices against, so writing anything but what the seller bills
- * would report a cost nobody was charged; the list price and the promotion that produced the
- * difference stay in the catalog, where they can be read and restored.
+ * Pricing is written as the catalog's LIST price (the peak price for a scheduled row), never a
+ * discounted one: it is the one number that is true whenever a Project is created or re-synced.
+ * Every discount — a running promotion, an off-peak tier — is applied by billedPricing when a
+ * Request completes, and only while the stored price is still this one.
  */
 export function presetModelEntries(): ModelEntry[] {
   return MODEL_CATALOG.map((m) => {
-    // A scheduled discount writes the PEAK price, which is the same number whatever hour the
-    // Project is created or re-synced in. What is on disk has to be stable: the off-peak rate
-    // is applied when the price is read, by the models page and by the cost center alike.
-    const pricing = m.offPeakDiscount !== undefined ? m.pricing : effectivePricing(m);
+    const { pricing } = m;
     return {
       provider: m.provider,
       model_id: m.modelId,

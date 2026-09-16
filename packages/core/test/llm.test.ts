@@ -17,7 +17,11 @@ import {
   UnsupportedParameterError,
 } from "@prismshadow/agenthub";
 import type { UniConfig, UniEvent, UniMessage, UsageMetadata } from "@prismshadow/agenthub";
-import type { LLMOutcome, ThinkingLevelName } from "../src/interfaces/index.js";
+import type {
+  GenerativeModelConfig,
+  LLMOutcome,
+  ThinkingLevelName,
+} from "../src/interfaces/index.js";
 
 import {
   EventTranslator,
@@ -2408,5 +2412,86 @@ describe("tool_call_id uniquification (name-as-id providers, e.g. Gemini uses th
       res = await gen.next();
     }
     expect(callIdsOf(out)).toEqual(["get_time#2"]);
+  });
+});
+
+describe("GenerativeModel stamps the billed rates on a completed Request's token_usage", () => {
+  // The upstream is injected through the protected openStream seam, as in the outcome suite.
+  class PricedModel extends GenerativeModel {
+    constructor(
+      private readonly events: UniEvent[],
+      resolvePricing?: GenerativeModelConfig["resolvePricing"],
+    ) {
+      super({
+        modelId: "claude-sonnet-4-6",
+        tools: [],
+        ...(resolvePricing !== undefined ? { resolvePricing } : {}),
+      });
+    }
+    protected override openStream(): AsyncIterable<UniEvent> {
+      const events = this.events;
+      return (async function* () {
+        yield* events;
+      })();
+    }
+  }
+
+  const completed = (): UniEvent[] => [
+    ev({ content_items: [{ type: "text", text: "ok" }] }),
+    ev({
+      event_type: "stop",
+      content_items: [],
+      finish_reason: "stop",
+      usage_metadata: {
+        cached_tokens: 0,
+        prompt_tokens: 12,
+        thoughts_tokens: 0,
+        response_tokens: 4,
+      },
+    }),
+  ];
+
+  async function usageOf(model: GenerativeModel): Promise<OmniMessage<TokenUsagePayload>> {
+    const gen = model.streamGenerate({ newMessages: [userText("go")] });
+    const out: OmniMessage[] = [];
+    let res = await gen.next();
+    while (!res.done) {
+      out.push(res.value);
+      res = await gen.next();
+    }
+    expect(res.value).toMatchObject({ status: "completed" });
+    const usage = out.find((m) => (m.payload as { type?: string }).type === "token_usage");
+    expect(usage).toBeDefined();
+    return usage as OmniMessage<TokenUsagePayload>;
+  }
+
+  const RATES = { unit: "usd_per_mtok" as const, cache_read: 1, cache_write: 2, output: 3 };
+
+  it("asks once, at the event's own timestamp, and carries the answer on the event", async () => {
+    const asked: string[] = [];
+    const usage = await usageOf(
+      new PricedModel(completed(), async (at) => {
+        asked.push(at.toISOString());
+        return RATES;
+      }),
+    );
+    expect(usage.payload.pricing).toEqual(RATES);
+    expect(asked).toEqual([new Date(usage.timestamp).toISOString()]);
+  });
+
+  it("an unpriced model carries null; no resolver, or one that fails, leaves the field off without losing the usage", async () => {
+    expect(
+      (await usageOf(new PricedModel(completed(), async () => null))).payload.pricing,
+    ).toBeNull();
+    expect(Object.hasOwn((await usageOf(new PricedModel(completed()))).payload, "pricing")).toBe(
+      false,
+    );
+    const failed = await usageOf(
+      new PricedModel(completed(), async () => {
+        throw new Error("config unreadable");
+      }),
+    );
+    expect(Object.hasOwn(failed.payload, "pricing")).toBe(false);
+    expect(failed.payload.request.total).toBe(16);
   });
 });

@@ -13,12 +13,7 @@ import type { AddressInfo } from "node:net";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  MODEL_CATALOG,
-  catalogEntryFor,
-  effectivePricing,
-  userText,
-} from "@prismshadow/penguin-core";
+import { MODEL_CATALOG, catalogEntryFor, userText } from "@prismshadow/penguin-core";
 import type {
   ModelsResponse,
   ModelTestResponse,
@@ -26,6 +21,7 @@ import type {
   SessionCreateResponse,
 } from "../src/api/types.js";
 import { ProjectConfigService } from "../src/services/project-config-service.js";
+import { billedRates } from "../src/services/usage-service.js";
 import type { RuntimeSession } from "../src/runtime/session-manager.js";
 import type { ChannelEvent } from "../src/runtime/channel.js";
 import { apiClient, createTestApp, loginAdmin, provisionUser, waitFor } from "./helpers.js";
@@ -133,18 +129,17 @@ describe("models preset & catalog enrichment", () => {
     expect(mimo.credential?.baseUrl).toBe("https://openrouter.ai/api/v1");
     expect(mimo.credential?.apiKeyMasked).toBeUndefined();
 
-    // A catalog row on a promotion is preset at the rate the seller BILLS, not at the list
-    // price the catalog records. The cost center prices only against what is written into
-    // the Project, so anything else here would report a cost nobody was charged.
+    // A catalog row on a promotion is preset at its LIST price: the promotion is applied when a
+    // Request completes (billedPricing), so a promotion that starts or ends reaches this Project
+    // on upgrade instead of waiting in the file for a preset sync.
     const promoted = catalogEntryFor("tokendance", "glm-5.3-flash")!;
-    const billed = effectivePricing(promoted)!;
+    expect(promoted.discount).toBeGreaterThan(0);
     expect(pick(body, "tokendance", "glm-5.3-flash").pricing).toEqual({
-      cacheRead: billed.cache_read,
-      cacheWrite: billed.cache_write,
-      output: billed.output,
+      cacheRead: promoted.pricing!.cache_read,
+      cacheWrite: promoted.pricing!.cache_write,
+      output: promoted.pricing!.output,
     });
-    expect(billed.output).toBeLessThan(promoted.pricing!.output);
-    // An undiscounted row is preset at its list price, unchanged.
+    // An undiscounted row is preset at its list price too.
     const plain = catalogEntryFor("tokendance", "hy4-preview")!;
     expect(pick(body, "tokendance", "hy4-preview").pricing).toEqual({
       cacheRead: plain.pricing!.cache_read,
@@ -598,17 +593,26 @@ describe("model-reference rekeying and the connectivity test", () => {
     expect(toml).not.toContain("openai/gpt-5.5");
   });
 
-  it("a scheduled row answers with both of its rates, from the one stable price on disk", async () => {
-    // No clock is passed and none is wanted: which tier a given request ran in is decided from
-    // that record's own timestamp when the usage is aggregated, so the price lookup's whole job
-    // is to say what the two tiers are. The number on disk is the peak one either way.
+  // 2026-08-31 is a Monday: 01:30Z is 09:30 in Beijing (peak), 12:00Z is 20:00 (off-peak).
+  const PEAK = new Date("2026-08-31T01:30:00Z");
+  const OFF_PEAK = new Date("2026-08-31T12:00:00Z");
+
+  it("a scheduled row stores the one stable price, and the tier is derived from a Request's own instant", async () => {
+    // The number on disk is the peak price whatever the hour; which tier a Request bills at is
+    // decided by when it completed, so the same stored price bills twice as much at 09:30 as at
+    // 20:00 on the same Monday.
     const svc = wire(ProjectConfigService, { paths: { root: t.root } });
-    const rates = await svc.getPricing(projectId, "deepseek", "deepseek-v4-flash");
+    const stored = await svc.getPricing(projectId, "deepseek", "deepseek-v4-flash");
     const catalogPeak = catalogEntryFor("deepseek", "deepseek-v4-flash")!.pricing!;
-    expect(rates!.peak.output).toBe(catalogPeak.output);
-    expect(rates!.offPeak.output).toBeCloseTo(catalogPeak.output / 2, 5);
-    expect(rates!.peak.cacheRead).toBe(catalogPeak.cache_read);
-    expect(rates!.offPeak.cacheRead).toBeCloseTo(catalogPeak.cache_read / 2, 6);
+    expect(stored).toEqual({
+      cacheRead: catalogPeak.cache_read,
+      cacheWrite: catalogPeak.cache_write,
+      output: catalogPeak.output,
+    });
+    expect(billedRates(stored!, "deepseek", "deepseek-v4-flash", PEAK)).toEqual(stored);
+    const off = billedRates(stored!, "deepseek", "deepseek-v4-flash", OFF_PEAK);
+    expect(off.output).toBeCloseTo(catalogPeak.output / 2, 5);
+    expect(off.cacheRead).toBeCloseTo(catalogPeak.cache_read / 2, 6);
   });
 
   it("a hand-edited price on a scheduled row is billed as typed, in both tiers", async () => {
@@ -631,13 +635,12 @@ describe("model-reference rekeying and the connectivity test", () => {
     }));
     await api.put(url(), { models: entries });
     const svc = wire(ProjectConfigService, { paths: { root: t.root } });
-    // Nothing here knows whether 3 is a peak rate, so halving it would invent a discount: the
-    // two tiers collapse to the typed number and the split costs a row and changes nothing.
+    // Nothing here knows whether 3 is a peak rate, so halving it would invent a discount: both
+    // tiers bill the typed number.
     const typed = { cacheRead: 1, cacheWrite: 2, output: 3 };
-    expect(await svc.getPricing(projectId, "deepseek", "deepseek-v4-flash")).toEqual({
-      peak: typed,
-      offPeak: typed,
-    });
+    expect(await svc.getPricing(projectId, "deepseek", "deepseek-v4-flash")).toEqual(typed);
+    expect(billedRates(typed, "deepseek", "deepseek-v4-flash", OFF_PEAK)).toEqual(typed);
+    expect(billedRates(typed, "deepseek", "deepseek-v4-flash", PEAK)).toEqual(typed);
   });
 
   it("an absent display name inherits the catalog's; only an empty one clears it", async () => {

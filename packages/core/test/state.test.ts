@@ -50,6 +50,7 @@ import {
   projectConfigPath,
   removeVaultEntry,
   renderProjectConfigToml,
+  resolveBilledPricing,
   resolveModelRef,
   resolveRoot,
   saveProjectConfig,
@@ -58,6 +59,7 @@ import {
   skillsDir,
   systemConfigPath,
   toolsDir,
+  type ModelEntry,
   type ModelRef,
   type ProjectConfig,
   type SystemConfig,
@@ -1581,6 +1583,63 @@ describe("default_chat (new-chat defaults block)", () => {
     expect(parsed.default_model).toEqual({ provider: "p", model_id: "m" });
     expect(parsed.default_chat).toEqual({ thinking_level: "low" });
     expect(parsed.models).toEqual([{ provider: "p", model_id: "m" }]);
+  });
+});
+
+describe("resolveBilledPricing (the rates stamped on a completed Request)", () => {
+  // Monday 2026-08-31: 01:30Z is 09:30 Beijing (peak), 12:00Z is 20:00 (off-peak).
+  const PEAK = new Date("2026-08-31T01:30:00Z");
+  const OFF_PEAK = new Date("2026-08-31T12:00:00Z");
+  const session = (): ModelEntry =>
+    defaultProjectConfig().models.find(
+      (m) => m.provider === "deepseek" && m.model_id === "deepseek-v4-flash",
+    )!;
+
+  it("reads the price on disk at the moment, through the catalog discount live then", async () => {
+    const entry = session();
+    await saveProjectConfig(tmpRoot, DEFAULT_PROJECT_ID, defaultProjectConfig());
+    expect(await resolveBilledPricing(tmpRoot, DEFAULT_PROJECT_ID, entry, PEAK)).toEqual(
+      entry.pricing,
+    );
+    const off = (await resolveBilledPricing(tmpRoot, DEFAULT_PROJECT_ID, entry, OFF_PEAK))!;
+    expect(off.output).toBeCloseTo(entry.pricing!.output / 2, 5);
+
+    // A price typed mid-Session bills the next Request as typed, off-peak or not.
+    const cfg = await loadProjectConfig(tmpRoot, DEFAULT_PROJECT_ID);
+    const row = getModel(cfg, { provider: "deepseek", model_id: "deepseek-v4-flash" })!;
+    row.pricing = { unit: "usd_per_mtok", cache_read: 1, cache_write: 2, output: 3 };
+    await saveProjectConfig(tmpRoot, DEFAULT_PROJECT_ID, cfg);
+    expect(await resolveBilledPricing(tmpRoot, DEFAULT_PROJECT_ID, entry, OFF_PEAK)).toEqual(
+      row.pricing,
+    );
+
+    // A price removed mid-Session leaves the next Request unpriced.
+    delete row.pricing;
+    await saveProjectConfig(tmpRoot, DEFAULT_PROJECT_ID, cfg);
+    expect(await resolveBilledPricing(tmpRoot, DEFAULT_PROJECT_ID, entry, PEAK)).toBeNull();
+  });
+
+  it("falls back to the Session's own entry with no file, or a file that no longer names the model", async () => {
+    const entry = {
+      ...session(),
+      pricing: { unit: "usd_per_mtok" as const, cache_read: 7, cache_write: 8, output: 9 },
+    };
+    // No file: the built-in defaults are not the user's price.
+    expect(await resolveBilledPricing(tmpRoot, DEFAULT_PROJECT_ID, entry, OFF_PEAK)).toEqual(
+      entry.pricing,
+    );
+    const without = defaultProjectConfig();
+    without.models = without.models.filter((m) => m.model_id !== "deepseek-v4-flash");
+    await saveProjectConfig(tmpRoot, DEFAULT_PROJECT_ID, without);
+    expect(
+      getModel(await loadProjectConfig(tmpRoot, DEFAULT_PROJECT_ID), {
+        provider: "deepseek",
+        model_id: "deepseek-v4-flash",
+      }),
+    ).toBeUndefined();
+    expect(await resolveBilledPricing(tmpRoot, DEFAULT_PROJECT_ID, entry, OFF_PEAK)).toEqual(
+      entry.pricing,
+    );
   });
 });
 

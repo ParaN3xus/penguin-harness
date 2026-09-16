@@ -1,19 +1,26 @@
 /**
- * Unit tests for usage persistence and statistics: origin→model attribution,
- * summary buckets and group aggregation, cost computed **on the fly** (only
- * Tokens are persisted; cost is priced against current pricing at query time,
- * no pricing → NULL + hasUncosted; a later price update is reflected
- * immediately), and the status → success-rate pipeline that rides on the time
- * series (aborted doesn't count as a model failure).
+ * Unit tests for usage persistence and statistics: origin→model attribution, each record's
+ * cost **fixed when it is written** (from the rates the Request carried on token_usage, or
+ * priced by the recorder at that instant; no price → NULL + hasUncosted; a later price change
+ * never re-prices a recorded row), summary buckets and group aggregation over the recorded
+ * costs, the one-time settle of rows written before costs were fixed, and the status →
+ * success-rate pipeline that rides on the time series (aborted doesn't count as a model
+ * failure).
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { sessionMeta, tokenUsage, withOrigin } from "@prismshadow/penguin-core";
+import {
+  catalogEntryFor,
+  requestEnd,
+  sessionMeta,
+  tokenUsage,
+  withOrigin,
+} from "@prismshadow/penguin-core";
 import type { SessionMetaPayload, TokenCounts } from "@prismshadow/penguin-core";
 import { ORIGIN_MODELS_MAX, UsageRecorder } from "../src/runtime/usage-recorder.js";
 import { ErrorsRepo } from "../src/db/repos/errors.js";
 import { UsageRepo } from "../src/db/repos/usage.js";
-import { UsageService } from "../src/services/usage-service.js";
-import type { PricingRates } from "../src/services/usage-service.js";
+import { UsageService, billedRates, requestCostUsd } from "../src/services/usage-service.js";
+import type { PricingLookup, PricingRates } from "../src/services/usage-service.js";
 import { openDatabase } from "../src/db/database.js";
 import { enumerateBuckets, enumerateTsBuckets, formatLocalDate } from "../src/internal/dates.js";
 import type { DatabaseSync } from "node:sqlite";
@@ -46,6 +53,9 @@ function meta(sessionId: string, modelId: string, provider = "custom"): SessionM
 describe("usage-recorder", () => {
   let db: DatabaseSync;
   let repo: UsageRepo;
+  /** A recorder whose price lookup answers `stored` (default: no price anywhere). */
+  const recorder = (lookupPricing: PricingLookup = async () => undefined, now = new Date()) =>
+    wire(UsageRecorder, { usage: repo, clock: { now: () => now }, lookupPricing });
 
   beforeEach(() => {
     db = openDatabase(":memory:");
@@ -53,9 +63,14 @@ describe("usage-recorder", () => {
   });
   afterEach(() => db.close());
 
-  it("token_usage → one row (the request bucket; only Tokens persisted, never cost)", async () => {
-    const rec = wire(UsageRecorder, { usage: repo, clock: { now: () => new Date() } });
-    await rec.record(CTX, tokenUsage(counts(1000), counts(115)));
+  it("token_usage → one row (the request bucket), its cost fixed from the rates the Request carried", async () => {
+    const event = tokenUsage(counts(1000), counts(115));
+    event.payload.pricing = { unit: "usd_per_mtok", cache_read: 1, cache_write: 2, output: 4 };
+    // The rates on the event are the bill: the stored price is not consulted at all.
+    const rec = recorder(async () => {
+      throw new Error("a Request that carried its rates must not be re-priced");
+    });
+    await rec.record(CTX, event);
     const rows = db.prepare("SELECT * FROM usage_records").all();
     expect(rows).toHaveLength(1);
     const row = rows[0]!;
@@ -64,10 +79,61 @@ describe("usage-recorder", () => {
     expect(row.model_id).toBe("main-model");
     expect(row.total).toBe(115); // taken from request.total
     expect(row.cache_read).toBe(100);
+    expect(row.cost).toBeCloseTo((100 * 1 + 10 * 2 + 5 * 4) / 1e6, 15);
+    expect(row.cost_settled).toBe(1);
+  });
+
+  it("pricing: null is a model with no price — the row is written uncosted, and settled", async () => {
+    const event = tokenUsage(counts(10), counts(10));
+    event.payload.pricing = null;
+    await recorder(async () => ({ cacheRead: 9, cacheWrite: 9, output: 9 })).record(CTX, event);
+    const row = db.prepare("SELECT cost, cost_settled FROM usage_records").get()!;
+    expect(row.cost).toBeNull();
+    expect(row.cost_settled).toBe(1);
+  });
+
+  it("an event that carries no rates (a title request) is priced here, at this instant, by the same rule", async () => {
+    // A DeepSeek row still storing the catalog's peak price, recorded at 20:00 Beijing on a
+    // Monday: the off-peak tier applies, exactly as core would have stamped it.
+    const peak = catalogEntryFor("deepseek", "deepseek-v4-flash")!.pricing!;
+    const stored = {
+      cacheRead: peak.cache_read,
+      cacheWrite: peak.cache_write,
+      output: peak.output,
+    };
+    const at = new Date("2026-08-31T12:00:00Z");
+    const ctx = { ...CTX, provider: "deepseek", modelId: "deepseek-v4-flash" };
+    await recorder(async () => stored, at).record(ctx, tokenUsage(counts(115), counts(115)));
+    const row = db.prepare("SELECT cost FROM usage_records").get()!;
+    const expected = requestCostUsd(
+      { cacheRead: 100, cacheWrite: 10, output: 5 },
+      billedRates(stored, "deepseek", "deepseek-v4-flash", at),
+    );
+    expect(expected).toBeLessThan(
+      requestCostUsd({ cacheRead: 100, cacheWrite: 10, output: 5 }, stored),
+    );
+    expect(row.cost).toBeCloseTo(expected, 15);
+  });
+
+  it("a failed Request costs 0 on a priced model and nothing on an unpriced one; a failing lookup still writes the row", async () => {
+    await recorder(async () => ({ cacheRead: 1, cacheWrite: 1, output: 1 })).record(
+      CTX,
+      requestEnd("fatal"),
+    );
+    await recorder(async () => undefined).record(CTX, requestEnd("fatal"));
+    await recorder(async () => {
+      throw new Error("config unreadable");
+    }).record(CTX, tokenUsage(counts(5), counts(5)));
+    const rows = db.prepare("SELECT status, cost FROM usage_records ORDER BY id").all();
+    expect(rows).toEqual([
+      { status: "fatal", cost: 0 },
+      { status: "fatal", cost: null },
+      { status: "completed", cost: null },
+    ]);
   });
 
   it("a sub-session's session_meta registers the origin→model mapping; token_usage is attributed via it", async () => {
-    const rec = wire(UsageRecorder, { usage: repo, clock: { now: () => new Date() } });
+    const rec = recorder();
     const childMeta = withOrigin(
       sessionMeta(meta("session-child", "child-model")),
       "session-child",
@@ -81,20 +147,20 @@ describe("usage-recorder", () => {
   });
 
   it("falls back to the main Session's Model when the origin mapping is missing", async () => {
-    const rec = wire(UsageRecorder, { usage: repo, clock: { now: () => new Date() } });
+    const rec = recorder();
     await rec.record(CTX, withOrigin(tokenUsage(counts(5), counts(5)), "session-unknown"));
     const row = db.prepare("SELECT model_id FROM usage_records").get()!;
     expect(row.model_id).toBe("main-model");
   });
 
   it("non-token_usage messages are a no-op", async () => {
-    const rec = wire(UsageRecorder, { usage: repo, clock: { now: () => new Date() } });
+    const rec = recorder();
     await rec.record(CTX, sessionMeta(meta("session-main", "main-model")));
     expect(db.prepare("SELECT COUNT(*) AS n FROM usage_records").get()!.n).toBe(0);
   });
 
   it("the origin mapping is capped: past the limit the earliest entry is evicted and falls back to the main Session's Model", async () => {
-    const rec = wire(UsageRecorder, { usage: repo, clock: { now: () => new Date() } });
+    const rec = recorder();
     for (let i = 0; i <= ORIGIN_MODELS_MAX; i++) {
       // ORIGIN_MODELS_MAX + 1 entries total: the earliest, sub-0, gets evicted.
       await rec.record(CTX, withOrigin(sessionMeta(meta(`sub-${i}`, "sub-model")), `sub-${i}`));
@@ -107,19 +173,20 @@ describe("usage-recorder", () => {
   });
 });
 
-describe("usage-service (cost computed on the fly)", () => {
+describe("usage-service (sums the costs fixed at record time)", () => {
   let db: DatabaseSync;
   let repo: UsageRepo;
   let service: (now: Date) => UsageService;
-  /** Mutable pricing table: simulates a "price added later" — change the price after inserting a record, and the query reflects it immediately. */
+  /**
+   * The price each model has when a row is WRITTEN: `insert` fixes the row's cost from it, as the
+   * recorder does. Changing it afterwards simulates a later price edit — which must not move a
+   * recorded row.
+   */
   let pricing: Record<string, PricingRates | undefined>;
 
-  // The pricing lookup callback takes three params (projectId, provider, modelId): locates the
-  // price via the paired reference. These fixtures use models with no schedule, so both tiers
-  // are the one rate — a scheduled model's two tiers are exercised in the peak-split test below.
-  const lookup = async (_p: string, _provider: string, modelId: string) => {
-    const rates = pricing[modelId];
-    return rates === undefined ? undefined : { peak: rates, offPeak: rates };
+  /** Queries never look a price up: they sum what was recorded. */
+  const lookup: PricingLookup = async () => {
+    throw new Error("a usage query must not re-price recorded rows");
   };
 
   beforeEach(() => {
@@ -136,7 +203,16 @@ describe("usage-service (cost computed on the fly)", () => {
   const ROW_COST = (10 * 0.3 + 1 * 3.75 + 5 * 15) / 1e6;
 
   function insert(date: string, opts: Partial<Parameters<UsageRepo["insert"]>[0]> = {}): void {
+    const row = {
+      cacheRead: 10,
+      cacheWrite: 1,
+      output: 5,
+      modelId: "m1",
+      ...opts,
+    };
+    const rates = pricing[row.modelId];
     repo.insert({
+      cost: rates === undefined ? null : requestCostUsd(row, rates),
       ts: `${date}T00:00:00.000Z`,
       date,
       projectId: "p1",
@@ -153,33 +229,18 @@ describe("usage-service (cost computed on the fly)", () => {
     });
   }
 
-  it("a scheduled model is priced per record, and the total does not move with the clock", async () => {
-    // The defect this pins: pricing the whole table at whichever tier is in force when the page
-    // is opened made a finished week's cost double at 09:00 Beijing and halve at 12:00. The tier
-    // is a fact about when each request ran, so it is decided from that record's own `ts`.
-    //
-    // 2026-08-31 is a Monday. 01:30Z is 09:30 in Beijing (peak); 12:00Z is 20:00 (off-peak).
-    const REF = { provider: "deepseek", modelId: "deepseek-v4-flash" };
-    insert("2026-08-31", { ...REF, ts: "2026-08-31T01:30:00.000Z" });
-    insert("2026-08-31", { ...REF, ts: "2026-08-31T12:00:00.000Z" });
-    pricing["deepseek-v4-flash"] = { cacheRead: 1, cacheWrite: 2, output: 4 };
-    const tiered = async () => ({
-      peak: { cacheRead: 1, cacheWrite: 2, output: 4 },
-      offPeak: { cacheRead: 0.5, cacheWrite: 1, output: 2 },
-    });
-    // One row's Tokens are cacheRead 10 / cacheWrite 1 / output 5, so the peak record costs
-    // (10*1 + 1*2 + 5*4)/1e6 and the off-peak one exactly half of that.
-    const peakCost = (10 * 1 + 1 * 2 + 5 * 4) / 1e6;
-    const expected = peakCost + peakCost / 2;
+  it("a query sums the recorded costs, and the total does not move with the clock", async () => {
+    // Two rows fixed at different rates (the tier each ran in, decided when it was recorded):
+    // reading them at any hour gives the same total.
+    insert("2026-08-31", { ts: "2026-08-31T01:30:00.000Z", cost: 0.002 });
+    insert("2026-08-31", { ts: "2026-08-31T12:00:00.000Z", cost: 0.001 });
     for (const at of ["2026-08-31T01:30:00Z", "2026-08-31T12:00:00Z", "2026-09-06T01:30:00Z"]) {
-      const svc = wire(UsageService, {
-        usage: repo,
-        errors: wire(ErrorsRepo, { db: db }),
-        lookupPricing: tiered,
-        clock: { now: () => new Date(at) },
+      const res = await service(new Date(at)).query("p1", {
+        groupBy: "date",
+        from: "2026-08-31",
+        to: "2026-08-31",
       });
-      const res = await svc.query("p1", { groupBy: "date", from: "2026-08-31", to: "2026-08-31" });
-      expect(res.summary.total.cost, at).toBeCloseTo(expected, 10);
+      expect(res.summary.total.cost, at).toBeCloseTo(0.003, 12);
     }
   });
 
@@ -200,19 +261,27 @@ describe("usage-service (cost computed on the fly)", () => {
     expect(res.summary.last7d.hasUncosted).toBe(false);
   });
 
-  it("price added later: no pricing at insert time; once configured, queries price it immediately", async () => {
+  it("a price changed later never re-prices a recorded row: only the rows written after it carry it", async () => {
     const now = new Date("2026-07-06T10:00:00");
-    insert("2026-07-06", { modelId: "m-late" });
+    insert("2026-07-06", { modelId: "m-late" }); // no price yet: recorded uncosted
+    insert("2026-07-06"); // m1 at its old price
     const svc = service(now);
 
     const before = await svc.query("p1", { groupBy: "date" });
-    expect(before.summary.total.cost).toBeNull();
+    expect(before.summary.total.cost).toBeCloseTo(ROW_COST, 12);
     expect(before.summary.total.hasUncosted).toBe(true);
 
+    // A price added for m-late and m1 re-priced: the two recorded rows keep their figures.
     pricing["m-late"] = { cacheRead: 1, cacheWrite: 1, output: 1 };
+    pricing.m1 = { cacheRead: 100, cacheWrite: 100, output: 100 };
+    const unchanged = await svc.query("p1", { groupBy: "date" });
+    expect(unchanged.summary.total.cost).toBeCloseTo(ROW_COST, 12);
+    expect(unchanged.summary.total.hasUncosted).toBe(true);
+
+    insert("2026-07-06", { modelId: "m-late" });
     const after = await svc.query("p1", { groupBy: "date" });
-    expect(after.summary.total.cost).toBeCloseTo((10 + 1 + 5) / 1e6, 12);
-    expect(after.summary.total.hasUncosted).toBe(false);
+    expect(after.summary.total.cost).toBeCloseTo(ROW_COST + (10 + 1 + 5) / 1e6, 12);
+    expect(after.summary.total.hasUncosted).toBe(true); // the first m-late row stays uncosted
   });
 
   it("group aggregation: date sorted descending; agent/model/session dimensions with agentId drill-down; folded across Models", async () => {
@@ -241,25 +310,16 @@ describe("usage-service (cost computed on the fly)", () => {
     expect(other.groups).toEqual([]);
   });
 
-  it("pricing is looked up for every reference the response prices, and only those", async () => {
+  it("every cost figure in a response is the recorded sum, with no price lookup at all", async () => {
     const now = new Date("2026-07-06T10:00:00");
-    pricing["m-old"] = { cacheRead: 1, cacheWrite: 1, output: 1 };
     insert("2026-07-06", { modelId: "m1" });
-    // Inside the last 30 days but outside the requested range: no surviving aggregate
-    // covers it, so it must not be priced — and must not perturb the ones that are.
-    insert("2026-06-20", { modelId: "m-old" });
-    const asked: string[] = [];
-    const svc = wire(UsageService, {
-      usage: repo,
-      errors: wire(ErrorsRepo, { db: db }),
-      lookupPricing: async (p: string, provider: string, modelId: string) => {
-        asked.push(modelId);
-        return lookup(p, provider, modelId);
-      },
-      clock: { now: () => now },
+    // Outside the requested range: it must not perturb the figures that are in range.
+    insert("2026-06-20", { modelId: "m1", cost: 1 });
+    const res = await service(now).query("p1", {
+      groupBy: "date",
+      from: "2026-07-06",
+      to: "2026-07-06",
     });
-    const res = await svc.query("p1", { groupBy: "date", from: "2026-07-06", to: "2026-07-06" });
-    expect(asked).toEqual(["m1"]);
     expect(res.summary.total.cost).toBeCloseTo(ROW_COST, 12);
     expect(res.summary.today.cost).toBeCloseTo(ROW_COST, 12);
     expect(res.groups[0]!.cost).toBeCloseTo(ROW_COST, 12);
@@ -365,6 +425,7 @@ describe("usage-service model totals (unfiltered, for the models page)", () => {
 
   function insert(date: string, opts: Partial<Parameters<UsageRepo["insert"]>[0]> = {}): void {
     repo.insert({
+      cost: null,
       ts: `${date}T00:00:00.000Z`,
       date,
       projectId: "p1",
@@ -410,11 +471,9 @@ describe("usage-service series (zero-filled time-series buckets)", () => {
   let db: DatabaseSync;
   let repo: UsageRepo;
   let service: (now: Date) => UsageService;
+  /** The price a row's cost is fixed at when `insert` writes it. */
   let pricing: Record<string, PricingRates | undefined>;
-  const lookup = async (_p: string, _provider: string, modelId: string) => {
-    const rates = pricing[modelId];
-    return rates === undefined ? undefined : { peak: rates, offPeak: rates };
-  };
+  const lookup: PricingLookup = async () => undefined;
 
   beforeEach(() => {
     db = openDatabase(":memory:");
@@ -429,7 +488,10 @@ describe("usage-service series (zero-filled time-series buckets)", () => {
   const ROW_COST = (10 * 0.3 + 1 * 3.75 + 5 * 15) / 1e6;
 
   function insert(date: string, opts: Partial<Parameters<UsageRepo["insert"]>[0]> = {}): void {
+    const row = { cacheRead: 10, cacheWrite: 1, output: 5, modelId: "m1", ...opts };
+    const rates = pricing[row.modelId];
     repo.insert({
+      cost: rates === undefined ? null : requestCostUsd(row, rates),
       ts: `${date}T00:00:00.000Z`,
       date,
       projectId: "p1",
@@ -635,6 +697,101 @@ describe("usage-service series (zero-filled time-series buckets)", () => {
         granularity: "hour",
       }),
     ).rejects.toThrow(/granularity/);
+  });
+});
+
+describe("usage-service settleUnsettledCosts (COMPATIBILITY: rows from before costs were fixed)", () => {
+  let db: DatabaseSync;
+  let repo: UsageRepo;
+
+  beforeEach(() => {
+    db = openDatabase(":memory:");
+    repo = wire(UsageRepo, { db: db });
+  });
+  afterEach(() => db.close());
+
+  const COUNTS = { cacheRead: 10, cacheWrite: 1, output: 5 };
+
+  /** A row as a build that did not price rows wrote it: Tokens only, cost_settled left at 0. */
+  function legacyRow(ts: string, provider: string, modelId: string): void {
+    db.prepare(
+      `INSERT INTO usage_records
+         (ts, date, project_id, agent_id, session_id, provider, model_id, cache_read, cache_write, output, total)
+       VALUES (?, ?, 'p1', 'a1', 's1', ?, ?, 10, 1, 5, 16)`,
+    ).run(ts, ts.slice(0, 10), provider, modelId);
+  }
+
+  it("costs each old row once, at the price its Project stores, by the rule of the build that wrote it", async () => {
+    const peak = catalogEntryFor("deepseek", "deepseek-v4-flash")!.pricing!;
+    const deepseek = {
+      cacheRead: peak.cache_read,
+      cacheWrite: peak.cache_write,
+      output: peak.output,
+    };
+    // A catalog row on a flat promotion whose Project stores the LIST price: the builds before
+    // this change billed a stored price as it stood, so history is not discounted now.
+    const promoted = catalogEntryFor("tokendance", "glm-5.3-flash")!;
+    expect(promoted.discount).toBeGreaterThan(0);
+    const list = {
+      cacheRead: promoted.pricing!.cache_read,
+      cacheWrite: promoted.pricing!.cache_write,
+      output: promoted.pricing!.output,
+    };
+    const stored: Record<string, PricingRates | undefined> = {
+      "deepseek/deepseek-v4-flash": deepseek,
+      "tokendance/glm-5.3-flash": list,
+    };
+    const lookups: string[] = [];
+    const svc = wire(UsageService, {
+      usage: repo,
+      errors: wire(ErrorsRepo, { db: db }),
+      lookupPricing: async (_p: string, provider: string, modelId: string) => {
+        lookups.push(`${provider}/${modelId}`);
+        return stored[`${provider}/${modelId}`];
+      },
+      clock: { now: () => new Date() },
+    });
+    // Monday 2026-08-31: 01:30Z is 09:30 Beijing (peak), 12:00Z is 20:00 (off-peak).
+    legacyRow("2026-08-31T01:30:00.000Z", "deepseek", "deepseek-v4-flash");
+    legacyRow("2026-08-31T12:00:00.000Z", "deepseek", "deepseek-v4-flash");
+    legacyRow("2026-08-31T12:00:00.000Z", "tokendance", "glm-5.3-flash");
+    legacyRow("2026-08-31T12:00:00.000Z", "custom", "m-unpriced");
+    // A row the recorder fixed is never touched.
+    repo.insert({
+      ts: "2026-08-31T12:00:00.000Z",
+      date: "2026-08-31",
+      projectId: "p1",
+      agentId: "a1",
+      sessionId: "s1",
+      originSessionId: null,
+      provider: "deepseek",
+      modelId: "deepseek-v4-flash",
+      ...COUNTS,
+      total: 16,
+      cost: 42,
+    });
+
+    expect(await svc.settleUnsettledCosts()).toBe(4);
+    const rows = db
+      .prepare("SELECT cost, cost_settled FROM usage_records ORDER BY id")
+      .all() as Array<{ cost: number | null; cost_settled: number }>;
+    expect(rows[0]!.cost).toBe(requestCostUsd(COUNTS, deepseek));
+    expect(rows[1]!.cost).toBe(
+      requestCostUsd(
+        COUNTS,
+        billedRates(deepseek, "deepseek", "deepseek-v4-flash", new Date("2026-08-31T12:00:00Z")),
+      ),
+    );
+    expect(rows[1]!.cost).toBeLessThan(rows[0]!.cost!);
+    expect(rows[2]!.cost).toBe(requestCostUsd(COUNTS, list));
+    expect(rows[3]!.cost).toBeNull();
+    expect(rows[4]!.cost).toBe(42);
+    expect(rows.every((r) => r.cost_settled === 1)).toBe(true);
+
+    // A second boot finds nothing left to settle, and reads no price for it.
+    lookups.length = 0;
+    expect(await svc.settleUnsettledCosts()).toBe(0);
+    expect(lookups).toEqual([]);
   });
 });
 

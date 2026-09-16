@@ -972,6 +972,8 @@ export class GenerativeModel implements LLMInterface {
   private lastRequestTotal: number;
   /** Last hard-clamped cap already warned about on stderr (dedupe: retries reuse the same estimate and would repeat the identical line). */
   private lastWarnedCap: number | undefined;
+  /** See GenerativeModelConfig.resolvePricing; unset = `token_usage` carries no `pricing`. */
+  private readonly resolvePricing: GenerativeModelConfig["resolvePricing"];
 
   constructor(config: GenerativeModelConfig) {
     // Omit apiKey / baseUrl when undefined, letting AgentHub read them from environment
@@ -1002,6 +1004,7 @@ export class GenerativeModel implements LLMInterface {
       approximateTokens(config.systemPrompt ?? "") +
       approximateTokens(JSON.stringify(this.uniConfig.tools ?? []));
     this.lastRequestTotal = this.baseInputTokens;
+    this.resolvePricing = config.resolvePricing;
   }
 
   /**
@@ -1302,7 +1305,17 @@ export class GenerativeModel implements LLMInterface {
     // The session series is not this object's business (its lifetime is one model context):
     // the engine accumulates and stamps token_usage.session on every message it forwards.
     // The request counts stand in for consumers running a GenerativeModel without an engine.
-    yield tokenUsage(requestTokens, requestTokens);
+    const usage = tokenUsage(requestTokens, requestTokens);
+    if (this.resolvePricing) {
+      // Priced here, before the event leaves this generator, so the stream and the Trace carry
+      // the same rates: the engine yields and writes the object it receives.
+      try {
+        usage.payload.pricing = await this.resolvePricing(new Date(usage.timestamp));
+      } catch {
+        // No `pricing` rather than no usage: the consumer prices the Request itself.
+      }
+    }
+    yield usage;
     return { status: "completed" };
   }
 

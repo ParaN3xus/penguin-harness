@@ -339,35 +339,42 @@ describe("isFreeModel", () => {
 });
 describe("discountedPrice", () => {
   /**
-   * A row carrying exactly what "sync presets" would write for a catalog entry: the discounted
-   * price for a flat promotion, the peak price for a scheduled one (which is never baked in).
+   * A row carrying exactly what "sync presets" writes for a catalog entry: its list price (the
+   * peak price for a scheduled one). No discount is ever written into a Project.
    */
   const syncedRow = (provider: string, modelId: string) => {
-    const entry = catalogEntryFor(provider, modelId)!;
-    const billed = (entry.offPeakDiscount !== undefined ? entry.pricing : effectivePricing(entry))!;
+    const list = catalogEntryFor(provider, modelId)!.pricing!;
     return {
       provider,
       modelId,
-      cacheRead: String(billed.cache_read),
-      cacheWrite: String(billed.cache_write),
-      output: String(billed.output),
+      cacheRead: String(list.cache_read),
+      cacheWrite: String(list.cache_write),
+      output: String(list.output),
     };
   };
 
-  it("a synced row on a flat promotion reports the rate, and bills at the stored price", () => {
+  it("a synced row on a flat promotion reports the rate, and bills the list price less it", () => {
     const row = syncedRow("tokendance", "glm-5.3-flash");
     const found = discountedPrice(row)!;
     expect(found.percent).toBe(10);
     expect(found.scheduled).toBe(false);
-    // A flat promotion is baked in at sync time, so what is billed is what is stored.
-    expect(found.billed).toEqual({
-      cacheRead: Number(row.cacheRead),
-      cacheWrite: Number(row.cacheWrite),
-      output: Number(row.output),
-    });
-    // And it really is below the catalog's list price.
     const entry = catalogEntryFor("tokendance", "glm-5.3-flash")!;
-    expect(entry.pricing!.cache_write).toBeGreaterThan(found.billed.cacheWrite);
+    const billed = effectivePricing(entry)!;
+    expect(found.billed).toEqual({
+      cacheRead: billed.cache_read,
+      cacheWrite: billed.cache_write,
+      output: billed.output,
+    });
+    // And it really is below the list price the row stores.
+    expect(Number(row.cacheWrite)).toBeGreaterThan(found.billed.cacheWrite);
+  });
+
+  it("a promotion past its end carries no mark: the row is simply at list price again", () => {
+    const row = syncedRow("openrouter", "z-ai/glm-5.3-flash");
+    const until = catalogEntryFor("openrouter", "z-ai/glm-5.3-flash")!.discountUntil!;
+    const end = Date.parse(until);
+    expect(discountedPrice(row, new Date(end - 60_000))?.percent).toBe(50);
+    expect(discountedPrice(row, new Date(end))).toBeUndefined();
   });
 
   // Beijing is UTC+8, so 01:00Z is 09:00 there. 2026-08-31 is a Monday.
@@ -421,15 +428,16 @@ describe("discountedPrice", () => {
     const row = syncedRow("tokendance", "kimi-k3");
     expect(discountedPrice(row)).toBeDefined();
     expect(discountedPrice({ ...row, output: "9.99" })).toBeUndefined();
-    // A row still holding the LIST price (a Project that has not synced presets) is not
-    // being billed the promotional rate, so it gets no badge either.
+    // A row still holding the DISCOUNTED number an earlier build wrote for the promotion (a
+    // Project that has not synced presets since) is billed as it stands, so it gets no badge.
     const entry = catalogEntryFor("tokendance", "kimi-k3")!;
+    const baked = effectivePricing(entry)!;
     expect(
       discountedPrice({
         ...row,
-        cacheRead: String(entry.pricing!.cache_read),
-        cacheWrite: String(entry.pricing!.cache_write),
-        output: String(entry.pricing!.output),
+        cacheRead: String(baked.cache_read),
+        cacheWrite: String(baked.cache_write),
+        output: String(baked.output),
       }),
     ).toBeUndefined();
   });

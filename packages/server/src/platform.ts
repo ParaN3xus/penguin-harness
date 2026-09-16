@@ -162,8 +162,18 @@ export class Startup {
   @Use() private readonly sessionService!: SessionServiceIface;
   @Use() private readonly machines!: Machines;
   @Use() private readonly errors!: Errors;
+  @Use() private readonly usage!: UsageQueries;
 
   async setup() {
+    // Usage rows with no fixed cost yet — from before costs were fixed at record time, or
+    // written by an older build a hot update rolled back to — are costed once, before anything
+    // reads the cost center (COMPATIBILITY: see UsageService.settleUnsettledCosts). Awaited, but
+    // a failure is recorded rather than thrown: the rows then read as uncosted until a later boot.
+    try {
+      await this.usage.settleUnsettledCosts();
+    } catch (err) {
+      this.errors.record({ source: "process", err, code: "usage_cost_settle_failed" });
+    }
     // Schedule scheduler: startup reconciliation (missed, don't backfill) + periodic scan.
     await this.scheduler.start();
     // Company mode's scheduler: same lifetime and the same startup rule (reconcile once,

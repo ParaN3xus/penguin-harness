@@ -19,7 +19,7 @@ import type {
   UsageRecordInsert,
   UsageSeriesGranularity,
   UsageSeriesModelSums,
-  PeakTier,
+  UnsettledUsageRow,
 } from "../db/repos/usage.js";
 import type {
   UsageErrorsPage,
@@ -80,18 +80,15 @@ export abstract class Errors extends Interface<{
 /** UsageStore: the mechanism UsageRepo implements. */
 export abstract class UsageStore extends Interface<{
   insert(r: UsageRecordInsert): void;
-  bucketByModel(projectId: string, f?: UsageFilter, tiers?: readonly PeakTier[]): UsageModelSums[];
-  groupsByModel(
-    projectId: string,
-    groupBy: UsageGroupBy,
-    f?: UsageFilter,
-    tiers?: readonly PeakTier[],
-  ): UsageGroupModelSums[];
+  unsettledRefs(): Array<{ projectId: string; provider: string; modelId: string }>;
+  unsettledRows(projectId: string, provider: string, modelId: string): UnsettledUsageRow[];
+  settle(rows: ReadonlyArray<{ id: number; cost: number | null }>): void;
+  bucketByModel(projectId: string, f?: UsageFilter): UsageModelSums[];
+  groupsByModel(projectId: string, groupBy: UsageGroupBy, f?: UsageFilter): UsageGroupModelSums[];
   seriesByModel(
     projectId: string,
     granularity: UsageSeriesGranularity,
     f?: UsageFilter,
-    tiers?: readonly PeakTier[],
   ): UsageSeriesModelSums[];
   agentSeries(
     projectId: string,
@@ -114,6 +111,7 @@ export abstract class UsageQueries extends Interface<{
   queryErrors(projectId: string, q: UsageErrorsQuery): UsageErrorsPage;
   clearErrors(projectId: string, q: UsageErrorsClearQuery): number;
   modelTotals(projectId: string): UsageModelTotals;
+  settleUnsettledCosts(): Promise<number>;
   costBySession(
     projectId: string,
     sessionIds: readonly string[],

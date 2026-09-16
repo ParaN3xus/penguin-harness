@@ -19,8 +19,8 @@
 import {
   MODEL_PROVIDERS,
   catalogEntryFor,
+  discountRateAt,
   effectivePricing,
-  offPeakAt,
 } from "@prismshadow/penguin-core/model-catalog";
 import type { ModelProviderInfo } from "@prismshadow/penguin-core/model-catalog";
 
@@ -194,8 +194,7 @@ export interface DiscountedPrice {
   percent: number;
   /**
    * What the seller bills for this row right now, in USD per million tokens — the figure the
-   * card prints. For a flat promotion this is the stored price, already discounted at sync
-   * time; for a scheduled one the stored price is the peak price and this is the reduced rate.
+   * card prints: the stored list (or peak) price less the discount live at this instant.
    */
   billed: { cacheRead: number; cacheWrite: number; output: number };
   /** True when the rate is a time-of-day one, so the badge can explain when it applies. */
@@ -213,42 +212,37 @@ function bucketValue(v: number | string | undefined): number | undefined {
 /**
  * The discount decoration for one model row, or undefined for a row that carries none.
  *
- * A row qualifies only when its (provider, modelId) names a catalog entry on a promotion AND
- * its stored price is still exactly the price that entry expects to be stored. Prices are
- * editable, and a hand-typed number has nothing to do with the seller's list price — marking it
- * would invent a saving the user is not getting. The same guard covers a Project that has not
- * run "sync presets" yet: its rows still hold whatever price they were created with.
+ * A row qualifies only when its (provider, modelId) names a catalog entry with a discount live
+ * at `now` AND its stored price is still exactly that entry's list price (the peak price for a
+ * scheduled row) — the one condition under which a Request on it is billed at a discount (core's
+ * billedPricing), so the card and the bill agree. Prices are editable, and a hand-typed number
+ * has nothing to do with the seller's list price — marking it would invent a saving the user is
+ * not getting. The same guard covers a Project whose rows still hold a price from an older
+ * preset, including the discounted numbers earlier builds wrote for a promotion: they carry no
+ * mark until "sync presets" puts the list price back.
  *
- * Which price that is differs by promotion kind, and the difference is the point:
- *
- * - A **flat** promotion is a single rate the seller bills until it lapses, so `sync presets`
- *   bakes it in and the stored number is already the discounted one.
- * - A **scheduled** one changes twice a day. Baking it in would put a number on disk that meant
- *   something different an hour later, and would make re-syncing rewrite prices by the clock —
- *   so the peak price is stored and the reduction is applied here, against `now`. Inside the
- *   peak windows the row is simply at list price and carries no mark at all.
+ * The discount itself is never stored, so it is applied here against `now`: a scheduled row
+ * inside its peak windows, and a promotion past its `discountUntil`, are simply at list price
+ * and carry no mark at all.
  */
 export function discountedPrice(
   row: ModelRowLike & PricingBucketsLike,
   now: Date = new Date(),
 ): DiscountedPrice | undefined {
   const entry = catalogEntryFor(row.provider, row.modelId);
-  if (entry?.pricing === undefined) return undefined;
-  const schedule = entry.offPeakDiscount;
-  const rate = schedule?.rate ?? entry.discount;
+  const list = entry?.pricing;
+  if (entry === undefined || list === undefined) return undefined;
+  const same =
+    bucketValue(row.cacheRead) === list.cache_read &&
+    bucketValue(row.cacheWrite) === list.cache_write &&
+    bucketValue(row.output) === list.output;
+  if (!same) return undefined;
+  const rate = discountRateAt(entry, now);
   // A fraction off, so only (0, 1) says anything: `effectivePricing` already ignores 0, and a
   // badge built from a value outside that range reads as `-0%`, `-100%` beside a "Free" tag, or
   // `--20%`. A stray 0 is the plausible one — the field's own doc says a lapsed promotion is one
   // field to delete, and deleting a digit is the near miss.
-  if (rate === undefined || rate <= 0 || rate >= 1) return undefined;
-  const expected = schedule !== undefined ? entry.pricing : effectivePricing(entry);
-  if (expected === undefined) return undefined;
-  const same =
-    bucketValue(row.cacheRead) === expected.cache_read &&
-    bucketValue(row.cacheWrite) === expected.cache_write &&
-    bucketValue(row.output) === expected.output;
-  if (!same) return undefined;
-  if (schedule !== undefined && !offPeakAt(schedule, now)) return undefined;
+  if (rate <= 0 || rate >= 1) return undefined;
   const billed = effectivePricing(entry, now);
   if (billed === undefined) return undefined;
   return {
@@ -258,7 +252,7 @@ export function discountedPrice(
       cacheWrite: billed.cache_write,
       output: billed.output,
     },
-    scheduled: schedule !== undefined,
+    scheduled: entry.offPeakDiscount !== undefined,
   };
 }
 

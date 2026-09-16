@@ -26,7 +26,7 @@ import type {
 import type { UserRow } from "../db/repos/users.js";
 import type { RawTable, UtilityCompletion } from "../services/project-config-service.js";
 import type { ListEndpointModelsOptions, ModelRef, ProjectConfig } from "@prismshadow/penguin-core";
-import type { TieredRates } from "../services/usage-service.js";
+import type { PricingRates } from "../services/usage-service.js";
 import type {
   ModelOAuthErrorCode,
   ModelOAuthMode,
@@ -113,7 +113,7 @@ export abstract class ProjectConfigStore extends Interface<{
     projectId: string,
     provider: string,
     modelId: string,
-  ): Promise<TieredRates | undefined>;
+  ): Promise<PricingRates | undefined>;
   detectVision(
     projectId: string,
     req: ModelVisionDetectRequest,

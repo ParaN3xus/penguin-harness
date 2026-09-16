@@ -55,6 +55,7 @@ import type { StreamModel } from "../../lib/omni/stream-model";
 import { aggregateMemoryChanges, sameMemoryChanges } from "../../lib/omni/memory-changes";
 import type { MemoryLocateTarget } from "../../lib/omni/memory-changes";
 import {
+  billedBucketPricing,
   bucketCostUsd,
   liveSessionElapsedMs,
   sessionElapsedBreakdown,
@@ -1555,9 +1556,14 @@ export function ChatPage() {
     [selected, addSession, navigate],
   );
 
-  // Real-time cost for this turn: converts the Task's bucketed usage using the session Model's
-  // (paired reference) current pricing; null if no pricing is configured.
-  const modelPricing = models?.models.find((m) => sameModelRef(m, activeModelRef))?.pricing;
+  // Real-time cost for this turn: converts the Task's bucketed usage at the rate the session
+  // Model (paired reference) bills right now — its stored price through any catalog discount
+  // live at this instant; null if no pricing is configured. An estimate: the server fixes each
+  // Request's cost when it completes, and the settled figure replaces this one.
+  const activeModel = models?.models.find((m) => sameModelRef(m, activeModelRef));
+  const modelPricing = activeModel
+    ? billedBucketPricing(activeModel.provider, activeModel.modelId, activeModel.pricing)
+    : undefined;
   const ctx: StreamRenderContext = {
     pendingApprovals: stream.pendingApprovals,
     onApprove,

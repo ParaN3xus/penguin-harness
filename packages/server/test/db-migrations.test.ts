@@ -1,8 +1,8 @@
 /**
  * The ordered-migration mechanism, the 0.2.4 → 0.2.7 migration that is its first entry, the
- * 0.2.9 → 0.2.10 drop that is its first restart-only one, the additive column pair that
- * the user profile added to `users`, and the channels migration that is its first table
- * recreation.
+ * 0.2.9 → 0.2.10 drop that is its first restart-only one, the additive column pairs that
+ * the user profile added to `users` and the fixed cost added to `usage_records`, and the
+ * channels migration that is its first table recreation.
  *
  * Two properties carry everything else: a real 0.2.4 database reaches exactly the shape a
  * fresh one is created with (so a runtime older than the platform pushed onto it becomes
@@ -77,6 +77,7 @@ function open024(): DatabaseSync {
   // must come off, or a round trip through migration 5's down would land on a narrower
   // `users` than this fixture and read as a rollback that lost something.
   dropProfileColumns(db);
+  dropUsageCostColumns(db);
   db.exec(GOAL_STATE_DDL);
   return db;
 }
@@ -110,8 +111,9 @@ function open6(): DatabaseSync {
   const db = new sqlite.DatabaseSync(":memory:");
   db.exec(SCHEMA_SQL);
   db.exec(PRE_CHANNEL_CHAT_DDL);
-  // SCHEMA_SQL declares the CURRENT shape; migration 8's queue came after 6.
+  // SCHEMA_SQL declares the CURRENT shape; migration 8's queue and 9's cost columns came after 6.
   db.exec("DROP TABLE IF EXISTS org_desk_notices");
+  dropUsageCostColumns(db);
   db.exec("PRAGMA user_version = 6");
   return db;
 }
@@ -121,6 +123,7 @@ function open7(): DatabaseSync {
   const db = new sqlite.DatabaseSync(":memory:");
   db.exec(SCHEMA_SQL);
   db.exec("DROP TABLE IF EXISTS org_desk_notices");
+  dropUsageCostColumns(db);
   db.exec("PRAGMA user_version = 7");
   return db;
 }
@@ -136,6 +139,7 @@ function open029(): DatabaseSync {
   // both the fixture is a database no release made.
   db.exec("DROP TABLE machine_project; DROP TABLE machines; DROP TABLE machine;");
   dropProfileColumns(db);
+  dropUsageCostColumns(db);
   db.exec("PRAGMA user_version = 2");
   return db;
 }
@@ -152,7 +156,20 @@ function openPreProfile(): DatabaseSync {
   // Version 4 predates company mode as well: its three migrations (6–8) come after the
   // profile's, so a database at 4 has none of their tables.
   dropCompanyTables(db);
+  dropUsageCostColumns(db);
   db.exec("PRAGMA user_version = 4");
+  return db;
+}
+
+/**
+ * A database from before costs were fixed at record time: today's declaration minus exactly the
+ * two usage_records columns migration 9 adds, stamped at the version before it.
+ */
+function openPreUsageCost(): DatabaseSync {
+  const db = new sqlite.DatabaseSync(":memory:");
+  db.exec(SCHEMA_SQL);
+  dropUsageCostColumns(db);
+  db.exec("PRAGMA user_version = 8");
   return db;
 }
 
@@ -177,6 +194,18 @@ function dropCompanyTables(db: DatabaseSync): void {
 function dropProfileColumns(db: DatabaseSync): void {
   db.exec("ALTER TABLE users DROP COLUMN avatar");
   db.exec("ALTER TABLE users DROP COLUMN display_name");
+}
+
+/** Takes migration 9's two usage_records columns off a database built from the current declaration. */
+function dropUsageCostColumns(db: DatabaseSync): void {
+  db.exec("ALTER TABLE usage_records DROP COLUMN cost_settled");
+  db.exec("ALTER TABLE usage_records DROP COLUMN cost");
+}
+
+/** Column names of `usage_records`. */
+function usageColumns(db: DatabaseSync): string[] {
+  const rows = db.prepare("PRAGMA table_info(usage_records)").all() as { name: string }[];
+  return rows.map((r) => r.name);
 }
 
 /** Column names of `users`, for the two cases that are about columns rather than whole shapes. */
@@ -522,6 +551,70 @@ describe("migration 7 → current: company-mode-desk-notices", () => {
     } finally {
       db.close();
       at7.close();
+    }
+  });
+});
+
+describe("pre-cost → current: usage-record-cost", () => {
+  const legacyRow =
+    "INSERT INTO usage_records (ts, date, project_id, agent_id, session_id, provider, model_id, cache_read, cache_write, output, total)" +
+    " VALUES ('2026-09-01T00:00:00Z', '2026-09-01', 'p1', 'a1', 's1', 'custom', 'm1', 10, 1, 5, 16)";
+
+  it("adds both columns with every existing row unsettled, and a database that already has them migrates the same", () => {
+    const db = openPreUsageCost();
+    const fresh = new sqlite.DatabaseSync(":memory:");
+    try {
+      fresh.exec(SCHEMA_SQL);
+      db.exec(legacyRow);
+      expect(usageColumns(db)).not.toContain("cost");
+      expect(migrate(db).applied).toEqual(
+        MIGRATIONS.filter((m) => m.version > 8).map((m) => m.name),
+      );
+      expect(shape(db)).toBe(shape(fresh));
+      // The row a pre-cost build wrote waits for the startup settle: no cost, not settled.
+      expect(db.prepare("SELECT cost, cost_settled FROM usage_records").all()).toEqual([
+        { cost: null, cost_settled: 0 },
+      ]);
+
+      // ADOPTION: on a database this build created, the declarative track already added both.
+      fresh.exec("PRAGMA user_version = 8");
+      expect(migrate(fresh).applied).toEqual(
+        MIGRATIONS.filter((m) => m.version > 8).map((m) => m.name),
+      );
+      expect(usageColumns(fresh).filter((c) => c === "cost")).toEqual(["cost"]);
+    } finally {
+      db.close();
+      fresh.close();
+    }
+  });
+
+  it("is swap-safe: a rolled-back predecessor keeps inserting, and its rows read unsettled", () => {
+    const db = openPreUsageCost();
+    try {
+      migrate(db, { swapPath: true });
+      db.exec(legacyRow); // what a predecessor that does not know the columns writes
+      expect(db.prepare("SELECT cost, cost_settled FROM usage_records").all()).toEqual([
+        { cost: null, cost_settled: 0 },
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("down removes both columns, taking every fixed cost with them; the rows survive", () => {
+    const db = openPreUsageCost();
+    try {
+      db.exec(legacyRow);
+      const before = shape(db);
+      migrate(db);
+      db.exec("UPDATE usage_records SET cost = 0.5, cost_settled = 1");
+
+      rollbackTo(db, 8);
+      expect(shape(db)).toBe(before);
+      expect(usageColumns(db)).not.toContain("cost_settled");
+      expect(db.prepare("SELECT total FROM usage_records").all()).toEqual([{ total: 16 }]);
+    } finally {
+      db.close();
     }
   });
 });

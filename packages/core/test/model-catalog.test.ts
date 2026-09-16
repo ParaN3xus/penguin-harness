@@ -11,6 +11,8 @@ import {
   modelHomepageUrl,
   catalogEntryFor,
   attributionHeaders,
+  billedPricing,
+  discountRateAt,
   effectivePricing,
   offPeakAt,
   DEEPSEEK_OFF_PEAK,
@@ -321,14 +323,11 @@ describe("model-catalog", () => {
       expect(entry.provider).toBe(cat.provider);
       expect(entry.model_id).toBe(cat.modelId);
       expect(entry.context_window).toBe(cat.contextWindow);
-      // A Project stores the BILLED rate, not the catalog's list price: the cost center
-      // prices only against what is written here, so a promoted row must arrive discounted.
-      // The exception is a row on a peak/off-peak schedule, which stores the PEAK price: the
-      // rate changes twice a day, so baking one in would make the number on disk depend on the
-      // hour the Project happened to be created or re-synced in.
-      expect(entry.pricing, entry.model_id).toEqual(
-        cat.offPeakDiscount !== undefined ? cat.pricing : effectivePricing(cat),
-      );
+      // A Project stores the catalog's LIST price (the peak price for a scheduled row), never
+      // a discounted one: every discount is applied when a Request completes (billedPricing),
+      // so the number on disk depends neither on the hour nor on which promotions were running
+      // when the Project was created or re-synced.
+      expect(entry.pricing, entry.model_id).toEqual(cat.pricing);
       expect(entry.vision).toBe(cat.supportsVision ? undefined : false);
       // Gateway presets pin a client protocol, and so do the two direct rows whose own id
       // does not route (MiniMax M3, DeepSeek deepseek-flash); other direct models auto-route.
@@ -767,8 +766,10 @@ describe("model-catalog", () => {
     ]);
     // Gemini 3.6 / 3.7 / 3.8 Flash: Google halves all three of them through 2026-12-31, and
     // all six of their rows — direct and on OpenRouter — store Google's list price and
-    // declare that launch discount in `discount`, so the list survives the promotion and
-    // effectivePricing yields the 0.075/0.75/3.75 either seller bills today.
+    // declare that launch discount in `discount` with its end in `discountUntil`, so the list
+    // survives the promotion, effectivePricing yields the 0.075/0.75/3.75 either seller bills
+    // until then, and the list price from the end on.
+    const inPromotion = new Date("2026-09-16T00:00:00Z");
     for (const [provider, modelId] of [
       ["google", "gemini-3.8-flash"],
       ["google", "gemini-3.7-flash"],
@@ -787,10 +788,12 @@ describe("model-catalog", () => {
         [row.pricing!.cache_read, row.pricing!.cache_write, row.pricing!.output],
         modelId,
       ).toEqual([0.15, 1.5, 7.5]);
-      const billed = effectivePricing(row)!;
+      const billed = effectivePricing(row, inPromotion)!;
       expect([billed.cache_read, billed.cache_write, billed.output], modelId).toEqual([
         0.075, 0.75, 3.75,
       ]);
+      expect(row.discountUntil, modelId).toBe("2027-01-01T08:00:00Z");
+      expect(effectivePricing(row, new Date(row.discountUntil!)), modelId).toEqual(row.pricing);
     }
     // No other Gemini row carries a launch discount: Google's pricing page marks one on the
     // 3.6 / 3.7 / 3.8 Flash generations and on nothing else in this catalog, so these rows
@@ -831,10 +834,10 @@ describe("model-catalog", () => {
     const glm53 = catalogEntryFor("zhipu", "glm-5.3")!;
     expect([glm53.contextWindow, glm53.supportsVision]).toEqual([1000000, false]);
     expect(glm53.pricing).toEqual(catalogEntryFor("zhipu", "glm-5.2")!.pricing);
-    // GLM-5.3 Flash is listed both directly and on OpenRouter, and the two rows deliberately
-    // disagree on price: the direct row keeps Z.AI's list price while the gateway row stores
-    // the 50%-off rate OpenRouter actually bills through 2026-09-09, so the gateway figures
-    // are exactly half the direct ones.
+    // GLM-5.3 Flash is listed both directly and on OpenRouter, and both rows store Z.AI's list
+    // price. The gateway row also declares the 50%-off promotion OpenRouter billed through
+    // 2026-09-09 16:00 UTC, so it billed exactly half the direct row until then and the same
+    // from that instant on.
     const glm53f = catalogEntryFor("zhipu", "glm-5.3-flash")!;
     expect([glm53f.contextWindow, glm53f.supportsVision]).toEqual([1000000, true]);
     expect([
@@ -848,7 +851,10 @@ describe("model-catalog", () => {
       glm53for.pricing!.cache_read,
       glm53for.pricing!.cache_write,
       glm53for.pricing!.output,
-    ]).toEqual([0.015, 0.075, 0.25]);
+    ]).toEqual([0.03, 0.15, 0.5]);
+    expect([glm53for.discount, glm53for.discountUntil]).toEqual([0.5, "2026-09-09T16:00:00Z"]);
+    expect(effectivePricing(glm53for, new Date("2026-09-09T15:59:59Z"))!.output).toBe(0.25);
+    expect(effectivePricing(glm53for, new Date("2026-09-09T16:00:00Z"))).toEqual(glm53f.pricing);
     // Vision agrees on both routes: the direct row's AgentHub GLM client forwards image_url
     // parts for this one id, and the gateway row's generic Responses client carries them for
     // any id. It is the only vision-capable row in the direct Z.AI group.
@@ -1053,10 +1059,11 @@ describe("model-catalog", () => {
     expect(price("openai", "gpt-5.6")).toEqual([0.5, 5, 30]);
     expect(price("openai", "gpt-5.6-terra")).toEqual([0.2, 2, 12]);
     expect(price("openai", "gpt-5.6-luna")).toEqual([0.02, 0.2, 1.2]);
-    // Gateway rows store what OpenRouter bills, so they diverge from the list price wherever
-    // a promotion is running: sol is at `discount: 0.5`, terra and luna are back at full rate
-    // after theirs lapsed (the 2x drift this re-read corrected).
-    expect(price("openrouter", "openai/gpt-5.6-sol")).toEqual([0.25, 3.125, 15]);
+    // Gateway rows store the list price and declare a running promotion beside it: sol is at
+    // `discount: 0.5`, terra and luna are back at full rate after theirs lapsed (the 2x drift
+    // the 2026-08-18 re-read corrected).
+    expect(price("openrouter", "openai/gpt-5.6-sol")).toEqual([0.5, 6.25, 30]);
+    expect(catalogEntryFor("openrouter", "openai/gpt-5.6-sol")!.discount).toBe(0.5);
     expect(price("openrouter", "openai/gpt-5.6-terra")).toEqual([0.2, 2.5, 12]);
     expect(price("openrouter", "openai/gpt-5.6-luna")).toEqual([0.02, 0.25, 1.2]);
     // GPT-6 Astra runs no promotion (`discount: 0`) and its default endpoint is OpenAI's own,
@@ -1431,6 +1438,51 @@ describe("attributionHeaders (how the harness names itself to the gateways that 
   });
 });
 
+describe("flat promotions and the billed price", () => {
+  it("an end is declared only beside a discount, as a valid UTC instant", () => {
+    for (const m of MODEL_CATALOG.filter((x) => x.discountUntil !== undefined)) {
+      const ref = `${m.provider}/${m.modelId}`;
+      expect(m.discount, ref).toBeGreaterThan(0);
+      expect(m.discountUntil, ref).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+      expect(Number.isNaN(Date.parse(m.discountUntil!)), ref).toBe(false);
+    }
+  });
+
+  it("a promotion applies up to its end, exclusive, and never at an unreadable instant", () => {
+    // OpenRouter's GLM-5.3 Flash listing sat on Z.AI's 50% promotion through 2026-09-09 16:00 UTC.
+    const row = catalogEntryFor("openrouter", "z-ai/glm-5.3-flash")!;
+    expect([row.pricing!.cache_read, row.pricing!.cache_write, row.pricing!.output]).toEqual([
+      0.03, 0.15, 0.5,
+    ]);
+    const end = Date.parse(row.discountUntil!);
+    expect(discountRateAt(row, new Date(end - 1))).toBe(0.5);
+    expect(effectivePricing(row, new Date(end - 1))!.output).toBe(0.25);
+    expect(discountRateAt(row, new Date(end))).toBe(0);
+    expect(effectivePricing(row, new Date(end))).toEqual(row.pricing);
+    expect(discountRateAt(row, new Date(Number.NaN))).toBe(0);
+    // A promotion with no declared end runs until the row stops declaring it.
+    const open = catalogEntryFor("tokendance", "kimi-k3")!;
+    expect(open.discountUntil).toBeUndefined();
+    expect(discountRateAt(open, new Date("2099-01-01T00:00:00Z"))).toBe(open.discount);
+  });
+
+  it("billedPricing discounts only a stored price that is still the catalog's list price", () => {
+    const at = new Date("2026-09-16T00:00:00Z");
+    const entry = catalogEntryFor("tokendance", "kimi-k3")!;
+    const list = entry.pricing!;
+    expect(billedPricing("tokendance", "kimi-k3", list, at)).toEqual(effectivePricing(entry, at));
+    expect(billedPricing("tokendance", "kimi-k3", list, at)!.output).toBeLessThan(list.output);
+    // Any other number is the user's own (or an older build's discounted one): billed as stored.
+    const typed = { unit: "usd_per_mtok" as const, cache_read: 1, cache_write: 2, output: 3 };
+    expect(billedPricing("tokendance", "kimi-k3", typed, at)).toEqual(typed);
+    const baked = effectivePricing(entry, at)!;
+    expect(billedPricing("tokendance", "kimi-k3", baked, at)).toEqual(baked);
+    // Off the catalog there is no discount to apply; no stored price is no price.
+    expect(billedPricing("custom", "my-proxy", typed, at)).toEqual(typed);
+    expect(billedPricing("tokendance", "kimi-k3", undefined, at)).toBeUndefined();
+  });
+});
+
 describe("off-peak schedules", () => {
   const S = DEEPSEEK_OFF_PEAK;
   /** Beijing is UTC+8 with no DST, so a Beijing wall clock is the UTC one minus 8 hours. */
@@ -1511,8 +1563,9 @@ describe("off-peak schedules", () => {
     ]);
   });
   it("no entry declares both a flat discount and a schedule", () => {
-    // effectivePricing, discountedPrice and presetModelEntries all silently prefer the schedule,
-    // so a row declaring both would be billed at its list price during peak with nothing failing.
+    // discountRateAt (and so effectivePricing, billedPricing and the models page's badge)
+    // silently prefers the schedule, so a row declaring both would be billed at its list price
+    // during peak with nothing failing.
     // The rule is stated in the field's doc; this is what makes it true.
     const both = MODEL_CATALOG.filter(
       (m) => m.discount !== undefined && m.offPeakDiscount !== undefined,

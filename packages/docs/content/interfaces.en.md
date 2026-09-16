@@ -105,6 +105,7 @@ interface GenerativeModelConfig {
   thinkingLevel?: ThinkingLevelName;   // construction default (a per-request parameter can override); "none" | "low" | "medium" | "high" | "xhigh" | "max"
   requestTimeoutMs?: number;       // Request idle budget: the longest wait for the next upstream event, default 300000; <=0 disables
   toolCallIds?: ToolCallIdAllocator;   // Session-level tool_call_id registry (pass the same instance across compaction)
+  resolvePricing?: (at: Date) => Promise<TokenUsagePricing | null>; // rates a completed Request is billed at, stamped on its token_usage as `pricing`
 }
 ```
 

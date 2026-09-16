@@ -1,12 +1,12 @@
 /**
  * Usage statistics query.
  *
- * Cost is **computed in real time**: usage_records only stores Tokens (pricing may
- * be added later), so at query time each Model's cost is converted using the
- * current Project's configured pricing — the repo returns raw Token totals broken
- * down by `(provider, model_id)` paired reference, and this service looks up each
- * reference's price once and folds it into cost / hasUncosted (if a Model has no
- * pricing, its consumption is excluded from cost and hasUncosted is flagged).
+ * Cost is **fixed when a Request completes**: every usage_records row carries the cost the
+ * recorder computed from the rates in force at that moment, and nothing here re-prices it — a
+ * price edited, synced or discounted later only changes what later Requests cost. The repo
+ * returns sums broken down by `(provider, model_id)` paired reference, and this service folds
+ * them into cost / hasUncosted (a row whose model had no price is excluded from cost and flags
+ * hasUncosted).
  * Summary cards (today / last 7 days / cumulative), grouped aggregation (date /
  * agent / model / session, with the session dimension supporting agentId drill-down
  * filtering), and the zero-filled time series the cost center's charts draw.
@@ -30,18 +30,13 @@ import type {
   UsageSeriesPoint,
 } from "../api/types.js";
 import type { ErrorFilter } from "../db/repos/errors.js";
-import {
-  catalogEntryFor,
-  offPeakAt,
-  offPeakScheduledRefs,
-} from "@prismshadow/penguin-core/model-catalog";
+import { billedPricing, catalogEntryFor, offPeakAt } from "@prismshadow/penguin-core/model-catalog";
 import type {
   UsageModelSums,
   UsageGroupModelSums,
   UsageSeriesModelSums,
   UsageAgentBucketCount,
   UsageFilter,
-  PeakTier,
 } from "../db/repos/usage.js";
 import {
   enumerateBuckets,
@@ -70,24 +65,12 @@ export interface PricingRates {
   output: number;
 }
 
-/**
- * What one Model costs, in the tiers it can be billed in.
- *
- * `offPeak` differs from `peak` only for a catalog row on a time-based schedule whose stored
- * price is still the catalog's own. Both are returned together because a query spans time: a
- * week that straddles the boundary contains Tokens of both kinds, and each half is priced at
- * the rate it actually ran at rather than at whichever tier is in force when it is read.
- */
-export interface TieredRates {
-  peak: PricingRates;
-  offPeak: PricingRates;
-}
-
+/** The price a Project stores for a paired reference, as it stands on disk; undefined = none. */
 export type PricingLookup = (
   projectId: string,
   provider: string,
   modelId: string,
-) => Promise<TieredRates | undefined>;
+) => Promise<PricingRates | undefined>;
 
 export interface UsageQuery {
   from?: string;
@@ -158,29 +141,61 @@ export function requestCostUsd(
 }
 
 /**
- * The rates one usage record is billed at, decided from the record's own timestamp: the
- * off-peak tier when the reference carries a catalog schedule and `at` falls outside its peak
- * windows, the peak tier otherwise. For a reference with no schedule, or whose stored price is
- * no longer the catalog's, the two tiers are the same figure (see project-config-service's
- * `tieredRates`), so the decision changes nothing there. `peakExpr` in the usage repo is this
- * rule written in SQL for the aggregations; the two must agree record for record, which is why
- * an unreadable timestamp — which the repo never stores — takes the peak tier rather than
- * inventing a discount.
+ * The rates a Request on `(provider, modelId)` completing at `at` is billed at, for a Project
+ * that stores `stored`: core's billedPricing — the one rule behind the rates recorded on
+ * `token_usage` — in this package's shape.
  */
-export function ratesAt(
-  tiered: TieredRates,
+export function billedRates(
+  stored: PricingRates,
   provider: string,
   modelId: string,
   at: Date,
 ): PricingRates {
-  const schedule = catalogEntryFor(provider, modelId)?.offPeakDiscount;
-  if (schedule === undefined || Number.isNaN(at.getTime())) return tiered.peak;
-  return offPeakAt(schedule, at) ? tiered.offPeak : tiered.peak;
+  const billed = billedPricing(
+    provider,
+    modelId,
+    {
+      unit: "usd_per_mtok",
+      cache_read: stored.cacheRead,
+      cache_write: stored.cacheWrite,
+      output: stored.output,
+    },
+    at,
+  )!;
+  return { cacheRead: billed.cache_read, cacheWrite: billed.cache_write, output: billed.output };
 }
 
-/** Cost formula: sum of the three buckets at the tier these Tokens ran in, USD per million. */
-function costOf(sums: UsageModelSums, tiered: TieredRates): number {
-  return requestCostUsd(sums, sums.peak ? tiered.peak : tiered.offPeak);
+/**
+ * COMPATIBILITY — remove two releases after the one that fixes costs at record time, together
+ * with {@link UsageService.settleUnsettledCosts} (changelog/unreleased/
+ * 2026-09-16-backward-compatibility.md). The rates the cost center of the builds BEFORE that
+ * change billed a record at: the stored price as it stands, cut to the off-peak tier only when
+ * the row still stores the catalog's peak price and the record's own timestamp fell off-peak.
+ * Those builds wrote a flat promotion into the stored price itself, so none is applied here —
+ * billedRates would discount history those builds never discounted.
+ */
+function legacyRates(
+  stored: PricingRates,
+  provider: string,
+  modelId: string,
+  at: Date,
+): PricingRates {
+  const entry = catalogEntryFor(provider, modelId);
+  const schedule = entry?.offPeakDiscount;
+  if (schedule === undefined || entry?.pricing === undefined || Number.isNaN(at.getTime())) {
+    return stored;
+  }
+  const untouched =
+    stored.cacheRead === entry.pricing.cache_read &&
+    stored.cacheWrite === entry.pricing.cache_write &&
+    stored.output === entry.pricing.output;
+  if (!untouched || !offPeakAt(schedule, at)) return stored;
+  const off = (v: number): number => Math.round(v * (1 - schedule.rate) * 1e6) / 1e6;
+  return {
+    cacheRead: off(stored.cacheRead),
+    cacheWrite: off(stored.cacheWrite),
+    output: off(stored.output),
+  };
 }
 
 /** In-process Map key for a paired reference (\0-separated, the same style as session-manager's agentKey; never persisted). */
@@ -198,27 +213,37 @@ export class UsageService implements UsageQueries {
     this.projectConfig.getPricing(projectId, provider, modelId);
 
   /**
-   * The catalog's time-based schedules, as the aggregations want them.
-   *
-   * Split by the SCHEDULE, not by whether this Project is on the catalog's price: a Project
-   * that edited the price gets one rate for both halves from {@link lookupPricing}, so the extra
-   * dimension costs a row and changes no number. Doing it the other way round would need the
-   * config read before the query that discovers which references occur.
+   * COMPATIBILITY — see {@link legacyRates} for when this goes. Fixes the cost of every usage
+   * record that has none yet: rows written before costs were fixed at record time, and rows an
+   * older build wrote after a hot update rolled back to it. Each is priced at the price its
+   * Project stores now, by the rule the build that wrote it billed by, so the cost center shows
+   * the same figures after the upgrade as before it. Idempotent — a settled row is never
+   * touched again — and safe beside the recorder, whose rows are settled when written. Returns
+   * how many rows it settled.
    */
-  private tiers(): PeakTier[] {
-    return offPeakScheduledRefs().map(({ schedule, refs }) => ({
-      refs,
-      utcOffsetMinutes: schedule.utcOffsetMinutes,
-      peakDays: schedule.peakDays,
-      peakHours: schedule.peakHours,
-    }));
+  async settleUnsettledCosts(): Promise<number> {
+    let settled = 0;
+    for (const ref of this.usage.unsettledRefs()) {
+      const stored = await this.lookupPricing(ref.projectId, ref.provider, ref.modelId);
+      const rows = this.usage.unsettledRows(ref.projectId, ref.provider, ref.modelId);
+      this.usage.settle(
+        rows.map((r) => ({
+          id: r.id,
+          cost:
+            stored === undefined
+              ? null
+              : requestCostUsd(r, legacyRates(stored, ref.provider, ref.modelId, new Date(r.ts))),
+        })),
+      );
+      settled += rows.length;
+    }
+    return settled;
   }
 
   /**
    * Period cost per session, for company mode's attribution by the sessions an organization
-   * owns: sums by paired reference priced at the current rates (each half at the tier its own
-   * records ran in). `unpriced` says some usage ran on a model without pricing, so the numbers
-   * are a lower bound.
+   * owns: the recorded costs summed per session. `unpriced` says some usage ran on a model
+   * without pricing, so the numbers are a lower bound.
    */
   async costBySession(
     projectId: string,
@@ -228,25 +253,11 @@ export class UsageService implements UsageQueries {
   ): Promise<{ bySession: Map<string, number>; unpriced: boolean }> {
     const bySession = new Map<string, number>();
     if (sessionIds.length === 0) return { bySession, unpriced: false };
-    const rows = this.usage.groupsByModel(
-      projectId,
-      "session",
-      { sessionIds, fromTs, toTs },
-      this.tiers(),
-    );
-    const rates = new Map<string, TieredRates | undefined>();
+    const rows = this.usage.groupsByModel(projectId, "session", { sessionIds, fromTs, toTs });
     let unpriced = false;
     for (const r of rows) {
-      const key = refKey(r.provider, r.modelId);
-      if (!rates.has(key)) {
-        rates.set(key, await this.lookupPricing(projectId, r.provider, r.modelId));
-      }
-      const rate = rates.get(key);
-      if (!rate) {
-        unpriced = true;
-        continue;
-      }
-      bySession.set(r.key, (bySession.get(r.key) ?? 0) + costOf(r, rate));
+      if (r.uncosted > 0) unpriced = true;
+      if (r.cost !== null) bySession.set(r.key, (bySession.get(r.key) ?? 0) + r.cost);
     }
     return { bySession, unpriced };
   }
@@ -259,22 +270,10 @@ export class UsageService implements UsageQueries {
     toTs: string,
   ): Promise<Array<{ date: string; cost: number }>> {
     if (sessionIds.length === 0) return [];
-    const rows = this.usage.seriesByModel(
-      projectId,
-      "day",
-      { sessionIds, fromTs, toTs },
-      this.tiers(),
-    );
-    const rates = new Map<string, TieredRates | undefined>();
+    const rows = this.usage.seriesByModel(projectId, "day", { sessionIds, fromTs, toTs });
     const byDate = new Map<string, number>();
     for (const r of rows) {
-      const key = refKey(r.provider, r.modelId);
-      if (!rates.has(key)) {
-        rates.set(key, await this.lookupPricing(projectId, r.provider, r.modelId));
-      }
-      const rate = rates.get(key);
-      if (!rate) continue;
-      byDate.set(r.key, (byDate.get(r.key) ?? 0) + costOf(r, rate));
+      if (r.cost !== null) byDate.set(r.key, (byDate.get(r.key) ?? 0) + r.cost);
     }
     return [...byDate.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
@@ -302,20 +301,16 @@ export class UsageService implements UsageQueries {
       ...(q.fromTs !== undefined ? { fromTs: q.fromTs } : {}),
       ...(q.toTs !== undefined ? { toTs: q.toTs } : {}),
     };
-    const tiers = this.tiers();
-    const todayRows = this.usage.bucketByModel(projectId, win(today, today), tiers);
+    const todayRows = this.usage.bucketByModel(projectId, win(today, today));
     const last7dRows = this.usage.bucketByModel(
       projectId,
       win(localDateMinusDays(this.clock.now(), 6)),
-      tiers,
     );
-    const totalRows = this.usage.bucketByModel(projectId, { ...win(q.from, q.to), ...ts }, tiers);
-    const groupRows = this.usage.groupsByModel(
-      projectId,
-      q.groupBy,
-      { ...win(q.from, q.to), ...ts },
-      tiers,
-    );
+    const totalRows = this.usage.bucketByModel(projectId, { ...win(q.from, q.to), ...ts });
+    const groupRows = this.usage.groupsByModel(projectId, q.groupBy, {
+      ...win(q.from, q.to),
+      ...ts,
+    });
     // Time series at the requested precision, zero-filled over the requested
     // range, defaulting to the last 30 days when no range is given.
     const granularity = q.granularity ?? "day";
@@ -343,12 +338,10 @@ export class UsageService implements UsageQueries {
         "Date range too wide for this granularity; narrow the range or coarsen the granularity.",
       );
     }
-    const seriesRows = this.usage.seriesByModel(
-      projectId,
-      granularity,
-      { ...win(seriesFrom, seriesTo), ...ts },
-      tiers,
-    );
+    const seriesRows = this.usage.seriesByModel(projectId, granularity, {
+      ...win(seriesFrom, seriesTo),
+      ...ts,
+    });
     // Per-Agent and per-Model series: each drops its own dimension's filter (its
     // chart draws that dimension's whole breakdown) but honors the other
     // dimension plus the selected range.
@@ -387,26 +380,16 @@ export class UsageService implements UsageQueries {
       ...(q.includeGlobalErrors === true ? { includeGlobal: true } : {}),
     };
 
-    // Each paired reference that occurs is looked up for its current price only once.
-    const rates = new Map<string, TieredRates | undefined>();
-    const allRefs = new Map<string, { provider: string; modelId: string }>();
-    for (const r of [...todayRows, ...last7dRows, ...totalRows, ...groupRows, ...seriesRows]) {
-      allRefs.set(refKey(r.provider, r.modelId), { provider: r.provider, modelId: r.modelId });
-    }
-    for (const [key, ref] of allRefs) {
-      rates.set(key, await this.lookupPricing(projectId, ref.provider, ref.modelId));
-    }
-
     return {
       summary: {
-        today: this.foldBucket(todayRows, rates),
-        last7d: this.foldBucket(last7dRows, rates),
-        total: this.foldBucket(totalRows, rates),
+        today: this.foldBucket(todayRows),
+        last7d: this.foldBucket(last7dRows),
+        total: this.foldBucket(totalRows),
       },
       groupBy: q.groupBy,
-      groups: this.foldGroups(groupRows, rates, q.groupBy),
+      groups: this.foldGroups(groupRows, q.groupBy),
       granularity,
-      series: this.foldSeries(bucketKeys, seriesRows, rates),
+      series: this.foldSeries(bucketKeys, seriesRows),
       byAgentSeries: foldAgentSeries(bucketKeys, agentBucketRows),
       byModelSeries: foldModelSeries(bucketKeys, modelBucketRows),
       errors: this.foldErrors(projectId, errorFilter),
@@ -495,10 +478,7 @@ export class UsageService implements UsageQueries {
     };
   }
 
-  private foldBucket(
-    rows: UsageModelSums[],
-    rates: Map<string, TieredRates | undefined>,
-  ): UsageBucket {
+  private foldBucket(rows: UsageModelSums[]): UsageBucket {
     let total = 0;
     let requests = 0;
     let cost: number | null = null;
@@ -506,18 +486,13 @@ export class UsageService implements UsageQueries {
     for (const r of rows) {
       total += r.total;
       requests += r.requests;
-      const rate = rates.get(refKey(r.provider, r.modelId));
-      if (rate) cost = (cost ?? 0) + costOf(r, rate);
-      else hasUncosted = true;
+      if (r.cost !== null) cost = (cost ?? 0) + r.cost;
+      if (r.uncosted > 0) hasUncosted = true;
     }
     return { total, requests, cost, hasUncosted };
   }
 
-  private foldGroups(
-    rows: UsageGroupModelSums[],
-    rates: Map<string, TieredRates | undefined>,
-    groupBy: UsageGroupBy,
-  ): UsageGroupRow[] {
+  private foldGroups(rows: UsageGroupModelSums[], groupBy: UsageGroupBy): UsageGroupRow[] {
     // The model dimension folds by paired reference (a shared model_id name across providers is split into separate rows); other dimensions fold by their group key.
     const keyOf = (r: UsageGroupModelSums): string =>
       groupBy === "model" ? refKey(r.provider, r.key) : r.key;
@@ -539,9 +514,8 @@ export class UsageService implements UsageQueries {
       acc.output += r.output;
       acc.total += r.total;
       acc.requests += r.requests;
-      const rate = rates.get(refKey(r.provider, r.modelId));
-      if (rate) acc.cost = (acc.cost ?? 0) + costOf(r, rate);
-      else acc.hasUncosted = true;
+      if (r.cost !== null) acc.cost = (acc.cost ?? 0) + r.cost;
+      if (r.uncosted > 0) acc.hasUncosted = true;
       byKey.set(keyOf(r), acc);
     }
     const out = [...byKey.values()];
@@ -560,11 +534,7 @@ export class UsageService implements UsageQueries {
    * `ts` and can therefore fall outside a skeleton built from `date` if a row
    * was recorded under a different clock.
    */
-  private foldSeries(
-    keys: string[],
-    rows: UsageSeriesModelSums[],
-    rates: Map<string, TieredRates | undefined>,
-  ): UsageSeriesPoint[] {
+  private foldSeries(keys: string[], rows: UsageSeriesModelSums[]): UsageSeriesPoint[] {
     const byKey = new Map<string, UsageSeriesPoint>(
       keys.map((bucket) => [
         bucket,
@@ -591,8 +561,7 @@ export class UsageService implements UsageQueries {
       acc.requests += r.requests;
       acc.completed += r.completed;
       acc.denominator += r.denominator;
-      const rate = rates.get(refKey(r.provider, r.modelId));
-      if (rate) acc.cost = (acc.cost ?? 0) + costOf(r, rate);
+      if (r.cost !== null) acc.cost = (acc.cost ?? 0) + r.cost;
     }
     return keys.map((k) => byKey.get(k)!);
   }

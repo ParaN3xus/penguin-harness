@@ -105,6 +105,7 @@ interface GenerativeModelConfig {
   thinkingLevel?: ThinkingLevelName;   // 构造期默认档位(逐请求参数可覆盖);"none" | "low" | "medium" | "high" | "xhigh" | "max"
   requestTimeoutMs?: number;       // Request 的空闲超时:等待上游下一个事件的上限,默认 300000;<=0 关闭
   toolCallIds?: ToolCallIdAllocator;   // Session 级 tool_call_id 唯一性登记表(压缩重建时传同一实例)
+  resolvePricing?: (at: Date) => Promise<TokenUsagePricing | null>; // 请求完成时的计费单价,写进其 token_usage 的 `pricing`
 }
 ```
 

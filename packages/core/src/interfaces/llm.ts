@@ -8,7 +8,13 @@
  *
  * Docs: packages/docs/content/interfaces.{zh,en}.md (site path /docs/interfaces).
  */
-import type { ErrorCode, OmniMessage, StopReason, ToolDefinition } from "../omnimessage/types.js";
+import type {
+  ErrorCode,
+  OmniMessage,
+  StopReason,
+  TokenUsagePricing,
+  ToolDefinition,
+} from "../omnimessage/types.js";
 import type { ThinkingLevelName } from "./shared.js";
 // Concrete class, used only as a type annotation (type-only import; no runtime dependency, no circular reference).
 import type { ToolCallIdAllocator } from "../llm/tool-call-ids.js";
@@ -78,6 +84,15 @@ export interface GenerativeModelConfig {
    * one. See llm/tool-call-ids.ts.
    */
   toolCallIds?: ToolCallIdAllocator;
+  /**
+   * The rates a completed Request is billed at, stamped onto its `token_usage` as `pricing`:
+   * called once per completed Request with that event's own timestamp, so the Trace records
+   * what the Request cost the moment it finished and no later price change can rewrite it.
+   * Resolves `null` for a model with no price. Unset (the bare/meta LLM, hosts that keep no
+   * price table), or rejected: the event goes out without `pricing`, and a consumer that needs
+   * the cost prices the Request itself — a failed price lookup never costs the usage record.
+   */
+  resolvePricing?: (at: Date) => Promise<TokenUsagePricing | null>;
 }
 
 export interface GenerativeModelParameters {

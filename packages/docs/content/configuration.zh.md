@@ -96,6 +96,8 @@ output = 1.142857
 
 `pricing.unit` 目前固定为 `usd_per_mtok`（USD 每百万 Token）；三档对应 `token_usage` 的三个计数桶。
 
+一次请求的成本在它完成时定格，按当时生效的价格计算：所用单价记在 Trace 里该请求的 `token_usage` 上，成本中心加总的就是这些数。改价、同步预置、促销开始或结束，都只影响之后的请求；唯一按当前价格重新推导的，是 Trace 页的逐轮成本。
+
 该文件通过 CLI `penguin config model …` 或 Web 的 Models 页面修改——服务运行期间不要手工编辑，模型本身则永远无权读写它。
 
 ### 沙箱安全策略

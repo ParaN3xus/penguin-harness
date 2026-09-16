@@ -339,12 +339,28 @@ export interface AbortPayload extends ErrorInfo {
   reason?: string | null;
 }
 
+/** The three rates a Request was billed at, in USD per million Tokens (the Project pricing shape). */
+export interface TokenUsagePricing {
+  unit: "usd_per_mtok";
+  cache_read: number;
+  cache_write: number;
+  output: number;
+}
+
 export interface TokenUsagePayload {
   type: "token_usage";
   /** Current Session cumulative token usage. */
   session: TokenCounts;
   /** Token usage for the most recent Request. */
   request: TokenCounts;
+  /**
+   * The rates the most recent Request was billed at, fixed the moment it completed: the
+   * Project's price then, less any catalog discount live at that instant. `null` = the model
+   * had no price. Absent from Traces written before the field existed and from hosts that
+   * resolve no price; a consumer that needs the cost then prices the Request itself, by the
+   * same rule. The recorded cost of a Request is never re-derived from a later price.
+   */
+  pricing?: TokenUsagePricing | null;
 }
 
 /**

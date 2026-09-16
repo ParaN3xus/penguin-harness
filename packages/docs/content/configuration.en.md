@@ -96,6 +96,8 @@ output = 1.142857
 
 `pricing.unit` is currently always `usd_per_mtok` (USD per million tokens); the three buckets map onto `token_usage`'s three counters.
 
+A request's cost is fixed when it completes, at the price in force then: the rates it was billed at are recorded on its `token_usage` in the Trace, and the cost center sums those figures. Editing a price, syncing presets, or a promotion starting or ending changes only later requests. The one figure re-derived at today's price is the Trace page's per-turn cost.
+
 Edit this file via the CLI (`penguin config model …`) or the Web Models page — never by hand while the service is running, and never by the model itself, which has no right to read or write it.
 
 ### Command policy
