@@ -3,6 +3,7 @@
 - **Date:** 2026-09-16
 - **Type:** feature
 - **Scope:** `ui`
+- **PR:** [#763](https://github.com/Prism-Shadow/penguin-harness/pull/763)
 
 [中文版](2026-09-16-theme-fixtures-screens.zh.md)
 
