@@ -68,7 +68,7 @@ penguin run -m "长任务" --background            # 立即返回 session id
 | `--verbose` | 显示完整工具输出；缺省折叠过长的工具输出（见下文） |
 | `--server <url>` | 目标服务器（见「服务器连接」） |
 
-使用 `--resume` 时，Workspace 与模型由原 Session 锁定，不可再用 `--workspace` / `--model-id` / `--provider` 覆盖。`--resume` 下仍接受 `--thinking`：它重新钉住该 Session，自下一次 LLM 请求起生效（中途更换会使提供商缓存失效，建议先压缩）。退出时会打印可直接复制的 `penguin chat --resume <sessionId>` 命令。
+使用 `--resume` 时，Workspace 与模型沿用原 Session，不可再用 `--workspace` / `--model-id` / `--provider` 覆盖；如需换模型，恢复后在会话内使用 `/switch-model`。`--resume` 下仍接受 `--thinking`：它重新钉住该 Session，自下一次 LLM 请求起生效（中途更换会使提供商缓存失效，建议先压缩）。退出时会打印可直接复制的 `penguin chat --resume <sessionId>` 命令。
 
 REPL 内命令：
 
@@ -79,6 +79,8 @@ REPL 内命令：
 | `/clear` | 原地开启全新空白 Session；原会话保留在磁盘上，仍可用 `--resume` 恢复 |
 | `/thinking` | 显示本 Session 的思考等级：被 `--thinking` 或 `/thinking` 钉住的等级，否则为 Agent 配置的等级 |
 | `/thinking <level>` | 钉住本 Session 的思考等级（`low` / `medium` / `high` / `xhigh` / `max`）；不会写回 Agent 配置。软限制：自下一次请求起生效、允许中途更换——回执会建议先 `/compact` 压缩，因为更换会使提供商的提示词缓存失效；此后派生的子会话继承钉住的等级 |
+| `/switch-model` | 显示本 Session 当前的模型 |
+| `/switch-model <provider> <model_id>` | 在本 Session 内切换模型：必须先用当前模型总结压缩上下文（Agent 的压缩方式为 discard 时也不例外），成功后以新模型继续同一对话；压缩失败或被中断则保持原模型。尚未运行过的 Session 无需压缩，直接切换。目标须已在 Project 模型配置中（`penguin config model list`）；两个参数以空白分隔，model_id 可含 `/` |
 | `/verbose` | 在折叠与完整工具输出之间切换 |
 | `/exit`、`/quit` | 退出 |
 

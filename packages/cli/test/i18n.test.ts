@@ -65,6 +65,53 @@ describe("getMessages", () => {
     expect(getMessages("zh").chatHints()).toContain("/verbose");
   });
 
+  it("the in-session model switch reads the same in both languages", () => {
+    const en = getMessages("en");
+    const zh = getMessages("zh");
+    for (const m of [en, zh]) {
+      // Every surface that teaches the command names it with its argument pair and says a
+      // switch compacts first.
+      for (const text of [m.chatHints(), m.switchModelCurrent("a (p)"), m.resumeNoOverride()]) {
+        expect(text).toContain("/switch-model <provider> <model_id>");
+      }
+      expect(m.chat.resume).toContain("/switch-model");
+      expect(m.switchModelUsage()).toContain("/switch-model <provider> <model_id>");
+      // Interpolations carry their arguments.
+      const done = m.switchModelDone("a (p)", "b (q)");
+      expect(done).toContain("a (p) → b (q)");
+      expect(m.switchModelSame("b (q)")).toContain("b (q)");
+      const notConfigured = m.switchModelNotConfigured("b (q)", "LIST-CMD", "ADD-CMD");
+      for (const part of ["b (q)", "LIST-CMD", "ADD-CMD"]) expect(notConfigured).toContain(part);
+      expect(m.switchModelUnavailable("b (q)", "no key")).toContain("no key");
+      expect(m.switchModelUnavailable("b (q)", "")).not.toMatch(/[:：]$/);
+      expect(m.switchModelBusy().length).toBeGreaterThan(0);
+      expect(m.switchModelNoCompaction().length).toBeGreaterThan(0);
+      // The compaction lines of a switch name the target, and the model a failure stays on.
+      expect(m.compactionStart("summarize", "model_switch", "b (q)")).toContain("b (q)");
+      expect(m.compactionStart("discard", "model_switch", "b (q)")).toContain("b (q)");
+      const sw = { previous: "a (p)", next: "b (q)" };
+      expect(m.compactionStop("summarize", "completed", undefined, undefined, sw)).toContain(
+        "b (q)",
+      );
+      for (const status of ["failed", "fatal", "retryable", "aborted"]) {
+        const line = m.compactionStop("summarize", status, undefined, "boom", sw);
+        expect(line).toContain("a (p)");
+        expect(line).not.toContain("b (q)");
+      }
+      // A non-switch compaction keeps its own wording.
+      expect(m.compactionStart("summarize", "manual")).not.toBe(
+        m.compactionStart("summarize", "model_switch", "b (q)"),
+      );
+    }
+    // Two languages, not one copied twice.
+    expect(zh.switchModelDone("a", "b")).not.toBe(en.switchModelDone("a", "b"));
+    expect(zh.switchModelBusy()).not.toBe(en.switchModelBusy());
+    expect(zh.switchModelNoCompaction()).not.toBe(en.switchModelNoCompaction());
+    expect(
+      zh.compactionStop("summarize", "completed", undefined, undefined, { next: "b" }),
+    ).not.toBe(en.compactionStop("summarize", "completed", undefined, undefined, { next: "b" }));
+  });
+
   it("server-backed command families exist in both languages (spot checks)", () => {
     for (const lang of ["en", "zh"] as const) {
       const m = getMessages(lang);
