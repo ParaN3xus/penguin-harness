@@ -3,6 +3,7 @@
 - **Date:** 2026-09-16
 - **Type:** feature
 - **Scope:** `ui`
+- **PR:** [#761](https://github.com/Prism-Shadow/penguin-harness/pull/761)
 
 [中文版](2026-09-16-theme-fonts-frost-console.zh.md)
 
