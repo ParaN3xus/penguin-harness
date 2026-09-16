@@ -1,6 +1,7 @@
 /**
- * The shell's organization status marks (pure, unit tested): the tone the switcher's dot and
- * the overview's status pill take, and what a session-list group should render given what
+ * The shell's organization status marks (pure, unit tested): the tone the status pill (the
+ * switcher's trigger, the overview, settings) and the switcher rows' dots take, and what a
+ * session-list group should render given what
  * the store holds for it — so the sidebar never shows a skeleton for a fetch that already
  * failed.
  */

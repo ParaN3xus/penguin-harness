@@ -114,6 +114,11 @@ function orgStatusLabel(kind: OrgStatusKind): string {
   return kind === "paused" ? S.company.statusPaused : S.company.statusActive;
 }
 
+/** An organization's headline state in words, for an accessible name that has to carry it. */
+export function orgStatusText(org: { status: OrgStatus; invalid?: string }): string {
+  return orgStatusLabel(orgStatusKind(org));
+}
+
 const ORG_STATUS_BADGE: Record<OrgStatusKind, BadgeTone> = {
   invalid: "red",
   paused: "amber",
