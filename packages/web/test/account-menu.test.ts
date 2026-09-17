@@ -163,4 +163,16 @@ describe("the account menu", () => {
     expect(source).not.toContain("ServerUpdateRow");
     expect(source).not.toContain("DesktopUpdateRow");
   });
+
+  it("credits MiSans on every menu, behind no gate", () => {
+    // The app ships Xiaomi's MiSans font, whose licence requires software that uses it to say
+    // so, whatever the account or the backend. So the credit is not one of the gated rows: it
+    // is the menu body's last child, opened right after sign-out's gate closes.
+    const credit = source.indexOf("{S.settings.fontCredit}");
+    expect(credit).toBeGreaterThan(-1);
+    const lastGateEnd = source.lastIndexOf(")}\n", credit);
+    expect(source.slice(lastGateEnd, credit).match(/<\w/g)).toEqual(["<p"]);
+    const menuEnd = source.indexOf("</Dropdown>", credit);
+    expect(source.slice(credit, menuEnd).match(/<\/?\w/g)).toEqual(["</p", "</d"]);
+  });
 });

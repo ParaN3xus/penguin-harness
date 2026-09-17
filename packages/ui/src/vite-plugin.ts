@@ -13,8 +13,14 @@
  * node_modules — so the package-name import would load this file from the stale snapshot, and as
  * a `.ts` file under node_modules, which Node refuses to strip types from.
  *
+ * On a build it also emits the bundled fonts' licence texts (`src/fonts/LICENSES/*.txt`: mirrored
+ * from the font packages by `scripts/sync-font-licenses.mjs`, and MiSans's transcribed from its
+ * licensor) as `fonts-licenses/<name>.txt`, so every dist that carries the fonts — the served app,
+ * the desktop bundle, the gallery — carries their licences beside them.
+ *
  * Structural types only, so the package needs no `vite` dependency.
  */
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 export interface PenguinUiAlias {
@@ -22,9 +28,30 @@ export interface PenguinUiAlias {
   replacement: string;
 }
 
+/** The slice of Rollup's plugin context the licence emission uses. */
+export interface PenguinUiEmitContext {
+  emitFile(file: { type: "asset"; fileName: string; source: string }): string;
+}
+
 export interface PenguinUiPlugin {
   name: string;
   config: () => { resolve: { alias: PenguinUiAlias[] } };
+  generateBundle: (this: PenguinUiEmitContext) => void;
+}
+
+/** Where the emitted licence texts land in a consumer's dist. */
+export const FONT_LICENSES_DIR = "fonts-licenses";
+
+/** The licence texts in `src/fonts/LICENSES/`, `{ fileName, source }` per font, sorted by file name. */
+export function fontLicenseAssets(): { fileName: string; source: string }[] {
+  const dir = new URL("./fonts/LICENSES/", import.meta.url);
+  return readdirSync(dir)
+    .filter((file) => file.endsWith(".txt"))
+    .sort()
+    .map((file) => ({
+      fileName: `${FONT_LICENSES_DIR}/${file}`,
+      source: readFileSync(new URL(file, dir), "utf8"),
+    }));
 }
 
 /** package.json `exports` subpath → file under src/. Keep the two in step. */
@@ -56,5 +83,9 @@ export function penguinUi(): PenguinUiPlugin {
   return {
     name: "penguin:ui",
     config: () => ({ resolve: { alias: penguinUiAliases() } }),
+    // Build only: Vite never calls generateBundle from the dev server.
+    generateBundle() {
+      for (const asset of fontLicenseAssets()) this.emitFile({ type: "asset", ...asset });
+    },
   };
 }
