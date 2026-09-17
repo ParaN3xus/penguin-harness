@@ -1,34 +1,21 @@
 /**
- * The sticky left rail (unthemed): brand and mode switch, the view controls (theme, size,
- * language, compare, reduced motion), the scroll-spied section list grouped as the catalog, and
- * the feedback note. Every control writes the URL.
+ * The sticky left rail (unthemed): brand and mode switch; the theme, size and language segments;
+ * the compare and reduced-motion switches; one scroll-spied link per module; the fonts page; and
+ * the feedback note. That is the whole rail, and it fits without scrolling. Every control writes
+ * the URL.
  */
 import { THEME_IDS } from "@prismshadow/penguin-ui";
-import { useEffect, useRef } from "react";
 import { BASE } from "../lib/location";
 import { THEME_NAMES, TIER_PX } from "../lib/themes";
 import { formatGalleryQuery, LANGS, MODE_PREFS, TIERS } from "../lib/url-state";
 import type { ModePref } from "../lib/url-state";
-import { SECTION_ENTRIES, useCatalogText } from "../preview";
-import type { SectionEntry } from "../preview";
+import { useText } from "../preview";
+import { MODULES } from "../registry";
 import { useGallery } from "../state";
 import { Segmented, SwitchRow } from "./controls";
 import { ChromeIcon } from "./icons";
 
 const MODE_ICONS = { light: "sun", dark: "moon", system: "monitor" } as const;
-
-/** Section entries grouped in render order. */
-function groups(): { id: string; entries: SectionEntry[] }[] {
-  const out: { id: string; entries: SectionEntry[] }[] = [];
-  for (const entry of SECTION_ENTRIES) {
-    const last = out[out.length - 1];
-    if (last && last.id === entry.group.id) last.entries.push(entry);
-    else out.push({ id: entry.group.id, entries: [entry] });
-  }
-  return out;
-}
-
-const GROUPS = groups();
 
 export function ModeSwitch() {
   const { S, state, update } = useGallery();
@@ -91,25 +78,13 @@ export function ViewControls({ compact = false }: { compact?: boolean }) {
 
 export function Rail({ activeId }: { activeId: string | null }) {
   const { S, state, update } = useGallery();
-  const text = useCatalogText();
-  const nav = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const list = nav.current;
-    const link = activeId ? list?.querySelector<HTMLElement>(`[data-id="${activeId}"]`) : null;
-    if (!list || !link) return;
-    const top = link.offsetTop - list.offsetTop;
-    if (top < list.scrollTop + 24 || top > list.scrollTop + list.clientHeight - 48) {
-      list.scrollTop = Math.max(0, top - list.clientHeight / 3);
-    }
-  }, [activeId]);
-
+  const text = useText();
   const query = formatGalleryQuery({ ...state, variants: {} });
   return (
     <aside className="g-rail g-chrome">
       <div className="g-rail-head">
         <a className="g-brand" href={`${BASE}/${query}`}>
-          <img src={`${BASE}/penguin-logo.svg`} alt="" width={30} height={30} />
+          <img src={`${BASE}/penguin-logo.svg`} alt="" width={26} height={26} />
           <span>
             <strong>{S.brand.title}</strong>
             <small>{S.brand.subtitle}</small>
@@ -122,7 +97,7 @@ export function Rail({ activeId }: { activeId: string | null }) {
       <div className="g-switches">
         <SwitchRow
           label={S.rail.compare}
-          checked={state.compare}
+          checked={state.compare === true}
           onChange={(compare) => update({ compare })}
         />
         <SwitchRow
@@ -132,41 +107,27 @@ export function Rail({ activeId }: { activeId: string | null }) {
         />
       </div>
 
-      <nav ref={nav} className="g-nav" aria-label={S.rail.sections}>
-        <a className="g-nav-link g-nav-extra" href={`${BASE}/fonts${query}`}>
+      <nav className="g-nav" aria-label={S.rail.modules}>
+        {MODULES.list.map(({ module }) => (
+          <a
+            key={module.id}
+            className="g-nav-link"
+            href={`#${module.id}`}
+            data-active={module.id === activeId || undefined}
+          >
+            {text.module(module).title}
+          </a>
+        ))}
+        <a className="g-nav-link g-nav-fonts" href={`${BASE}/fonts${query}`}>
           <ChromeIcon name="type" size={14} />
           <span>{S.rail.fonts}</span>
         </a>
-        {GROUPS.map(({ id, entries }, g) => {
-          const group = entries[0]?.group;
-          if (!group) return null;
-          return (
-            <div key={id} className="g-nav-group">
-              <a className="g-nav-group-title" href={`#group-${id}`}>
-                <span className="g-num">{String(g + 1).padStart(2, "0")}</span>
-                {text.group(group).title}
-              </a>
-              {entries.map((entry) => (
-                <a
-                  key={entry.section.id}
-                  className="g-nav-link"
-                  href={`#${entry.section.id}`}
-                  data-id={entry.section.id}
-                  data-active={entry.section.id === activeId || undefined}
-                  data-planned={!entry.renderable || undefined}
-                >
-                  <span>{text.section(entry.section).title}</span>
-                </a>
-              ))}
-            </div>
-          );
-        })}
       </nav>
 
       <div className="g-rail-foot">
         <strong>{S.rail.feedbackTitle}</strong>
         <p>{S.rail.feedbackBody}</p>
-        <code>Console › Actions › Button › danger · sm · dark</code>
+        <code>Frost › Conversation › Approval · dark · zh</code>
       </div>
     </aside>
   );

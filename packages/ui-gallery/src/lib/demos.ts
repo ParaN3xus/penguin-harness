@@ -2,11 +2,12 @@
  * Demo collection and variant keys — pure, so the glob wiring (registry.ts) stays a thin shell
  * and every rule here is unit-tested.
  *
+ * A demo is a component's atomic preview (`*.demo.tsx`, demo.ts), shown in a module's Parts drawer.
  * A variant key is a selection's axis values joined with `.` in the axes' declaration order
  * (`danger.sm`); `all` selects the matrix of every combination. An unknown or malformed key reads
- * as the demo's default pick, so a stale link still opens the section.
+ * as the demo's default pick, so a stale link still opens the part.
  */
-import type { CatalogSection } from "../../../ui/src/catalog";
+import type { ComponentSection } from "../../../ui/src/catalog";
 import type { Demo, DemoAxes } from "../../../ui/src/demo";
 
 export const MATRIX_KEY = "all";
@@ -17,7 +18,7 @@ const AXIS_VALUE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export type VariantPick =
   { kind: "matrix" } | { kind: "single"; selection: Readonly<Record<string, string>> };
 
-/** The pick a section opens on: the matrix for a matrix demo, otherwise every axis's first value. */
+/** The pick a part opens on: the matrix for a matrix demo, otherwise every axis's first value. */
 export function defaultPick(axes: DemoAxes | undefined, matrix: boolean | undefined): VariantPick {
   if (matrix && axes && Object.keys(axes).length > 0) return { kind: "matrix" };
   return { kind: "single", selection: firstSelection(axes) };
@@ -79,28 +80,24 @@ export interface CollectedDemo {
 }
 
 export interface DemoRegistry {
-  /** Catalogued component demos by section id. */
+  /** Catalogued demos by part id. */
   byId: ReadonlyMap<string, CollectedDemo>;
-  /** Demos whose id names no catalog section: rendered at the end so none is silently hidden. */
-  uncatalogued: readonly CollectedDemo[];
-  /** Human-readable problems, shown above the sections. */
+  /** Human-readable problems, shown above the modules. */
   problems: readonly string[];
 }
 
 /**
  * Validates and indexes glob results against the catalog. A module without a `demo` export, a
- * duplicate id, an id naming a foundation or screen section, or an axis value that cannot be a
- * key segment is reported and skipped rather than thrown, so one broken demo never blanks the page.
+ * duplicate id, an id no catalog section has, or an axis value that cannot be a key segment is
+ * reported and skipped rather than thrown, so one broken demo never blanks the page.
  */
 export function collectDemos(
   modules: Readonly<Record<string, { demo?: Demo }>>,
-  sections: readonly CatalogSection[],
+  sections: readonly Pick<ComponentSection, "id">[],
 ): DemoRegistry {
-  const kinds = new Map(sections.map((s) => [s.id, s.kind]));
+  const known = new Set(sections.map((section) => section.id));
   const byId = new Map<string, CollectedDemo>();
-  const uncatalogued: CollectedDemo[] = [];
   const problems: string[] = [];
-  const seen = new Map<string, string>();
 
   for (const path of Object.keys(modules).sort()) {
     const demo = modules[path]?.demo;
@@ -108,12 +105,11 @@ export function collectDemos(
       problems.push(`${path}: no \`demo\` export (export const demo = defineDemo({ … }))`);
       continue;
     }
-    const earlier = seen.get(demo.id);
+    const earlier = byId.get(demo.id);
     if (earlier !== undefined) {
-      problems.push(`${path}: demo id "${demo.id}" is already used by ${earlier}`);
+      problems.push(`${path}: demo id "${demo.id}" is already used by ${earlier.path}`);
       continue;
     }
-    seen.set(demo.id, path);
     const badValues = Object.entries(demo.axes ?? {}).flatMap(([axis, values]) =>
       values.length === 0
         ? [`${axis} (empty)`]
@@ -125,11 +121,11 @@ export function collectDemos(
       );
       continue;
     }
-    const kind = kinds.get(demo.id);
-    if (kind === undefined) uncatalogued.push({ demo, path });
-    else if (kind !== "component")
-      problems.push(`${path}: "${demo.id}" is a ${kind} section, not a component`);
-    else byId.set(demo.id, { demo, path });
+    if (!known.has(demo.id)) {
+      problems.push(`${path}: "${demo.id}" is not a catalog.ts section, so no module lists it`);
+      continue;
+    }
+    byId.set(demo.id, { demo, path });
   }
-  return { byId, uncatalogued, problems };
+  return { byId, problems };
 }

@@ -1,82 +1,116 @@
-/** Shape: the radius scale, the same radii on control-shaped boxes, and the border widths. */
+/**
+ * Foundations › Shape & depth: the things radius, border and shadow are for, in one stack — a page
+ * card with its controls and a box nested at the inner radius, a menu floating over the card (glass
+ * in Frost), a dialog over the dimmed page and a toast above everything — each layer tagged with the
+ * stacking tier it takes. Below it, the radius steps and the five shadow levels on plain boxes.
+ */
+import type { CSSProperties } from "react";
 import { useGallery } from "../state";
-import {
-  Copyable,
-  groupNames,
-  Resolving,
-  SubHeading,
-  TokenTable,
-  TokenValue,
-  useActiveTokens,
-  useRemToPx,
-} from "./shared";
+import { BoardGroup } from "./shared";
+import { SPECIMENS } from "./specimens";
 
-const RADII = ["xs", "sm", "md", "lg", "xl", "pill"] as const;
+const RADII = ["xs", "sm", "md", "lg", "xl", "pill", "control"] as const;
+const SHADOWS = ["flat", "raised", "overlay", "modal", "drawer"] as const;
 
-export function ShapePage() {
-  const { tokens, S } = useGallery();
-  const values = useActiveTokens();
-  const toPx = useRemToPx();
-  if (!tokens) return <Resolving />;
+function Tier({ children }: { children: string }) {
+  return <span className="gf-tier gf-caption gf-mono">{children}</span>;
+}
+
+function Scene() {
+  const { S, state } = useGallery();
+  const t = S.foundations.scene;
   return (
-    <div className="gf-stack">
-      <section className="gf-block">
-        <SubHeading>{S.foundations.radiusScale}</SubHeading>
-        <div className="gf-radius-grid">
-          {RADII.map((step) => {
-            const name = `--ui-radius-${step}`;
-            const value = values[name];
-            return (
-              <div key={step} className="gf-radius-item">
-                <div className="gf-radius-box" style={{ borderRadius: `var(${name})` }} />
-                <Copyable text={name} className="gf-name" />
-                <span>
-                  <TokenValue value={value} className="gf-small" />
-                  {value && toPx(value) !== value && <span className="gf-px">{toPx(value)}</span>}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="gf-block">
-        <SubHeading>{S.foundations.onControls}</SubHeading>
-        <div className="gf-shapes">
-          <span className="gf-shape gf-shape-button" title="--ui-radius-md">
-            {S.foundations.sampleButton}
-          </span>
-          <span className="gf-shape gf-shape-input" title="--ui-radius-md">
-            {S.foundations.sampleInput}
-          </span>
-          <span className="gf-shape gf-shape-badge" title="--ui-radius-pill">
-            {S.foundations.sampleBadge}
-          </span>
-          <span className="gf-shape gf-shape-menu" title="--ui-radius-md">
-            <span className="gf-shape-menu-row">{S.foundations.sampleMenuRow}</span>
-            <span className="gf-shape-menu-row" data-active>
-              {S.foundations.sampleMenuRow}
+    <div className="gf-scene">
+      <div className="gf-scene-page">
+        <Tier>{t.pageTier}</Tier>
+        <div className="gf-card">
+          <div className="gf-card-head">
+            <strong>{t.cardTitle}</strong>
+            <span className="gf-caption">{t.cardMeta}</span>
+          </div>
+          <div className="gf-nested" style={{ "--gf-parent-p": "0.75rem" } as CSSProperties}>
+            <span className="gf-caption">{t.nested}</span>
+          </div>
+          <div className="gf-controls">
+            <span className="gf-button" data-variant="primary">
+              {t.primary}
             </span>
-          </span>
-          <span className="gf-shape gf-shape-card" title="--ui-radius-lg">
-            {S.foundations.sampleCard}
-          </span>
+            <span className="gf-button">{t.secondary}</span>
+            <span className="gf-input">{t.input}</span>
+            <span className="gf-badge">{t.badge}</span>
+          </div>
         </div>
-      </section>
-
-      <section className="gf-block">
-        <SubHeading>{S.foundations.borderWidths}</SubHeading>
-        <div className="gf-borders">
-          {["--ui-border-w", "--ui-border-w-thick"].map((name) => (
-            <div key={name} className="gf-border-row">
-              <span className="gf-border-line" style={{ borderTopWidth: `var(${name})` }} />
-              <Copyable text={name} className="gf-name" />
-              <TokenValue value={values[name]} className="gf-small" />
-            </div>
+        <div className="gf-menu ui-glass" role="menu">
+          <Tier>{t.menuTier}</Tier>
+          {t.menuItems.map((item, i) => (
+            <span key={item} className="gf-menu-row" data-active={i === 1 || undefined}>
+              {item}
+            </span>
           ))}
         </div>
-        <TokenTable names={groupNames("shape")} values={values} />
-      </section>
+      </div>
+      <div className="gf-scene-modal">
+        <p className="gf-scene-text" aria-hidden>
+          {SPECIMENS[state.lang].paragraph}
+        </p>
+        <span className="gf-backdrop" />
+        <Tier>{t.backdropTier}</Tier>
+        <div className="gf-dialog ui-glass" role="dialog" aria-label={t.dialogTitle}>
+          <strong>{t.dialogTitle}</strong>
+          <p className="gf-muted">{t.dialogBody}</p>
+          <div className="gf-controls gf-controls-end">
+            <span className="gf-button">{t.cancel}</span>
+            <span className="gf-button" data-variant="danger">
+              {t.confirm}
+            </span>
+          </div>
+        </div>
+        <div className="gf-toast">
+          <Tier>{t.toastTier}</Tier>
+          <span>{t.toast}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ShapeBoard() {
+  const { S } = useGallery();
+  return (
+    <div className="gf-board">
+      <Scene />
+      <div className="gf-pair">
+        <BoardGroup title={S.foundations.radius}>
+          <div className="gf-radii">
+            {RADII.map((step) => (
+              <span key={step} className="gf-radius">
+                <span
+                  className="gf-radius-box"
+                  style={{ borderRadius: `var(--ui-radius-${step})` }}
+                />
+                <span className="gf-caption gf-mono">{step}</span>
+              </span>
+            ))}
+          </div>
+          <div className="gf-borders">
+            <span className="gf-border" style={{ borderTopWidth: "var(--ui-border-w)" }} />
+            <span className="gf-border" style={{ borderTopWidth: "var(--ui-border-w-thick)" }} />
+          </div>
+        </BoardGroup>
+        <BoardGroup title={S.foundations.shadows}>
+          <div className="gf-shadows">
+            {SHADOWS.map((level) => (
+              <span
+                key={level}
+                className="gf-shadow"
+                style={{ boxShadow: `var(--ui-shadow-${level})` }}
+              >
+                <span className="gf-caption gf-mono">{level}</span>
+              </span>
+            ))}
+          </div>
+        </BoardGroup>
+      </div>
     </div>
   );
 }

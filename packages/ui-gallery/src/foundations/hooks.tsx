@@ -1,78 +1,70 @@
 /**
- * Style hooks: the closed hook list (A-architecture §4), each on the minimal markup its recipes
- * expect, so a theme's hooks can be reviewed before any component carries them. The markup follows
- * the anatomy the theme files document: `.ui-frame` children carry `data-slot`, `.ui-live` carries
- * `data-live`, `.ui-underline-nav` holds `[role=tab]` items, `.ui-grid-dots` modifies `.ui-grid`,
- * cards take `.ui-pill-hover[data-shape=card]`, and `.ui-button` marks a button label.
+ * Foundations › Hooks: the six style hooks (`packages/ui/src/hooks.ts`), each on the minimal markup
+ * its recipes select on — `.ui-frame` children carry `data-slot`, `.ui-live` carries `data-live`,
+ * `.ui-underline-nav` holds `[role=tab]` items, `.ui-display` sits on an `h1` — so a theme's hooks can
+ * be reviewed before any component carries them. The specimens live here, in the gallery, rather
+ * than in a package module: a package file applies a hook only inside the component that hosts it.
  *
- * The base look of each sample lives in `@layer components` (foundations.css): a hook's recipe
- * sits in `@layer ui-theme` and must win over it, exactly as it wins over a component's utilities.
+ * The base look of each sample lives in `@layer components` (foundations.css): a hook's recipe sits
+ * in `@layer ui-theme` and must win over it, exactly as it wins over a component's utilities.
  */
+import { HOOKS } from "@prismshadow/penguin-ui";
 import type { ReactNode } from "react";
 import { useGallery } from "../state";
-import { SubHeading } from "./shared";
 import { SPECIMENS } from "./specimens";
 
-function Hook({ name, children }: { name: string; children: ReactNode }) {
+function Hook({ name, children }: { name: (typeof HOOKS)[number]; children: ReactNode }) {
+  const { S } = useGallery();
   return (
-    <section className="gf-block gf-hook">
-      <SubHeading>
-        <span className="gf-mono">.{name}</span>
-      </SubHeading>
+    <section className="gf-hook">
+      <div className="gf-group-head">
+        <h3 className="gf-mono">.{name}</h3>
+        <span className="gf-aside">{S.foundations.hookJobs[name]}</span>
+      </div>
       <div className="gf-hook-body">{children}</div>
     </section>
   );
 }
 
-export function HooksPage() {
+export function HooksBoard() {
   const { state, S } = useGallery();
   const specimen = SPECIMENS[state.lang];
+  const t = S.foundations.hookSamples;
   return (
     <div className="gf-hooks">
-      <Hook name="ui-glass · .ui-wash">
-        <div className="ui-wash gh-wash">
-          <div className="gh-wash-text" aria-hidden>
-            {SPECIMENS.en.heading} · {SPECIMENS.zh.heading}
-          </div>
+      <Hook name="ui-glass">
+        <div className="gh-stage">
+          <p className="gh-stage-text" aria-hidden>
+            {specimen.paragraph}
+          </p>
           <div className="ui-glass gh-panel" role="menu">
-            <span className="gh-menu-row">{S.foundations.sampleMenuRow}</span>
-            <span className="gh-menu-row" data-active>
-              {S.foundations.sampleMenuRow}
+            {t.menu.map((item, i) => (
+              <span key={item} className="gh-menu-row" data-active={i === 1 || undefined}>
+                {item}
+              </span>
+            ))}
+          </div>
+        </div>
+      </Hook>
+
+      <Hook name="ui-eyebrow">
+        <div className="gh-list">
+          <p className="ui-eyebrow gh-eyebrow">{t.group}</p>
+          {t.rows.map((row) => (
+            <span key={row} className="gh-list-row">
+              {row}
             </span>
-            <span className="gh-menu-row">{S.foundations.sampleMenuRow}</span>
-          </div>
+          ))}
         </div>
       </Hook>
 
-      <Hook name="ui-grid · .ui-grid-dots">
-        <div className="gh-grid-pair">
-          <div className="ui-grid gh-grid" />
-          <div className="ui-grid ui-grid-dots gh-grid gh-grid-dots">
-            <span>{specimen.short}</span>
-          </div>
-        </div>
-      </Hook>
-
-      <Hook name="ui-ticks · .ui-pill-hover">
-        <div className="gh-row">
-          <div className="ui-ticks ui-pill-hover gh-card" data-shape="card">
-            <span className="ui-eyebrow gh-eyebrow">{S.foundations.sampleCard}</span>
-            <span>{specimen.heading}</span>
-          </div>
-          <button type="button" className="ui-pill-hover ui-button gh-button gh-button-secondary">
-            {S.foundations.sampleButton}
-          </button>
-        </div>
-      </Hook>
-
-      <Hook name="ui-eyebrow · .ui-display">
-        <span className="ui-eyebrow gh-eyebrow">Tool calls · Tokens</span>
+      <Hook name="ui-display">
         <h1 className="ui-display gh-display" lang="en">
-          {SPECIMENS.en.heading}
+          {SPECIMENS.en.display}
         </h1>
-        <h2 className="ui-display gh-display gh-display-2" lang="zh-CN">
-          {SPECIMENS.zh.heading}
-        </h2>
+        <h1 className="ui-display gh-display" lang="zh-CN">
+          {SPECIMENS.zh.display}
+        </h1>
       </Hook>
 
       <Hook name="ui-live">
@@ -91,43 +83,29 @@ export function HooksPage() {
       <Hook name="ui-frame">
         <div className="ui-frame gh-frame">
           <div data-slot="head" className="gh-frame-head">
-            <span>ts</span>
-            <span>rag.ts</span>
-            <button type="button" className="gh-frame-copy">
-              copy
-            </button>
+            <span className="gf-mono">claude-code-expert/src/rag.ts</span>
+            <span>{t.copy}</span>
           </div>
           <pre data-slot="body" className="gh-frame-body">
             {specimen.code}
           </pre>
           <div data-slot="foot" className="gh-frame-foot">
-            412 ms · exit 0
+            <span className="gf-mono">412ms · exit 0</span>
           </div>
         </div>
         <div className="ui-frame gh-frame gh-frame-panes">
-          <div data-slot="pane">{SPECIMENS.en.short}</div>
-          <div data-slot="pane">{SPECIMENS.zh.short}</div>
+          <div data-slot="pane">{SPECIMENS.en.ui}</div>
+          <div data-slot="pane">{SPECIMENS.zh.ui}</div>
         </div>
       </Hook>
 
       <Hook name="ui-underline-nav">
         <div className="ui-underline-nav gh-tabs" role="tablist">
-          {["Overview", "Traces", "Files"].map((tab, i) => (
+          {t.tabs.map((tab, i) => (
             <span key={tab} role="tab" aria-selected={i === 0} className="gh-tab">
               {tab}
             </span>
           ))}
-        </div>
-      </Hook>
-
-      <Hook name="ui-button">
-        <div className="gh-row">
-          <button type="button" className="ui-button gh-button gh-button-primary">
-            {S.foundations.sampleButton}
-          </button>
-          <button type="button" className="ui-button gh-button gh-button-secondary">
-            {S.foundations.sampleButton}
-          </button>
         </div>
       </Hook>
     </div>

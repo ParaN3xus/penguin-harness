@@ -1,48 +1,35 @@
 /**
- * Motion: every duration × easing pair as a dot crossing a track (the move takes exactly the
- * duration, then holds), and the live-signal timing on a caret and a dot. With `motion=reduced`
- * every animation in the preview holds its first frame (chrome.css), which is also what makes
- * screenshots deterministic.
+ * Foundations › Motion: every duration × easing pair as a dot crossing a track (the move takes
+ * exactly the duration, then holds), and the live signals — a streaming caret, a running dot and a
+ * spinner — on the timing each theme gives `.ui-live`. With `motion=reduced` every animation in the
+ * preview holds its first frame (chrome.css), which is also what keeps screenshots deterministic.
  */
 import type { CSSProperties } from "react";
 import { useGallery } from "../state";
-import {
-  groupNames,
-  Resolving,
-  SubHeading,
-  TokenTable,
-  TokenValue,
-  useActiveTokens,
-} from "./shared";
+import { BoardGroup } from "./shared";
 import { SPECIMENS } from "./specimens";
 
 const DURATIONS = ["fast", "base", "slow"] as const;
 const EASINGS = ["out", "in-out", "spring", "overlay-in", "overlay-out"] as const;
 
-export function MotionPage() {
-  const { tokens, S, state } = useGallery();
-  const values = useActiveTokens();
-  if (!tokens) return <Resolving />;
+export function MotionBoard() {
+  const { S, state } = useGallery();
   return (
-    <div className="gf-stack">
-      <section className="gf-block">
-        <SubHeading aside={state.motion === "reduced" ? S.foundations.reducedNote : undefined}>
-          {S.foundations.durations}
-        </SubHeading>
-        <div className="gf-motion-grid">
+    <div className="gf-board">
+      <BoardGroup
+        title={S.foundations.durations}
+        aside={state.motion === "reduced" ? S.foundations.reducedNote : undefined}
+      >
+        <div className="gf-motion">
           <span />
           {DURATIONS.map((duration) => (
-            <span key={duration} className="gf-motion-head">
-              <span className="gf-mono">{duration}</span>
-              <TokenValue value={values[`--ui-dur-${duration}`]} className="gf-small" />
+            <span key={duration} className="gf-caption gf-mono">
+              {duration}
             </span>
           ))}
           {EASINGS.map((easing) => (
             <div key={easing} className="gf-motion-row">
-              <span className="gf-motion-head">
-                <span className="gf-mono">{easing}</span>
-                <TokenValue value={values[`--ui-ease-${easing}`]} className="gf-small gf-wrap" />
-              </span>
+              <span className="gf-caption gf-mono">{easing}</span>
               {DURATIONS.map((duration) => (
                 <span key={duration} className="gf-track">
                   <span
@@ -59,23 +46,25 @@ export function MotionPage() {
             </div>
           ))}
         </div>
-      </section>
-
-      <section className="gf-block">
-        <SubHeading>{S.foundations.liveSignal}</SubHeading>
+      </BoardGroup>
+      <BoardGroup title={S.foundations.liveSignal}>
         <div className="gf-live">
-          <span className="gf-live-text">
+          <span>
             {SPECIMENS[state.lang].heading}
-            <span className="ui-live gh-caret" data-live="caret">
+            <span className="ui-live gf-caret" data-live="caret">
               ▌
             </span>
           </span>
-          <span className="ui-live gh-dot" data-live="dot" />
-          <span className="ui-live gh-spinner" data-live="spinner" />
-          <TokenValue value={values["--ui-live-timing"]} className="gf-small" />
+          <span className="gf-live-item">
+            <span className="ui-live gf-live-dot" data-live="dot" />
+            {S.foundations.toneWords.success}
+          </span>
+          <span className="gf-live-item">
+            <span className="ui-live gf-spinner" data-live="spinner" />
+            {S.foundations.loading}
+          </span>
         </div>
-      </section>
-      <TokenTable names={groupNames("motion")} values={values} />
+      </BoardGroup>
     </div>
   );
 }

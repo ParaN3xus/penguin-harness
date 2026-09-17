@@ -15,6 +15,7 @@ const PATHS = {
   external: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
   back: "M15 18 9 12l6-6",
   type: "M4 7V4h16v3M9 20h6M12 4v16",
+  parts: "m12 3 9 5-9 5-9-5 9-5zM3 13l9 5 9-5M3 17.5l9 5 9-5",
 } as const;
 
 export type ChromeIconName = keyof typeof PATHS;

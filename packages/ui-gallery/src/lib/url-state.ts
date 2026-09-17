@@ -1,16 +1,21 @@
 /**
  * The gallery's view state, which lives in the URL so any view can be quoted as a link.
  *
- *   /?theme=geek&mode=dark&tier=md&lang=zh&compare=1&v.actions-button=danger.sm#actions-button
+ *   /?theme=geek&mode=dark&tier=md&lang=zh&compare=conversation&v.conversation=approval#conversation
  *
  * `theme`, `mode`, `tier` and `lang` are always written out, so a copied link keeps meaning the
- * same thing if a default ever changes. `compare`, `motion` and the per-section variant picks
- * (`v.<section-id>=<variant key>`) appear only when set. Pure: parsing never throws, and an unknown
- * or missing value falls back to the caller's fallback (the last-used value) and then to the default.
+ * same thing if a default ever changes. `compare`, `motion` and the picks appear only when set:
+ * `compare=1` puts every module in three frames and `compare=<module>` only that one; a pick is
+ * `v.<id>=<key>`, where the id is a module's (`v.conversation=approval`) or, inside a Parts drawer,
+ * a part's (`v.actions-button=danger.sm`) — module ids have no `-` and part ids always do, so the two
+ * never collide. Pure: parsing never throws, and an unknown or missing value falls back to the
+ * caller's fallback (the last-used value) and then to the default.
  */
 import { DEFAULT_THEME_ID, THEME_IDS } from "@prismshadow/penguin-ui";
 import type { ThemeId } from "@prismshadow/penguin-ui";
 import type { FontScale } from "@prismshadow/penguin-ui/boot";
+import { MODULE_IDS } from "../../../ui/src/module";
+import type { ModuleId } from "../../../ui/src/module";
 
 export const MODE_PREFS = ["light", "dark", "system"] as const;
 export type ModePref = (typeof MODE_PREFS)[number];
@@ -28,10 +33,10 @@ export interface GalleryState {
   mode: ModePref;
   tier: FontScale;
   lang: Lang;
-  /** Each preview card becomes one frame per theme, side by side. */
-  compare: boolean;
+  /** `true`: every module renders one frame per theme; a module id: only that module does. */
+  compare: boolean | ModuleId;
   motion: Motion;
-  /** Section id → the variant key its pills select. Only non-default picks are kept. */
+  /** Module or part id → the key its pills select. Only non-default picks are kept. */
   variants: Readonly<Record<string, string>>;
 }
 
@@ -60,6 +65,11 @@ function pick<T extends string>(
   return undefined;
 }
 
+function parseCompare(value: string | null): GalleryState["compare"] {
+  if (value === "1") return true;
+  return pick(MODULE_IDS, value) ?? false;
+}
+
 export function parseGalleryState(search: string, remembered: RememberedPrefs = {}): GalleryState {
   const params = new URLSearchParams(search);
   const variants: Record<string, string> = {};
@@ -73,7 +83,7 @@ export function parseGalleryState(search: string, remembered: RememberedPrefs = 
     mode: pick(MODE_PREFS, params.get("mode"), remembered.mode) ?? DEFAULT_STATE.mode,
     tier: pick(TIERS, params.get("tier"), remembered.tier) ?? DEFAULT_STATE.tier,
     lang: pick(LANGS, params.get("lang"), remembered.lang) ?? DEFAULT_STATE.lang,
-    compare: params.get("compare") === "1",
+    compare: parseCompare(params.get("compare")),
     motion: pick(MOTIONS, params.get("motion")) ?? DEFAULT_STATE.motion,
     variants,
   };
@@ -84,7 +94,7 @@ const enc = encodeURIComponent;
 
 /**
  * The canonical query string (with its leading `?`) for a state. `extra` params (the embed
- * route's `demo` and `variant`) come right after the four preferences, in the order given.
+ * route's `module`, `demo` and `variant`) come right after the four preferences, in the order given.
  */
 export function formatGalleryQuery(
   state: GalleryState,
@@ -97,7 +107,8 @@ export function formatGalleryQuery(
     `lang=${enc(state.lang)}`,
   ];
   for (const [key, value] of Object.entries(extra)) parts.push(`${enc(key)}=${enc(value)}`);
-  if (state.compare) parts.push("compare=1");
+  if (state.compare !== false)
+    parts.push(`compare=${state.compare === true ? "1" : state.compare}`);
   if (state.motion !== DEFAULT_STATE.motion) parts.push(`motion=${enc(state.motion)}`);
   for (const id of Object.keys(state.variants).sort()) {
     parts.push(`${VARIANT_PREFIX}${enc(id)}=${enc(state.variants[id] ?? "")}`);
@@ -110,14 +121,15 @@ export function resolveMode(mode: ModePref, prefersDark: boolean): "light" | "da
   return mode === "system" ? (prefersDark ? "dark" : "light") : mode;
 }
 
-/** Sets (or, for the default key, clears) one section's variant pick. */
-export function withVariant(
-  state: GalleryState,
-  sectionId: string,
-  key: string | null,
-): GalleryState {
+/** Whether a module renders its three compare frames. */
+export function comparesModule(state: GalleryState, id: string): boolean {
+  return state.compare === true || state.compare === id;
+}
+
+/** Sets (or, for the default key, clears) one module's or part's pick. */
+export function withVariant(state: GalleryState, id: string, key: string | null): GalleryState {
   const variants = { ...state.variants };
-  if (key === null) delete variants[sectionId];
-  else variants[sectionId] = key;
+  if (key === null) delete variants[id];
+  else variants[id] = key;
   return { ...state, variants };
 }

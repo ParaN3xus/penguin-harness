@@ -1,98 +1,63 @@
 /**
- * Icons: the icon-size rungs from the Web App's `ICON_SIZE`, the theme's stroke / cap / join, and
- * every line icon the app declares (read from its source, see icon-registry.ts) drawn at the theme's
- * stroke. A path declared under several names shows once, with a count.
+ * Foundations › Icons: every line icon the Web App declares (read from its source, see
+ * lib/icon-registry.ts; W1 moves the registry into the package) drawn at the theme's stroke, cap and
+ * join, grouped by the file that declares it, after the size rungs of `ICON_SIZE`. A path declared
+ * under several names shows once, marked with its count — W1's deduplication list.
  */
-import type { CSSProperties } from "react";
-import { WEB_ICON_SIZES, WEB_ICONS } from "../registry";
+import { WEB_ICON_SIZES, WEB_ICONS } from "../sources";
 import { useGallery } from "../state";
-import { Copyable, groupNames, Resolving, SubHeading, TokenTable, useActiveTokens } from "./shared";
+import { BoardGroup, Glyph } from "./shared";
 
-function Glyph({ d, size }: { d: string; size: number }) {
-  const style: CSSProperties = {
-    strokeWidth: "var(--ui-icon-stroke)",
-    strokeLinecap: "var(--ui-icon-cap)" as CSSProperties["strokeLinecap"],
-    strokeLinejoin: "var(--ui-icon-join)" as CSSProperties["strokeLinejoin"],
-  };
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      style={style}
-      aria-hidden
-    >
-      <path d={d} />
-    </svg>
-  );
-}
-
-const shortName = (name: string) => name.replace(/_ICONS?$/, "").replace(/^[A-Z_]+ICONS\./, "");
-
-export function IconsPage({ size }: { size: string }) {
-  const { tokens, S } = useGallery();
-  const values = useActiveTokens();
-  if (!tokens) return <Resolving />;
-  const px = Number(size) || 16;
+export function IconsBoard() {
+  const { S } = useGallery();
   const sources = [...new Set(WEB_ICONS.map((icon) => icon.sources[0] ?? ""))];
   const sample =
     WEB_ICONS.find((icon) => icon.names.includes("GEAR_ICON"))?.d ?? WEB_ICONS[0]?.d ?? "";
   return (
-    <div className="gf-stack">
-      <div className="gf-two">
-        <section className="gf-block">
-          <SubHeading aside={S.foundations.iconRegistry(WEB_ICONS.length, sources.length)}>
-            {S.foundations.iconSizes}
-          </SubHeading>
-          <div className="gf-icon-sizes">
-            {WEB_ICON_SIZES.map(({ name, px: rung }) => (
-              <span key={name} className="gf-icon-size" title={`ICON_SIZE.${name}`}>
-                <span className="gf-icon-size-box">
-                  <Glyph d={sample} size={rung} />
-                </span>
-                <span className="gf-mono gf-small">{rung}</span>
-                <span className="gf-muted gf-tiny">{name}</span>
+    <div className="gf-board">
+      <BoardGroup
+        title={S.foundations.iconSizes}
+        aside={S.foundations.iconRegistry(WEB_ICONS.length, sources.length)}
+      >
+        <div className="gf-icon-sizes">
+          {WEB_ICON_SIZES.map(({ name, px }) => (
+            <span key={name} className="gf-icon-size" title={`ICON_SIZE.${name}`}>
+              <Glyph d={sample} size={px} />
+              <span className="gf-caption gf-mono">
+                {name} {px}
               </span>
-            ))}
-          </div>
-        </section>
-        <section className="gf-block">
-          <SubHeading>{S.foundations.iconStroke}</SubHeading>
-          <TokenTable names={groupNames("icons")} values={values} />
-        </section>
-      </div>
-
+            </span>
+          ))}
+        </div>
+      </BoardGroup>
       {sources.map((source) => {
         const icons = WEB_ICONS.filter((icon) => icon.sources[0] === source);
         return (
-          <section key={source} className="gf-block">
-            <SubHeading aside={icons.length}>
-              <span className="gf-mono">{source}</span>
-            </SubHeading>
+          <BoardGroup
+            key={source}
+            title={<span className="gf-mono">{source}</span>}
+            aside={icons.length}
+          >
             <div className="gf-icon-grid">
               {icons.map((icon) => (
-                <div
+                <span
                   key={icon.d}
-                  className="gf-icon-tile"
+                  className="gf-icon"
                   title={`${icon.names.join("\n")}\n— ${icon.sources.join(", ")}`}
                 >
-                  <Glyph d={icon.d} size={px} />
-                  <Copyable
-                    text={icon.names[0] ?? ""}
-                    className="gf-icon-name"
-                    title={icon.names.join(", ")}
-                  />
+                  <Glyph d={icon.d} size={16} />
+                  <span className="gf-caption gf-mono gf-icon-name">
+                    {icon.names[0]?.replace(/_ICONS?$/, "").replace(/^[A-Z_]+ICONS\./, "")}
+                  </span>
                   {icon.names.length > 1 && (
-                    <span className="gf-icon-dupes" title={S.foundations.duplicateNames}>
-                      ×{icon.names.length} {icon.names.slice(1).map(shortName).join(", ")}
+                    <span className="gf-caption gf-icon-dupes" title={S.foundations.duplicateNames}>
+                      ×{icon.names.length}
                     </span>
                   )}
-                </div>
+                </span>
               ))}
             </div>
-          </section>
+          </BoardGroup>
         );
       })}
     </div>

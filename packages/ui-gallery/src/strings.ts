@@ -4,10 +4,12 @@
  * gallery's own and never reach the product. Theme names (Primer / Frost / Console), component
  * names, token names and breadcrumbs stay English in both.
  *
- * `catalog` translates catalog.ts titles and descriptions. English reads catalog.ts directly, so
- * only `zh` fills it; a test checks it covers every group and section.
+ * `catalog` translates the module files' titles, descriptions and variant titles, and catalog.ts's
+ * section titles and descriptions. English reads those files directly, so only `zh` fills it; a test
+ * checks it covers every module, variant and section.
  */
-import type { TokenGroupId } from "@prismshadow/penguin-ui";
+import type { HookName, ToneName } from "@prismshadow/penguin-ui";
+import type { ModuleId } from "../../ui/src/module";
 
 export const zh = {
   brand: {
@@ -22,177 +24,296 @@ export const zh = {
     langNames: { en: "EN", zh: "中文" },
     modes: { light: "浅色", dark: "深色", system: "跟随系统" },
     sizeTitle: (px: number) => `根字号 ${px}px`,
-    compare: "三主题并排",
+    compare: "三主题对比",
     reducedMotion: "减弱动效",
     fonts: "字体与许可",
-    sections: "目录",
+    modules: "模块",
     feedbackTitle: "反馈",
-    feedbackBody: "引用卡片下方的路径，或用标题行的链接按钮复制地址。",
+    feedbackBody: "引用卡片左下角的路径，或用标题行的链接按钮复制地址。",
   },
   intro: {
     title: "组件画廊",
-    body: "共享 UI 包的基础令牌、组件演示与整页合成，可在三套主题、明暗、三档字号与中英文之间切换。每个分区与变体都有稳定地址：反馈时引用路径或链接即可。",
-    summary: (sections: number, demos: number, planned: number) =>
-      `${sections} 个分区 · ${demos} 个已有演示 · ${planned} 个计划中`,
-    coverage: "令牌覆盖",
-    coverageHint: "每个主题 × 明暗已定义的令牌数；未定义的令牌在各页显示为「未定义」。",
-    missingList: "未定义的令牌",
+    body: "共享 UI 包的十五个模块，每个都是用同一份模拟数据拼成的真实界面，可在三套主题、明暗、三档字号与中英文之间切换，每个变体都有可引用的地址。",
     resolving: "正在解析令牌…",
-    problems: "演示问题",
+    problems: "模块与演示的问题",
   },
   section: {
     copyLink: "复制链接",
     copied: "已复制",
     copyBreadcrumb: "复制路径",
+    parts: "组件",
     tokens: "令牌",
     code: "代码",
-    tokensIn: (where: string) => `${where} 下的取值`,
-    noTokens: "该演示未声明 tokensUsed。",
-    generatedFrom: (file: string) => `由 ${file} 根据 tokens.ts 生成。`,
+    variants: "变体",
+    tokensIn: (where: string, count: number) => `${where} 下读取的 ${count} 个令牌`,
+    noTokens: "这个合成没有读取任何令牌。",
     unset: "未定义",
     loadingCode: "正在加载源码…",
     compareFrame: (theme: string) => `${theme} 预览`,
+    partsOf: (count: number) => `${count} 个组件`,
+    noParts: "这个模块不列出组件。",
+    replaces: (what: string) => `替代 ${what}`,
   },
-  planned: {
-    badge: "计划中",
-    wave: "波次",
-    exports: "导出",
-    props: "属性",
-    replaces: "替代",
-    plans: { move: "迁移", new: "新建", lift: "提取", "move-new": "迁移并扩展" },
+  embed: {
+    unknownModule: (id: string) => `没有名为「${id}」的模块。`,
+    noDemo: (id: string) => `「${id}」还没有演示。`,
+    nothing: "用 ?module=<模块> 或 ?demo=<组件> 指定要渲染的内容。",
   },
   screens: {
     open: "打开整页",
-    missing: (id: string) =>
-      `尚无合成：在 packages/ui/src/screens/index.ts 的 SCREENS 中加入「${id}」即可出现。`,
     back: "返回画廊",
     notFound: (name: string) => `没有名为「${name}」的整页。`,
-    title: "整页合成",
-  },
-  uncatalogued: {
-    title: "未编入目录的演示",
-    description: "这些演示的 id 不在 catalog.ts 中。",
+    descriptions: {
+      chat: "运行中的 Task：定稿回答、展开的差异、运行中的子 Agent、待审批的命令、输入框与子 Agent 停靠面板。",
+      traces: "轨迹停靠面板：文件切换、总览、一轮的执行时间线、图例与事件行。",
+      settings:
+        "对话之上的分页设置对话框，停在「外观」：导航栏、分段控件、色板、开关与一个打开的说明弹出层。",
+      login: "装饰画布上的登录卡片，带语言与明暗切换。",
+    } as Partial<Record<string, string>>,
   },
   foundations: {
-    view: { active: "当前主题", matrix: "全部主题" },
-    contrastAgainst: "对比度",
-    presets: "强调色预设",
-    presetsHint: "预设在每个主题、两种明暗下都覆盖主题自带的强调色。",
-    families: "字体族",
-    roleScale: "角色字号",
-    weights: "字重",
-    tracking: "字距",
-    radiusScale: "圆角",
-    borderWidths: "描边宽度",
-    onControls: "用在控件上",
+    surfaces: "表面",
+    inks: "文字",
+    lines: "线条",
+    inkWords: ["正文文字", "次要文字", "弱化文字"] as readonly string[],
+    accent: "强调色",
+    presetsHint: "主题自带的强调色，与用户可选的五个预设",
+    themeAccent: "主题",
+    sampleSend: "发送",
+    selectedRow: "选中的行",
+    sampleLink: "打开文档",
+    linkHover: "悬停",
+    tones: "语义色调",
+    toneWords: {
+      success: "运行中",
+      attention: "等待中",
+      danger: "失败",
+      done: "已完成",
+      neutral: "空闲",
+      info: "同步中",
+    } as Record<ToneName, string>,
+    charts: "图表序列",
+    tokenSeries: "Token 构成",
+    code: "代码与差异",
+    codeLines: {
+      before: "const hits = rank(question).slice(0, ",
+      removed: "3",
+      added: "6",
+      after: ");",
+      selected: "return cite(hits);",
+    },
+    typeNote: "每一行都用各自角色的令牌排版；中文列显示拉丁字体与中文字体的衔接。",
+    scene: {
+      pageTier: "页面",
+      cardTitle: "Docs Expert",
+      cardMeta: "3 个会话 · $0.0231",
+      nested: "内层方框的圆角 = 外层圆角 − 内边距",
+      primary: "保存",
+      secondary: "取消",
+      input: "搜索会话",
+      badge: "运行中",
+      menuTier: "z-[60] 菜单",
+      menuItems: ["置顶", "重命名", "移动到…"] as readonly string[],
+      backdropTier: "z-50 对话框",
+      dialogTitle: "删除这个会话？",
+      dialogBody: "对话记录与 Trace 文件会一并删除。",
+      cancel: "取消",
+      confirm: "删除",
+      toastTier: "z-[100] 通知",
+      toast: "已导出 Trace #001",
+    },
+    radius: "圆角",
     shadows: "阴影层级",
-    glass: "毛玻璃",
-    controls: "控件高度",
-    measured: "实测",
-    rows: "行与菜单行",
-    padding: "卡片与面板内边距",
-    stack: "堆叠间距",
-    durations: "时长 × 缓动",
-    liveSignal: "实时信号",
-    reducedNote: "已减弱动效：动画停在首帧。",
+    spacingPage: {
+      title: "设置",
+      appearance: "外观",
+      theme: "主题",
+      themeOptions: ["浅色", "深色", "跟随系统"] as readonly string[],
+      fontSize: "字号",
+      sizeOptions: ["小", "中", "大"] as readonly string[],
+      general: "通用",
+      language: "语言",
+      languageOptions: ["中文", "English"] as readonly string[],
+      notifications: "完成时通知",
+    },
+    controlHeights: "控件高度（实测）",
     iconSizes: "图标尺寸",
-    iconStroke: "描边",
     iconRegistry: (icons: number, files: number) => `${icons} 个图标，来自 ${files} 个文件`,
     duplicateNames: "同一路径的多个名字",
+    durations: "时长 × 缓动",
+    reducedNote: "已减弱动效：动画停在首帧。",
+    liveSignal: "实时信号",
+    loading: "加载中",
     focusRing: "焦点环",
     inputFocus: "输入框焦点",
     selection: "选区",
     scrollbar: "滚动条",
-    layers: "层级",
-    layerRows: [
-      ["无", "页面内容与侧栏"],
-      ["z-40", "页内菜单"],
-      ["z-50", "模态框与抽屉的遮罩"],
-      ["z-[60]", "门户面板：下拉、弹出层、右键菜单"],
-      ["z-[65] / z-[70]", "停靠面板拖拽中的幽灵"],
-      ["z-[100]", "通知"],
-    ] as readonly (readonly [string, string])[],
-    sampleButton: "按钮",
-    sampleInput: "输入框",
-    sampleCard: "卡片",
-    sampleBadge: "徽标",
-    sampleMenuRow: "菜单行",
-    sampleRow: "列表行",
+    hookJobs: {
+      "ui-glass": "盖在内容之上的临时层",
+      "ui-eyebrow": "为下方一组条目命名的分组标签",
+      "ui-display": "页面或主视觉唯一的展示标题",
+      "ui-live": "正在进行之物的动效",
+      "ui-frame": "带头部、主体、底部与窗格的细线框",
+      "ui-underline-nav": "标签栏中选中项的标记",
+    } as Record<HookName, string>,
+    hookSamples: {
+      menu: ["置顶", "重命名", "删除"] as readonly string[],
+      group: "工作区",
+      rows: ["claude-code-expert", "docs-sync", "release-notes"] as readonly string[],
+      copy: "复制",
+      tabs: ["概览", "轨迹", "文件"] as readonly string[],
+    },
   },
   fonts: {
     title: "字体与许可",
     specimens: "字样",
     specimensHint: "每个主题的字体族，在 16 / 18 / 20 px 下各排一段中英文。",
     declared: "已声明的字体",
-    declaredHint: "页面样式表中的 @font-face；只有文本用到时浏览器才会下载。",
-    noFaces: "尚未声明任何字体（字体由 W0b 加入）。",
-    slices: (n: number) => `${n} 个分片`,
+    declaredHint:
+      "页面样式表中的 @font-face，按字体族、字重与样式合并；只有文本用到某个分片时浏览器才会下载它。",
+    noFaces: "尚未声明任何字体。",
+    family: "字体族",
+    weight: "字重",
+    slicesColumn: "分片",
+    loadStatus: "加载情况",
     licences: "许可文本",
-    noLicences: "还没有许可文本（W0b 会加入 packages/ui/src/fonts/LICENSES/）。",
+    noLicences: "还没有许可文本。",
     status: { loaded: "已加载", unloaded: "未使用", loading: "加载中", error: "失败" },
   },
   catalog: {
-    groups: {
+    modules: {
       foundations: {
         title: "基础",
-        description: "令牌契约的可视化：每个令牌，在每个主题与明暗下。",
+        description:
+          "调色板、字号梯度、形状与层次、节奏间距、图标、动效、焦点与六个样式钩子，每项一块面板。",
+        variants: {
+          colour: "颜色",
+          type: "排版",
+          "shape-depth": "形状与层次",
+          spacing: "间距",
+          icons: "图标",
+          motion: "动效",
+          focus: "焦点",
+          hooks: "样式钩子",
+        },
       },
-      icons: { title: "图标与标记", description: "线形图标、状态标记、加载环、头像与标识。W1。" },
-      actions: { title: "操作", description: "按钮、链接、复制与快捷键提示。W1。" },
-      forms: { title: "表单", description: "字段、文本控件、选择器、开关与设置行。W2。" },
+      conversation: {
+        title: "对话",
+        description:
+          "一个 Task 的对话记录：带附件的用户消息、含表格与代码的定稿正文、带思考与工具行的工作组、展开的差异、运行中的子 Agent、待审批的命令与统计行。",
+        variants: { streaming: "流式输出", settled: "已完成", approval: "待审批", failed: "失败" },
+      },
+      composer: {
+        title: "输入框",
+        description:
+          "输入框卡片：附件标签行、带光标的草稿、审批 / Skill / 思考 / 模型触发器、上下文环、发送或停止，以及它的两个菜单。",
+        variants: {
+          idle: "空闲",
+          running: "运行中",
+          chips: "附件标签",
+          "slash-menu": "斜杠菜单",
+          "model-picker": "模型选择",
+        },
+      },
       navigation: {
-        title: "导航",
-        description: "标签页、导航行、分组、路径、图标栏与命令面板。W4、W7、W8。",
+        title: "侧栏与导航",
+        description:
+          "会话侧栏（导航行、计数与带标记的会话行）；带路径与下划线标签页的页头；停靠面板的标签页与图标栏。",
+        variants: {
+          sidebar: "侧栏",
+          "tabs-crumbs": "标签页与路径",
+          "dock-rail": "停靠面板与图标栏",
+          collapsed: "折叠",
+        },
       },
-      overlays: { title: "浮层", description: "对话框、抽屉、菜单、弹出层、提示与通知。W3。" },
-      feedback: {
-        title: "反馈与状态",
-        description: "徽标、计数、提示条、骨架、空状态与进度。W1、W4。",
+      actions: {
+        title: "按钮与操作",
+        description:
+          "按钮出现的地方：页面工具栏、对话框底栏、紧凑行的悬停操作（含链接、快捷键与复制按钮），以及每种变体的每种状态。",
+        variants: {
+          toolbar: "工具栏",
+          footer: "对话框底栏",
+          "dense-row": "紧凑行",
+          states: "状态",
+        },
       },
-      layout: { title: "布局与表面", description: "卡片、页面框架、分区、行与拖拽手柄。W4、W7。" },
-      data: {
-        title: "数据展示",
-        description: "表格、键值列表、统计、日志、图例、环形图与迷你折线。W4、W8。",
+      status: {
+        title: "状态与反馈",
+        description: "任务列表上的运行状态、徽标与计数；提示条与通知；进度、骨架与空状态。",
+        variants: {
+          live: "进行中",
+          settled: "已结束",
+          notices: "提示",
+          "loading-empty": "加载与空状态",
+        },
       },
-      content: { title: "内容", description: "Markdown、代码、排版原语与差异视图。W5。" },
-      chat: { title: "对话", description: "气泡、流式文本、工具调用、审批与输入框。W6。" },
-      files: { title: "文件与目录树", description: "文件树、文件浏览器、预览与拖放遮罩。W7。" },
-      shell: { title: "外壳与停靠", description: "应用外壳、侧栏、停靠面板、启动球与工具栏。W7。" },
-      charts: {
-        title: "图表与仪表",
-        description: "领域图表留在 Web 中，读取 --ui-chart-* 令牌。W8。",
+      forms: {
+        title: "表单",
+        description:
+          "以设置行呈现的「外观」与「通用」设置，以及包含各类字段的对话框表单、它的错误与禁用状态。",
+        variants: {
+          settings: "设置",
+          "dialog-form": "对话框表单",
+          errors: "错误",
+          disabled: "禁用",
+        },
       },
-      screens: { title: "整页", description: "只用包内组件与模拟数据拼成的整页合成。" },
-    } as Partial<Record<string, { title: string; description: string }>>,
+      overlays: {
+        title: "浮层",
+        description:
+          "在对话之上打开的一切：右键菜单、说明弹出层与提示；对话框；抽屉；通知堆叠；命令面板。",
+        variants: {
+          menu: "菜单",
+          dialog: "对话框",
+          drawer: "抽屉",
+          toasts: "通知",
+          palette: "命令面板",
+        },
+      },
+      tables: {
+        title: "表格与列表",
+        description:
+          "带底色表头、可排序列与可展开行的模型表；朴素表头的密钥表；键值信息，以及以列表行呈现、带分页的已安装插件。",
+        variants: { band: "底色表头", plain: "朴素表头", dense: "紧凑", expandable: "可展开" },
+      },
+      stats: {
+        title: "统计与图表",
+        description:
+          "一份 Trace 的数字：总览、统计块与统计小片、上下文环与迷你折线；执行时间线与图例；按天的花费与预算。",
+        variants: { overview: "概览", timeline: "时间线", usage: "用量" },
+      },
+      content: {
+        title: "Markdown 与代码",
+        description:
+          "Markdown 写成的文档回答（标题、链接、行内代码、表格、公式与引用），代码块、统一差异视图与命令日志。",
+        variants: { prose: "正文", code: "代码", diff: "差异", log: "日志" },
+      },
+      files: {
+        title: "文件与目录树",
+        description:
+          "Workspace 的文件面板：带搜索、刷新与上传的目录树；带路径的文件预览；拖放遮罩。",
+        variants: { tree: "目录树", preview: "预览", drop: "拖放" },
+      },
+      pages: {
+        title: "页面与分区",
+        description: "设置类页面：页头、细线分区、卡片网格与可折叠分区；实体页；空页面。",
+        variants: { settings: "设置页", entity: "实体页", empty: "空页面" },
+      },
+      company: {
+        title: "公司看板",
+        description:
+          "公司模式的界面：工单看板、带执行结果的周日历、带员工状态的组织架构图，以及群聊。",
+        variants: { board: "看板", calendar: "日历", org: "组织", channel: "群聊" },
+      },
+      screens: {
+        title: "整页",
+        description: "各模块合起来的四个整页合成，每个都能在自己的页面上全尺寸打开。",
+        variants: { chat: "对话", traces: "轨迹", settings: "设置", login: "登录" },
+      },
+    } as Partial<
+      Record<ModuleId, { title: string; description: string; variants: Record<string, string> }>
+    >,
     sections: {
-      "foundations-color": {
-        title: "颜色",
-        description: "表面、文字、线条、强调色、六种语义色调、图表与代码。",
-      },
-      "foundations-typography": {
-        title: "排版",
-        description: "字体族、h1–h6 到说明文字的角色字号、字重与字距。",
-      },
-      "foundations-radius": { title: "形状", description: "控件形状上的圆角梯度，以及描边宽度。" },
-      "foundations-elevation": {
-        title: "层次与毛玻璃",
-        description: "五级阴影，以及铺在渐变底上的毛玻璃配方。",
-      },
-      "foundations-density": {
-        title: "间距与密度",
-        description: "实测高度的控件档位、行与菜单行内边距、堆叠间距。",
-      },
-      "foundations-motion": { title: "动效", description: "时长、缓动曲线与实时信号的节奏。" },
-      "foundations-icons": {
-        title: "图标",
-        description: "Web App 的线形图标，按主题的描边粗细、端点与转角绘制。",
-      },
-      "foundations-focus": { title: "焦点与选区", description: "焦点环、选区颜色与滚动条。" },
-      "foundations-hooks": {
-        title: "样式钩子",
-        description: "封闭的钩子列表，每个钩子挂在其配方所需的最小结构上。",
-      },
-      "foundations-layering": { title: "层级", description: "所有浮层从中取值的堆叠层级。" },
       "icons-glyph-icon": { description: "唯一的线形图标渲染器，描边读取 --ui-icon-stroke。" },
       "icons-registry": { title: "图标表", description: "所有路径字符串，按组归档，只声明一次。" },
       "icons-marks": { title: "标记", description: "与线形图标并存的非网格标记。" },
@@ -316,31 +437,7 @@ export const zh = {
         description:
           "图表、日历、看板与组织画布留在 Web 中，构建在 ChartFrame、Legend、Ring、Sparkline 与 ProgressBar 之上。",
       },
-      "screens-chat": {
-        title: "对话",
-        description: "侧栏与对话：运行中的工具调用、思考块、定稿回答与输入框。",
-      },
-      "screens-traces": { title: "Trace", description: "带时间线泳道的 Trace 面板。" },
-      "screens-settings": { title: "设置", description: "打开在「外观」页的分页设置对话框。" },
-      "screens-login": { title: "登录", description: "登录页。" },
     } as Partial<Record<string, { title?: string; description: string }>>,
-    tokenGroups: {
-      "color-surfaces": "颜色 — 表面",
-      "color-text": "颜色 — 文字",
-      "color-lines": "颜色 — 线条",
-      "color-accent": "颜色 — 强调色",
-      "color-tones": "颜色 — 语义色调",
-      "color-charts": "颜色 — 图表",
-      "color-code": "颜色 — 代码",
-      shape: "形状",
-      elevation: "层次",
-      "type-families": "排版 — 字体族",
-      "type-scale": "排版 — 字号与角色",
-      density: "密度",
-      motion: "动效",
-      icons: "图标",
-      focus: "焦点、选区与滚动条",
-    } as Partial<Record<TokenGroupId, string>>,
   },
 };
 

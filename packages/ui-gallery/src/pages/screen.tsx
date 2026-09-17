@@ -1,6 +1,7 @@
 /**
  * `/screens/<name>` — a full-viewport composite on the themed root, with a small floating
- * unthemed toolbar (hidden by `bare=1`) carrying the view controls and the screen's breadcrumb.
+ * unthemed toolbar (hidden by `bare=1`) carrying the view controls and the screen's breadcrumb,
+ * `Primer › Screens › Chat · light`, the same address the Screens module's card quotes.
  */
 import { useEffect } from "react";
 import { ModeSwitch, ViewControls } from "../chrome/rail";
@@ -11,16 +12,12 @@ import { BASE } from "../lib/location";
 import { formatGalleryQuery } from "../lib/url-state";
 import { SCREENS } from "../screens";
 import { useGallery } from "../state";
-import { CATALOG } from "../../../ui/src/catalog";
 
 export function ScreenPage({ name }: { name: string }) {
   const { S, state, mode, tokens } = useGallery();
   const [copied, copy] = useCopy();
   const screen = SCREENS[name];
   const bare = new URLSearchParams(window.location.search).get("bare") === "1";
-  const planned = CATALOG.find((group) => group.id === "screens")?.sections.find(
-    (section) => section.kind === "screen" && section.screen === name,
-  );
 
   useEffect(() => {
     if (!tokens) return;
@@ -31,13 +28,15 @@ export function ScreenPage({ name }: { name: string }) {
 
   const crumb = formatBreadcrumb({
     theme: state.theme,
-    group: "Screens",
-    section: planned?.title ?? name,
+    module: "Screens",
+    variant: [screen?.title ?? name],
     mode,
     lang: state.lang,
     tier: state.tier,
   });
-  const back = `${BASE}/${formatGalleryQuery({ ...state, variants: {} })}#screens-${name}`;
+  const variants: Record<string, string> =
+    screen && screen.id !== Object.keys(SCREENS)[0] ? { screens: screen.id } : {};
+  const back = `${BASE}/${formatGalleryQuery({ ...state, compare: false, variants })}#screens`;
 
   return (
     <>
@@ -47,7 +46,6 @@ export function ScreenPage({ name }: { name: string }) {
         ) : (
           <div className="g-screen-missing g-chrome">
             <p>{S.screens.notFound(name)}</p>
-            <p className="g-muted">{S.screens.missing(name)}</p>
             <ul>
               {Object.keys(SCREENS).map((known) => (
                 <li key={known}>

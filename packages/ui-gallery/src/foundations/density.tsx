@@ -1,44 +1,60 @@
 /**
- * Spacing & density: control rungs built from padding-block + line-height with their measured
- * height (the number that must match across themes), row and menu-row padding, card and panel
- * padding, and the stack gaps.
+ * Foundations › Spacing: the five rhythm steps as a ruler over a real settings page — a glyph welded
+ * to its label (stack-0), related rows (stack-1), a row group under its section title (stack-2), one
+ * section after another (stack-3) and the page header above the content (stack-4) — so it shows that
+ * siblings of different kinds never share a gap. Below it, the control rungs with their measured
+ * heights, the number that must match across themes.
  */
-import { useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useGallery } from "../state";
-import { groupNames, Resolving, SubHeading, TokenTable, useActiveTokens } from "./shared";
+import { BoardGroup, Glyph, Measured } from "./shared";
 
-/** Renders its child and prints the child's rendered height in px, re-measured on resize. */
-function Measured({
-  children,
-  style,
-  className,
-}: {
-  children: ReactNode;
-  style: CSSProperties;
-  className: string;
-}) {
-  const { S } = useGallery();
-  const ref = useRef<HTMLSpanElement>(null);
-  const [height, setHeight] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => setHeight(Math.round(el.getBoundingClientRect().height * 10) / 10);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+const GLYPHS = {
+  sun: "M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41",
+  type: "M4 7V4h16v3M9 20h6M12 4v16",
+  bell: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0",
+  globe:
+    "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z",
+} as const;
+
+/** A gap drawn as a measured band: its height is the step, its label names it. */
+function Gap({ step }: { step: 0 | 1 | 2 | 3 | 4 }) {
   return (
-    <span className="gf-measured">
-      <span ref={ref} className={className} style={style}>
-        {children}
+    <div className="gf-gap" style={{ height: `var(--ui-stack-${step})` }}>
+      <span className="gf-gap-label gf-caption gf-mono">stack-{step}</span>
+    </div>
+  );
+}
+
+function Row({
+  glyph,
+  label,
+  value,
+}: {
+  glyph: keyof typeof GLYPHS;
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div className="gf-pref">
+      <span className="gf-pref-label">
+        <Glyph d={GLYPHS[glyph]} size={15} />
+        <span className="gf-gap-inline" style={{ width: "var(--ui-stack-0)" }} />
+        {label}
       </span>
-      <span className="gf-px">
-        {height === null ? "…" : `${height}px`}{" "}
-        <span className="gf-muted">{S.foundations.measured}</span>
-      </span>
+      {value}
+    </div>
+  );
+}
+
+function Segments({ options, value }: { options: readonly string[]; value: number }) {
+  return (
+    <span className="gf-segmented">
+      {options.map((option, i) => (
+        <span key={option} data-active={i === value || undefined}>
+          {option}
+        </span>
+      ))}
     </span>
   );
 }
@@ -49,92 +65,56 @@ const RUNGS = [
   { rung: "lg", text: "body" },
 ] as const;
 
-export function DensityPage() {
-  const { tokens, S } = useGallery();
-  const values = useActiveTokens();
-  if (!tokens) return <Resolving />;
+export function SpacingBoard() {
+  const { S } = useGallery();
+  const t = S.foundations.spacingPage;
   return (
-    <div className="gf-stack">
-      <section className="gf-block">
-        <SubHeading>{S.foundations.controls}</SubHeading>
+    <div className="gf-board">
+      <div className="gf-ruler">
+        <h3 className="gf-page-title">{t.title}</h3>
+        <Gap step={4} />
+        <h4 className="gf-section-title">{t.appearance}</h4>
+        <Gap step={2} />
+        <Row glyph="sun" label={t.theme} value={<Segments options={t.themeOptions} value={2} />} />
+        <Gap step={1} />
+        <Row
+          glyph="type"
+          label={t.fontSize}
+          value={<Segments options={t.sizeOptions} value={1} />}
+        />
+        <Gap step={3} />
+        <h4 className="gf-section-title">{t.general}</h4>
+        <Gap step={2} />
+        <Row
+          glyph="globe"
+          label={t.language}
+          value={<Segments options={t.languageOptions} value={0} />}
+        />
+        <Gap step={1} />
+        <Row glyph="bell" label={t.notifications} value={<span className="gf-switch" data-on />} />
+      </div>
+      <BoardGroup title={S.foundations.controlHeights}>
         <div className="gf-rungs">
           {RUNGS.map(({ rung, text }) => (
-            <div key={rung} className="gf-rung">
-              <span className="gf-mono gf-rung-id">{rung}</span>
+            <span key={rung} className="gf-rung">
+              <span className="gf-caption gf-mono">{rung}</span>
               <Measured
                 className="gf-control"
-                style={{
-                  paddingBlock: `var(--ui-control-py-${rung})`,
-                  paddingInline: `var(--ui-control-px-${rung})`,
-                  gap: `var(--ui-control-gap-${rung === "sm" ? "sm" : "md"})`,
-                  fontSize: `var(--ui-text-${text}-size)`,
-                  lineHeight: `var(--ui-text-${text}-lh)`,
-                }}
+                style={
+                  {
+                    paddingBlock: `var(--ui-control-py-${rung})`,
+                    paddingInline: `var(--ui-control-px-${rung})`,
+                    fontSize: `var(--ui-text-${text}-size)`,
+                    lineHeight: `var(--ui-text-${text}-lh)`,
+                  } as CSSProperties
+                }
               >
-                <span className="gf-control-glyph" />
-                {S.foundations.sampleButton}
+                {S.foundations.scene.primary}
               </Measured>
-              <Measured
-                className="gf-control gf-control-input"
-                style={{
-                  paddingBlock: `var(--ui-control-py-${rung})`,
-                  paddingInline: `var(--ui-control-px-${rung})`,
-                  fontSize: `var(--ui-text-${text}-size)`,
-                  lineHeight: `var(--ui-text-${text}-lh)`,
-                }}
-              >
-                {S.foundations.sampleInput}
-              </Measured>
-            </div>
+            </span>
           ))}
         </div>
-      </section>
-
-      <div className="gf-two">
-        <section className="gf-block">
-          <SubHeading>{S.foundations.rows}</SubHeading>
-          <div className="gf-rows-sample">
-            {[0, 1, 2].map((i) => (
-              <Measured
-                key={i}
-                className="gf-row-sample"
-                style={{ padding: "var(--ui-row-py) var(--ui-row-px)" }}
-              >
-                {S.foundations.sampleRow} {i + 1}
-              </Measured>
-            ))}
-          </div>
-          <div className="gf-rows-sample gf-menu-sample">
-            {[0, 1, 2].map((i) => (
-              <Measured
-                key={i}
-                className="gf-row-sample"
-                style={{ padding: "var(--ui-menu-row-py) var(--ui-menu-row-px)" }}
-              >
-                {S.foundations.sampleMenuRow} {i + 1}
-              </Measured>
-            ))}
-          </div>
-        </section>
-        <section className="gf-block">
-          <SubHeading>{S.foundations.padding}</SubHeading>
-          {(["card", "panel"] as const).map((kind) => (
-            <div key={kind} className="gf-padding-box" style={{ padding: `var(--ui-${kind}-p)` }}>
-              <span className="gf-padding-inner gf-mono gf-small">--ui-{kind}-p</span>
-            </div>
-          ))}
-          <SubHeading>{S.foundations.stack}</SubHeading>
-          {([1, 2, 3] as const).map((step) => (
-            <div key={step} className="gf-stack-sample" style={{ gap: `var(--ui-stack-${step})` }}>
-              <span />
-              <span />
-              <span />
-              <span className="gf-mono gf-small">--ui-stack-{step}</span>
-            </div>
-          ))}
-        </section>
-      </div>
-      <TokenTable names={groupNames("density")} values={values} />
+      </BoardGroup>
     </div>
   );
 }

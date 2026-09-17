@@ -1,7 +1,9 @@
 /**
  * `/fonts` — what the package's `fonts/` ships: each theme's families (resolved from its tokens)
- * set in an en and a zh paragraph at the three root sizes, every `@font-face` the page's styles
- * declare with its load status, and the licence texts mirrored under `fonts/LICENSES/`.
+ * set in an en and a zh paragraph at the three root sizes, the `@font-face` rules the page's styles
+ * declare — one row per family, weight and style, with the number of `unicode-range` slices behind
+ * it and their load status (MiSans alone declares ~200 slice faces) — and the licence texts under
+ * `fonts/LICENSES/`.
  */
 import { THEME_IDS } from "@prismshadow/penguin-ui";
 import { useEffect, useState } from "react";
@@ -11,40 +13,48 @@ import { SPECIMENS } from "../foundations/specimens";
 import { BASE } from "../lib/location";
 import { THEME_NAMES, TIER_PX } from "../lib/themes";
 import { formatGalleryQuery } from "../lib/url-state";
-import { FONT_LICENSES, repoPath } from "../registry";
+import { FONT_LICENSES, licencePath } from "../sources";
 import { useGallery } from "../state";
 
 const ROLES = ["--ui-font-sans", "--ui-font-mono", "--ui-font-display", "--ui-font-cjk"] as const;
 
-interface FaceSummary {
+interface FaceRow {
   family: string;
-  count: number;
-  weights: string[];
-  styles: string[];
+  /** `400`, or a variable face's range `100 900`. */
+  weight: string;
+  style: string;
+  /** How many `@font-face` rules (unicode-range slices) share this family, weight and style. */
+  slices: number;
   status: Record<FontFaceLoadStatus, number>;
 }
 
-function useFaces(): FaceSummary[] {
-  const [faces, setFaces] = useState<FaceSummary[]>([]);
+function useFaces(): FaceRow[] {
+  const [faces, setFaces] = useState<FaceRow[]>([]);
   useEffect(() => {
     const read = () => {
-      const byFamily = new Map<string, FaceSummary>();
+      const rows = new Map<string, FaceRow>();
       document.fonts.forEach((face) => {
         const family = face.family.replace(/^["']|["']$/g, "");
-        const summary = byFamily.get(family) ?? {
+        const key = `${family}|${face.weight}|${face.style}`;
+        const row = rows.get(key) ?? {
           family,
-          count: 0,
-          weights: [],
-          styles: [],
+          weight: face.weight,
+          style: face.style,
+          slices: 0,
           status: { unloaded: 0, loading: 0, loaded: 0, error: 0 },
         };
-        summary.count++;
-        if (!summary.weights.includes(face.weight)) summary.weights.push(face.weight);
-        if (!summary.styles.includes(face.style)) summary.styles.push(face.style);
-        summary.status[face.status]++;
-        byFamily.set(family, summary);
+        row.slices++;
+        row.status[face.status]++;
+        rows.set(key, row);
       });
-      setFaces([...byFamily.values()].sort((a, b) => a.family.localeCompare(b.family)));
+      setFaces(
+        [...rows.values()].sort(
+          (a, b) =>
+            a.family.localeCompare(b.family) ||
+            a.weight.localeCompare(b.weight, "en", { numeric: true }) ||
+            a.style.localeCompare(b.style),
+        ),
+      );
     };
     read();
     document.fonts.addEventListener("loadingdone", read);
@@ -65,7 +75,7 @@ function Licence({ path }: { path: string }) {
           void load().then(setText);
       }}
     >
-      <summary>{repoPath(path)}</summary>
+      <summary>{licencePath(path)}</summary>
       <pre className="g-code">{text ?? "…"}</pre>
     </details>
   );
@@ -151,14 +161,32 @@ export function FontsPage() {
             <p className="g-muted">{S.fonts.noFaces}</p>
           ) : (
             <table className="g-table">
+              <thead>
+                <tr>
+                  <th>{S.fonts.family}</th>
+                  <th>{S.fonts.weight}</th>
+                  <th>{S.fonts.slicesColumn}</th>
+                  <th>{S.fonts.loadStatus}</th>
+                </tr>
+              </thead>
               <tbody>
                 {faces.map((face) => (
-                  <tr key={face.family}>
-                    <td style={{ fontFamily: `"${face.family}"` }}>{face.family}</td>
-                    <td>{face.count > 1 ? S.fonts.slices(face.count) : "1"}</td>
-                    <td>
-                      <code>{face.weights.join(", ")}</code> <code>{face.styles.join(", ")}</code>
+                  <tr key={`${face.family}|${face.weight}|${face.style}`}>
+                    <td
+                      style={{
+                        fontFamily: `"${face.family}"`,
+                        fontWeight: face.weight.split(" ")[0],
+                      }}
+                    >
+                      {face.family}
                     </td>
+                    <td>
+                      <code>
+                        {face.weight}
+                        {face.style !== "normal" ? ` ${face.style}` : ""}
+                      </code>
+                    </td>
+                    <td className="g-num-cell">{face.slices}</td>
                     <td className="g-muted">
                       {(Object.keys(face.status) as FontFaceLoadStatus[])
                         .filter((status) => face.status[status] > 0)
