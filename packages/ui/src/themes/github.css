@@ -132,6 +132,7 @@
     --ui-radius-lg: 0.5rem;
     --ui-radius-xl: 0.75rem;
     --ui-radius-pill: 9999px;
+    --ui-radius-control: 0.375rem;
     --ui-border-w: 1px;
     --ui-border-w-thick: 2px;
 
@@ -145,7 +146,6 @@
     --ui-glass-blur: 0px;
     --ui-glass-saturate: 100%;
     --ui-glass-line: var(--ui-line);
-    --ui-glass-highlight: transparent;
 
     /* ---- Typography — families: the system stacks the app ships today ---- */
     --ui-font-sans:
@@ -238,9 +238,11 @@
     --ui-menu-row-px: 0.875rem;
     --ui-card-p: 1rem;
     --ui-panel-p: 1rem;
+    --ui-stack-0: 0.25rem;
     --ui-stack-1: 0.5rem;
     --ui-stack-2: 1rem;
     --ui-stack-3: 1.5rem;
+    --ui-stack-4: 2.5rem;
 
     /* ---- Motion ---- */
     --ui-dur-fast: 150ms;
@@ -380,6 +382,7 @@
     --ui-radius-lg: 0.5rem;
     --ui-radius-xl: 0.75rem;
     --ui-radius-pill: 9999px;
+    --ui-radius-control: 0.375rem;
     --ui-border-w: 1px;
     --ui-border-w-thick: 2px;
 
@@ -393,7 +396,6 @@
     --ui-glass-blur: 0px;
     --ui-glass-saturate: 100%;
     --ui-glass-line: var(--ui-line);
-    --ui-glass-highlight: transparent;
 
     /* ---- Typography — families ---- */
     --ui-font-sans:
@@ -477,9 +479,11 @@
     --ui-menu-row-px: 0.875rem;
     --ui-card-p: 1rem;
     --ui-panel-p: 1rem;
+    --ui-stack-0: 0.25rem;
     --ui-stack-1: 0.5rem;
     --ui-stack-2: 1rem;
     --ui-stack-3: 1.5rem;
+    --ui-stack-4: 2.5rem;
 
     /* ---- Motion ---- */
     --ui-dur-fast: 150ms;
