@@ -74,6 +74,9 @@ describe("splitPaths", () => {
 
   it("leaves other absolute paths, routes and URLs alone", () => {
     expect(paths("GET /api/v1/organizations/co_lab/tickets returns 200")).toEqual([]);
+    expect(
+      paths("GET /api/projects/default_project/organizations/co_lab/tickets/T-12 returned 404"),
+    ).toEqual([]);
     expect(paths("/home/ada/.penguin/data/other_project/organizations/co_lab/x")).toEqual([]);
     expect(paths("https://example.test/default_project/organizations/co_lab/x")).toEqual([]);
     expect(paths("and/or 1/2 <app_data_dir>/")).toEqual([]);
@@ -85,9 +88,19 @@ describe("splitPaths", () => {
     expect(paths(`Output:${LAB}/workspace/out/`)).toEqual([`${LAB}/workspace/out/`]);
   });
 
-  it("stops at a space and at characters outside the ASCII file-name set", () => {
+  it("stops at a space", () => {
     expect(paths(`${LAB}/workspace/my notes/`)).toEqual([`${LAB}/workspace/my`]);
-    expect(paths(`${LAB}/workspace/实验/`)).toEqual([`${LAB}/workspace/`]);
+  });
+
+  it("leaves a path that runs on through a non-ASCII segment as text, rather than capsuling its parent", () => {
+    expect(paths(`结果在 ${LAB}/workspace/调研报告.md`)).toEqual([]);
+    expect(paths(`${LAB}/workspace/实验/`)).toEqual([]);
+    expect(paths(`${LAB}/workspace/report实验.md`)).toEqual([]);
+    expect(paths(`见 ${LAB}/workspace/exp/，数据在 ${LAB}/workspace/数据/a.csv`)).toEqual([
+      `${LAB}/workspace/exp/`,
+    ]);
+    // Prose that resumes after a folder goes on to no `/` or extension, so the folder is kept.
+    expect(paths(`目录：${LAB}/handbook/里有说明`)).toEqual([`${LAB}/handbook/`]);
   });
 
   it("keeps a whole <placeholder> segment inside the path", () => {
@@ -110,6 +123,7 @@ describe("codePath", () => {
     expect(codePath(`ls ${LAB}/workspace`, scope)).toBeNull();
     expect(codePath(`${LAB}/run.sh --fast`, scope)).toBeNull();
     expect(codePath("/api/v1/tickets", scope)).toBeNull();
+    expect(codePath("/api/projects/default_project/agents/ceo/schedules", scope)).toBeNull();
     expect(codePath("penguin", scope)).toBeNull();
   });
 });

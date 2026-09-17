@@ -11,12 +11,19 @@
  *   (`/…`, `~/…`, `C:/…`) that runs through this Project's data directory — a
  *   `/<projectId>/organizations/` or `/<projectId>/agents/` stretch, the real-path spelling of
  *   the same place. Any other absolute path is left alone: in prose `/api/v1/tickets` is a
- *   route, not a folder, and nothing but the data directory tells the two apart.
+ *   route, not a folder, and nothing but the data directory tells the two apart. This server's
+ *   own routes share that stretch (`/api/projects/<projectId>/organizations/…`), so a path that
+ *   starts at `/api/` is a route too.
  * - **What it is made of, in prose.** Segments of ASCII letters, digits and `._~+=@%-`, plus
  *   whole `<placeholder>` segments, separated by `/`. The path stops at anything else, so the
  *   punctuation and CJK around it stay outside (`见<app_data_dir>/…/dep-eval/。`), and a
  *   trailing `.` ends a sentence rather than a file name. File names are ASCII by the handbook's
  *   convention; a space ends a path, since prose gives no way to tell where it would stop.
+ * - **Where it runs on past that.** A path whose next segment is not ASCII
+ *   (`…/workspace/调研报告.md`, `…/workspace/实验/`) stays text: cut at the last ASCII
+ *   character, its capsule would name and copy the folder above the one written. The run of
+ *   letters after it counts as a segment when it goes on to a `/` or a file extension;
+ *   otherwise it is the sentence resuming (`…/handbook/里有说明`), and the path keeps its capsule.
  * - **In code.** An inline code span that holds one path and nothing else is one path, taken
  *   verbatim — the backticks already say where it ends, so any non-space character may appear
  *   in it. A code span holding a command, and every fenced block, stays code.
@@ -57,10 +64,13 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Whether a well-formed candidate starts at a root this module capsules. */
 function rooted(path: string, scope: PathScope): boolean {
   if (path.startsWith(`${PLACEHOLDER_ROOT}/`)) return true;
-  if (path.startsWith("<")) return false;
+  if (path.startsWith("/api/")) return false;
   const marker = new RegExp(`/${escapeRe(scope.projectId)}/(?:organizations|agents)(?:/|$)`);
   return scope.projectId !== "" && marker.test(path);
 }
+
+/** Text right after a prose path that carries it on through a non-ASCII segment. */
+const RUNS_ON = /^[\p{L}\p{N}_-]+(?:\/|\.[A-Za-z0-9])/u;
 
 /** Drops the sentence's full stop(s) from a prose path; a trailing `/` survives them. */
 function trimTrailing(path: string): string {
@@ -85,6 +95,7 @@ export function splitPaths(text: string, scope: PathScope): PathPiece[] {
   for (const m of text.matchAll(PROSE_PATH)) {
     const path = trimTrailing(m[0]);
     if (!rooted(path, scope) || !hasSegment(path)) continue;
+    if (RUNS_ON.test(text.slice(m.index + m[0].length))) continue;
     pushText(text.slice(last, m.index));
     out.push({ kind: "path", path });
     last = m.index + path.length;
@@ -100,11 +111,15 @@ export function codePath(code: string, scope: PathScope): string | null {
   return value;
 }
 
-/** The capsule's label: the last segment, without the trailing `/`. */
+/**
+ * The capsule's label: the last segment, without the trailing `/`. Empty for the placeholder
+ * alone — the one root a rooted candidate can stop at, since any other root has to run on
+ * through the Project's data directory.
+ */
 export function pathLabel(path: string): string {
   const body = path.replace(/\/+$/, "");
   const name = body.slice(body.lastIndexOf("/") + 1);
-  return name === PLACEHOLDER_ROOT || name === "~" || /^[A-Za-z]:$/.test(name) ? "" : name;
+  return name === PLACEHOLDER_ROOT ? "" : name;
 }
 
 /** Folder or file, by the rule in this module's comment. */

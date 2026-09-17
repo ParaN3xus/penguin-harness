@@ -135,7 +135,7 @@ export function OrgStatusPill({ org }: { org: { status: OrgStatus; invalid?: str
   );
 }
 
-/** The same state as a 6px dot (the switcher's trigger and rows), its name in the tooltip and sr text. */
+/** The same state as a 6px dot (the switcher's rows), its name in the tooltip and sr text. */
 export function OrgStatusDot({ org }: { org: { status: OrgStatus; invalid?: string } }) {
   const kind = orgStatusKind(org);
   const label = orgStatusLabel(kind);

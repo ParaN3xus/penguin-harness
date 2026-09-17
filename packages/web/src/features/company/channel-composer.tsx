@@ -8,16 +8,30 @@
  *
  * A pick writes the name the message will render (`@Ada Lovelace`), not the id the server
  * resolves: the draft tracks each picked mention as a range and the send converts it back
- * (mention-draft.ts has the rules — an edited mention goes out as plain text). A live mention
- * is tinted the way a sent chip is by a layer drawn behind the transparent textarea: the same
- * box, font and wrapping, with the text itself invisible, so only the tint shows through and
- * the textarea keeps native caret, selection, IME and undo.
+ * (mention-draft.ts has the rules). A mention is one block — an edit that reaches into it
+ * takes all of it, and the caret steps over it — tinted the way a sent chip is by a layer
+ * drawn behind the transparent textarea: the same box, font and wrapping, with the text itself
+ * invisible, so only the tint shows through and the textarea keeps native caret, selection,
+ * IME and undo.
+ *
+ * The browser's undo stack is why the block's edits are made the way they are. A value written
+ * from script leaves that stack stale: Ctrl+Z then does nothing, and a redo can bring back text
+ * from before the write.
+ *
+ * - Backspace at a mention's end and Delete at its start are replaced, before the browser acts,
+ *   by a native delete of the whole mention — one step on that stack, so Ctrl+Z restores it.
+ * - Any other edit that reaches into a mention (a word delete, a keyboard app's edit) is widened
+ *   after the fact and written back, which costs the undo steps before it.
+ * - An undo or redo is never written back. It restores only text, so when that text is one the
+ *   draft held with mentions, a short history puts the mentions back.
+ * - Nothing is written back while an input method is composing, since that breaks the
+ *   composition; the widening waits for compositionend.
  *
  * The keys are named in the placeholder and nothing is rendered under the box, the way
  * development mode's chat input reads: a line of hint below the composer is read once and
  * then costs a row of the stream on every later visit.
  */
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { S } from "../../lib/strings";
 import { ICON_GAP } from "../../lib/icon-scale";
@@ -35,11 +49,17 @@ import type { MentionCandidate, MentionKind } from "./channel-mentions";
 import {
   EMPTY_DRAFT,
   draftApplyEdit,
+  draftFollowEdit,
   draftInsertMention,
+  draftRecall,
+  draftRemember,
   draftSegments,
+  draftSnapSelection,
   draftWireText,
-  mentionStartsAt,
+  mentionCovers,
+  mentionDeletedByKey,
 } from "./mention-draft";
+import type { DraftHistory, MentionDraft } from "./mention-draft";
 
 /**
  * The box grows with the draft up to this many pixels, then scrolls inside — the same cap the
@@ -56,6 +76,13 @@ const MAX_BOX_PX = 160;
  * the tint off its name.
  */
 const BOX_METRICS = "rounded-md border px-3 py-[9px] text-sm leading-5";
+
+/**
+ * The native events React's onSelect reports for a selection a pointer made: it holds the event
+ * back while a button is down and fires on release. Keys and input methods arrive as
+ * `keydown`, `keyup` or `selectionchange`.
+ */
+const POINTER_SELECT = new Set(["mouseup", "contextmenu", "dragend"]);
 
 function kindTitle(kind: MentionKind): string {
   if (kind === "employee") return S.company.channels.employees;
@@ -84,10 +111,20 @@ export function ChannelComposer({
   const layerRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const segments = useMemo(() => draftSegments(draft), [draft]);
+  /** The rendered draft, for the native beforeinput listener. */
+  const draftRef = useRef(draft);
+  const draftHistory = useRef<DraftHistory>([]);
+  /** Where the selection's focus stood after the last change: where a keyboard move starts from. */
+  const focusAt = useRef(0);
+  /** The caret to set once React has written a widened value back. */
+  const pendingCaret = useRef<number | null>(null);
+  /** The draft when an input method started composing; null while none is. */
+  const composingFrom = useRef<MentionDraft | null>(null);
 
-  // A caret right after a picked mention (its trailing space deleted) is not a new query.
+  // A caret right after a picked mention (its trailing space deleted) would read its name as
+  // a query; an `@` inside a mention's name is not a new one either.
   const typed = mentionQueryAt(text, caret);
-  const mention = typed !== null && !mentionStartsAt(draft, typed.start) ? typed : null;
+  const mention = typed !== null && !mentionCovers(draft, typed.start) ? typed : null;
   const suggestions = mention === null ? [] : rankMentionCandidates(candidates, mention.query);
   const tokenKey = mention === null ? null : `${mention.start}:${mention.query}`;
   const panelOpen = mention !== null && suggestions.length > 0 && dismissed !== tokenKey;
@@ -125,6 +162,51 @@ export function ChannelComposer({
     syncLayer();
   }, [text]);
 
+  useLayoutEffect(() => {
+    draftRef.current = draft;
+    draftHistory.current = draftRemember(draftHistory.current, draft);
+    const at = pendingCaret.current;
+    if (at !== null) {
+      pendingCaret.current = null;
+      inputRef.current?.setSelectionRange(at, at);
+    }
+  }, [draft]);
+
+  /** Takes an edit's result; a text that differs from what the box shows is written back, caret included. */
+  const takeEdit = (result: { draft: MentionDraft; caret: number }, shown: string) => {
+    setDraft(result.draft);
+    setCaret(result.caret);
+    focusAt.current = result.caret;
+    if (result.draft.text !== shown) pendingCaret.current = result.caret;
+  };
+
+  // Backspace at a mention's end, Delete at its start: the whole mention, deleted natively.
+  // React's onBeforeInput does not fire for deletions, hence the native listener; the refs keep
+  // it current without re-attaching.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (el === null) return;
+    const onBeforeInput = (e: InputEvent) => {
+      if (!e.cancelable || composingFrom.current !== null) return;
+      const span = mentionDeletedByKey(
+        draftRef.current,
+        e.inputType,
+        el.selectionStart,
+        el.selectionEnd,
+      );
+      if (span === null) return;
+      e.preventDefault();
+      el.setSelectionRange(span.start, span.end);
+      // execCommand is deprecated but still the only way to edit onto the native undo stack;
+      // the input event it fires reaches onChange as the key's own would have.
+      if (document.execCommand?.("delete")) return;
+      const value = el.value.slice(0, span.start) + el.value.slice(span.end);
+      takeEdit(draftApplyEdit(draftRef.current, value, span.start), el.value);
+    };
+    el.addEventListener("beforeinput", onBeforeInput);
+    return () => el.removeEventListener("beforeinput", onBeforeInput);
+  }, []);
+
   const pick = (c: MentionCandidate) => {
     if (mention === null) return;
     const wire = mentionInsertId(c, candidates);
@@ -133,6 +215,7 @@ export function ChannelComposer({
     const next = draftInsertMention(draft, mention.start, caret, label, wire);
     setDraft(next.draft);
     setCaret(next.caret);
+    focusAt.current = next.caret;
     setHighlight(0);
     requestAnimationFrame(() => {
       const el = inputRef.current;
@@ -151,6 +234,7 @@ export function ChannelComposer({
       if (await onSend(body)) {
         setDraft(EMPTY_DRAFT);
         setCaret(0);
+        focusAt.current = 0;
       }
     } finally {
       setSending(false);
@@ -239,12 +323,50 @@ export function ChannelComposer({
                 {...noAutofill}
                 onChange={(e) => {
                   const value = e.target.value;
-                  const at = e.target.selectionStart ?? value.length;
-                  setDraft(draftApplyEdit(draft, value, at));
-                  setCaret(at);
+                  // The end of the selection: an undo, a redo or a drop leaves what it inserted
+                  // selected, and the insertion ends there.
+                  const at = e.target.selectionEnd;
+                  const { inputType } = e.nativeEvent as InputEvent;
                   setHighlight(0);
+                  const base = composingFrom.current;
+                  if (base === null && inputType !== "historyUndo" && inputType !== "historyRedo") {
+                    takeEdit(draftApplyEdit(draft, value, at), value);
+                    return;
+                  }
+                  setDraft(
+                    base !== null
+                      ? draftFollowEdit(base, value, at)
+                      : (draftRecall(draftHistory.current, value) ??
+                          draftFollowEdit(draft, value, at)),
+                  );
+                  setCaret(at);
+                  focusAt.current = at;
                 }}
-                onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+                onCompositionStart={() => {
+                  composingFrom.current = draft;
+                }}
+                onCompositionEnd={(e) => {
+                  const base = composingFrom.current;
+                  composingFrom.current = null;
+                  if (base === null) return;
+                  const el = e.currentTarget;
+                  takeEdit(draftApplyEdit(base, el.value, el.selectionEnd), el.value);
+                }}
+                onSelect={(e) => {
+                  if (composingFrom.current !== null) return;
+                  const el = e.currentTarget;
+                  const backward = el.selectionDirection === "backward";
+                  const snapped = draftSnapSelection(
+                    draft,
+                    { start: el.selectionStart, end: el.selectionEnd, backward },
+                    POINTER_SELECT.has(e.nativeEvent.type) ? null : focusAt.current,
+                  );
+                  if (snapped.start !== el.selectionStart || snapped.end !== el.selectionEnd) {
+                    el.setSelectionRange(snapped.start, snapped.end, el.selectionDirection);
+                  }
+                  focusAt.current = backward ? snapped.start : snapped.end;
+                  setCaret(snapped.end);
+                }}
                 onScroll={syncLayer}
                 onKeyDown={onKeyDown}
                 className={`relative block max-h-40 min-h-10 w-full resize-none border-gray-300 bg-transparent placeholder:text-gray-400 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400/30 disabled:opacity-60 dark:border-gray-700 dark:placeholder:text-gray-500 ${BOX_METRICS}`}

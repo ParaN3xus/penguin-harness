@@ -17,11 +17,14 @@ folder capsule, and the organization's status sits beside its name as a text cap
   a sent message's mention chip is, where it had written the id. The message sent still carries the
   id (`@ceo`, `@user:alice`, `@all`), so the server, delivery and `mention_not_member` did not
   change.
-- Each pick is tracked as a range of the draft. Typing inside a name, deleting part of it or
-  replacing a selection across it turns it into plain text; text typed or pasted elsewhere only
-  moves it. A mention glued to a word before it, or followed by characters that would extend the
-  id (`@Ada.md`), goes out as its visible text and loses its tint until the stray characters are
-  removed. Employees who share a name stay apart, and a typed or pasted `@id` works as before.
+- A picked mention became one block. Backspace right after it or Delete right before it removed
+  the whole name at once, and so did a word delete, a cut or a typed-over selection that reached
+  into it. The caret stepped over the name, and a click or a selection that ended inside it moved
+  to its edge. Ctrl+Z after that Backspace or Delete brought the mention back whole, and an input
+  method's composition that reached into a name removed it when the composition ended.
+- A mention glued to the text around it (`x@Ada`, `@Ada.md`) went out with a space that sets its
+  token apart, so it was still delivered, and so was an `@id` typed right after it (`@张三@ceo`).
+  Employees who share a name stay apart, and a typed or pasted `@id` works as before.
 - The menu also matched names typed in any script (`@张`), and an IME's Enter while composing after
   the `@` stopped picking a candidate.
 
@@ -33,10 +36,12 @@ folder capsule, and the organization's status sits beside its name as a text cap
   did not change.
 - A path is `<app_data_dir>/…`, or an absolute path that passes through the Project's
   `organizations/` or `agents/` directory. In prose it is made of ASCII file-name characters, so it
-  stops at a space, CJK text or punctuation, and a trailing full stop stays outside it. An inline
-  code span holding one path and nothing else becomes a capsule verbatim; fenced blocks, commands
-  in code spans and link labels stay as written. A trailing `/`, or a last segment without an
-  extension, reads as a folder; a last segment with an extension, as a file.
+  stops at a space, CJK text or punctuation, and a trailing full stop stays outside it. A path that
+  runs on through a non-ASCII segment (`…/workspace/调研报告.md`) and this server's own routes
+  (`/api/projects/…/organizations/…`) stay text. An inline code span holding one path and nothing
+  else becomes a capsule verbatim; fenced blocks, commands in code spans and link labels stay as
+  written. A trailing `/`, or a last segment without an extension, reads as a folder; a last
+  segment with an extension, as a file.
 
 ## Organization status
 
