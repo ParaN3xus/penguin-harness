@@ -132,6 +132,7 @@
     --ui-radius-lg: 0;
     --ui-radius-xl: 0;
     --ui-radius-pill: 0;
+    --ui-radius-control: 0;
     --ui-border-w: 1px;
     --ui-border-w-thick: 1px;
 
@@ -146,7 +147,6 @@
     --ui-glass-blur: 0px;
     --ui-glass-saturate: 1;
     --ui-glass-line: var(--ui-line);
-    --ui-glass-highlight: transparent;
 
     /* Typography — families. Latin face first, so ASCII always renders in the theme's face. */
     --ui-font-cjk: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei";
@@ -231,9 +231,11 @@
     --ui-menu-row-px: 0.5rem;
     --ui-card-p: 1rem;
     --ui-panel-p: 1.25rem;
+    --ui-stack-0: 0.25rem;
     --ui-stack-1: 0.5rem;
     --ui-stack-2: 1rem;
     --ui-stack-3: 1.5rem;
+    --ui-stack-4: 2.5rem;
 
     /* Motion: quick colour, no hover transforms, overlays on E2B's ui-out curve, stepped signals */
     --ui-dur-fast: 100ms;
@@ -374,6 +376,7 @@
     --ui-radius-lg: 0;
     --ui-radius-xl: 0;
     --ui-radius-pill: 0;
+    --ui-radius-control: 0;
     --ui-border-w: 1px;
     --ui-border-w-thick: 1px;
 
@@ -387,7 +390,6 @@
     --ui-glass-blur: 0px;
     --ui-glass-saturate: 1;
     --ui-glass-line: var(--ui-line-emphasis);
-    --ui-glass-highlight: transparent;
 
     /* Typography — families */
     --ui-font-cjk: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei";
@@ -472,9 +474,11 @@
     --ui-menu-row-px: 0.5rem;
     --ui-card-p: 1rem;
     --ui-panel-p: 1.25rem;
+    --ui-stack-0: 0.25rem;
     --ui-stack-1: 0.5rem;
     --ui-stack-2: 1rem;
     --ui-stack-3: 1.5rem;
+    --ui-stack-4: 2.5rem;
 
     /* Motion */
     --ui-dur-fast: 100ms;

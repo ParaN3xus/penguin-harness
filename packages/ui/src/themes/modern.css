@@ -127,6 +127,7 @@
     --ui-radius-lg: 1rem;
     --ui-radius-xl: 1.5rem;
     --ui-radius-pill: 9999px;
+    --ui-radius-control: 9999px;
     --ui-border-w: 1px;
     --ui-border-w-thick: 2px;
 
@@ -145,7 +146,6 @@
     --ui-glass-blur: 24px;
     --ui-glass-saturate: 1.4;
     --ui-glass-line: rgb(255 255 255 / 0.55);
-    --ui-glass-highlight: rgb(255 255 255 / 0.6);
 
     /* Typography — families. Latin face first, so ASCII always renders in the theme's face. */
     --ui-font-cjk: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei";
@@ -228,9 +228,11 @@
     --ui-menu-row-px: 0.625rem;
     --ui-card-p: 1rem;
     --ui-panel-p: 1.25rem;
+    --ui-stack-0: 0.25rem;
     --ui-stack-1: 0.5rem;
     --ui-stack-2: 1rem;
     --ui-stack-3: 1.5rem;
+    --ui-stack-4: 2.5rem;
 
     /* Motion (Sierra: .25s cubic-bezier(.4,0,.2,1), reveals .5s) */
     --ui-dur-fast: 150ms;
@@ -371,6 +373,7 @@
     --ui-radius-lg: 1rem;
     --ui-radius-xl: 1.5rem;
     --ui-radius-pill: 9999px;
+    --ui-radius-control: 9999px;
     --ui-border-w: 1px;
     --ui-border-w-thick: 2px;
 
@@ -385,7 +388,6 @@
     --ui-glass-blur: 24px;
     --ui-glass-saturate: 1.4;
     --ui-glass-line: rgb(255 255 255 / 0.08);
-    --ui-glass-highlight: rgb(255 255 255 / 0.06);
 
     /* Typography — families */
     --ui-font-cjk: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei";
@@ -467,9 +469,11 @@
     --ui-menu-row-px: 0.625rem;
     --ui-card-p: 1rem;
     --ui-panel-p: 1.25rem;
+    --ui-stack-0: 0.25rem;
     --ui-stack-1: 0.5rem;
     --ui-stack-2: 1rem;
     --ui-stack-3: 1.5rem;
+    --ui-stack-4: 2.5rem;
 
     /* Motion */
     --ui-dur-fast: 150ms;
@@ -520,9 +524,7 @@
     -webkit-backdrop-filter: blur(var(--ui-glass-blur)) saturate(var(--ui-glass-saturate));
     backdrop-filter: blur(var(--ui-glass-blur)) saturate(var(--ui-glass-saturate));
     border-color: var(--ui-glass-line);
-    box-shadow:
-      inset 0 1px 0 var(--ui-glass-highlight),
-      var(--ui-shadow-overlay);
+    box-shadow: var(--ui-shadow-overlay);
   }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     :root[data-theme="modern"] .ui-glass {

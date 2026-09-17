@@ -133,6 +133,10 @@
      theme's radius, including all the way down to 0. */
   --radius-2xl: calc(var(--ui-radius-xl) * 4 / 3);
   --radius-3xl: calc(var(--ui-radius-xl) * 2);
+  /* The pressable control's shape (Button, IconButton, Segmented, the Switch track, SendButton):
+     `rounded-control`. Its own token because a theme's controls and boxes differ in kind, not in
+     scale step — Frost's controls are pills while its boxes stay on the scale. */
+  --radius-control: var(--ui-radius-control);
 
   --shadow-sm: var(--ui-shadow-raised);
   --shadow-lg: var(--ui-shadow-overlay);
