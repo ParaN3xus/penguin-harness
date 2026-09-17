@@ -3,6 +3,7 @@
 - **Date:** 2026-09-17
 - **Type:** process
 - **Scope:** `tooling`, `ci`
+- **PR:** [#770](https://github.com/Prism-Shadow/penguin-harness/pull/770)
 
 [English](2026-09-17-notice-misans.md)
 
