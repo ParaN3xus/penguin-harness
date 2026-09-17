@@ -94,7 +94,7 @@ const COPY: Readonly<
 function Toolbar({ f }: { f: Fixtures }) {
   const local = COPY[f.lang];
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Heading level={3} className="mr-auto">
           {local.agentsTitle}
@@ -111,7 +111,7 @@ function Toolbar({ f }: { f: Fixtures }) {
         <IconButton label={local.more} icon="sliders" />
         <IconButton label={local.more} icon="more" />
       </div>
-      <ul className="grid">
+      <ul className="grid grid-cols-[minmax(0,1fr)]">
         {f.agents.map((agent) => (
           <li key={agent.id} className="flex items-center gap-3 border-t border-line-muted py-2.5">
             <AgentTile id={agent.id} name={agent.name} size={24} />
@@ -177,15 +177,15 @@ function DenseRow({ f }: { f: Fixtures }) {
   const local = COPY[f.lang];
   const providers = [...new Map(f.models.map((m) => [m.provider, m])).values()].slice(0, 3);
   return (
-    <div className="grid gap-6">
-      <section className="grid gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <div className="flex items-center gap-2">
           <Heading level={5} className="mr-auto">
             {local.keysTitle}
           </Heading>
           <Link external>{local.getKey}</Link>
         </div>
-        <ul className="grid">
+        <ul className="grid grid-cols-[minmax(0,1fr)]">
           {providers.map((model, i) => (
             <li
               key={model.provider}

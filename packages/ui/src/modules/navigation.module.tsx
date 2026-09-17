@@ -51,6 +51,7 @@ const COPY: Readonly<
       defaultBadge: string;
       dockTabs: readonly string[];
       panelActions: { add: string; move: string; close: string };
+      docks: { bottom: string; right: string };
     }
   >
 > = {
@@ -69,7 +70,8 @@ const COPY: Readonly<
     facts: ["Provider", "Model id", "Context", "Cache read / MTok", "Output / MTok", "Used by"],
     defaultBadge: "Default",
     dockTabs: ["Subagents (1)", "Trajectories", "Files"],
-    panelActions: { add: "Add panel", move: "Move to the bottom", close: "Close the dock" },
+    panelActions: { add: "Add panel", move: "Move to the right", close: "Close the dock" },
+    docks: { bottom: "Bottom dock", right: "Right dock" },
   },
   zh: {
     settings: "设置",
@@ -86,7 +88,8 @@ const COPY: Readonly<
     facts: ["提供方", "模型 id", "上下文", "缓存读取 / 百万 Token", "输出 / 百万 Token", "使用者"],
     defaultBadge: "默认",
     dockTabs: ["子智能体（1）", "轨迹观测", "文件"],
-    panelActions: { add: "添加面板", move: "移到底部", close: "关闭停靠面板" },
+    panelActions: { add: "添加面板", move: "移到右侧", close: "关闭停靠面板" },
+    docks: { bottom: "底部停靠面板", right: "右侧停靠面板" },
   },
 };
 
@@ -102,9 +105,19 @@ const NAV: readonly {
 ];
 
 /** A mock app window the compositions sit in: the product's own frame, at a fixed height. */
-function Window({ children, height = "h-[32rem]" }: { children: ReactNode; height?: string }) {
+function Window({
+  children,
+  height = "h-[32rem]",
+  column = false,
+}: {
+  children: ReactNode;
+  height?: string;
+  column?: boolean;
+}) {
   return (
-    <div className={`flex ${height} overflow-hidden rounded-lg border border-line bg-canvas`}>
+    <div
+      className={`flex ${column ? "flex-col" : ""} ${height} overflow-hidden rounded-lg border border-line bg-canvas`}
+    >
       {children}
     </div>
   );
@@ -172,7 +185,7 @@ function SidebarFrame({ f }: { f: Fixtures }) {
         </span>
         <IconButton label={c.collapseSidebar} icon="sidebar" />
       </div>
-      <nav className="grid gap-px px-2 pt-2">
+      <nav className="grid grid-cols-[minmax(0,1fr)] gap-px px-2 pt-2">
         <NavRow icon="newChat" label={c.newChat} />
         {NAV.map((row) => (
           <NavRow
@@ -195,8 +208,13 @@ function SidebarFrame({ f }: { f: Fixtures }) {
         />
         {workspace && (
           <>
-            <GroupHeader icon="folder" label={workspace.label} count={workspace.items.length} />
-            <ul className="grid gap-px">
+            <GroupHeader
+              icon="folder"
+              label={workspace.label}
+              name
+              count={workspace.items.length}
+            />
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-px">
               {workspace.items.map((row, i) => (
                 <SessionRow
                   key={row.id}
@@ -212,7 +230,7 @@ function SidebarFrame({ f }: { f: Fixtures }) {
         {earlier && (
           <>
             <GroupHeader icon="clock" label={earlier.label} count={earlier.items.length} />
-            <ul className="grid gap-px">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-px">
               {earlier.items.map((row) => (
                 <SessionRow key={row.id} item={row} f={f} />
               ))}
@@ -229,8 +247,9 @@ function SidebarFrame({ f }: { f: Fixtures }) {
   );
 }
 
-function ChatHead({ f }: { f: Fixtures }) {
+function ChatHead({ f, dock }: { f: Fixtures; dock?: "bottom" | "right" }) {
   const s = f.session;
+  const local = COPY[f.lang];
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line px-4">
       <span className="min-w-0 flex-1 truncate text-sm font-(--ui-weight-medium) text-fg">
@@ -240,6 +259,12 @@ function ChatHead({ f }: { f: Fixtures }) {
         <RunSpinner />
         {f.copy.chat.running}
       </span>
+      {dock && (
+        <span className="flex items-center">
+          <IconButton label={local.docks.bottom} icon="panelBottom" pressed={dock === "bottom"} />
+          <IconButton label={local.docks.right} icon="panelRight" pressed={dock === "right"} />
+        </span>
+      )}
       <span className="flex items-center gap-3 font-mono text-xs tabular-nums text-fg-muted">
         <span>{tokens(s.totals.tokens)}</span>
         <span>{usd(s.totals.costUsd)}</span>
@@ -270,7 +295,7 @@ function ChatBody({ f }: { f: Fixtures }) {
 
 function Sidebar({ f }: { f: Fixtures }) {
   return (
-    <Window>
+    <Window height="h-[39rem]">
       <SidebarFrame f={f} />
       <div className="flex min-w-0 flex-1 flex-col">
         <ChatHead f={f} />
@@ -285,8 +310,8 @@ function TabsAndCrumbs({ f }: { f: Fixtures }) {
   const model = f.models[0]!;
   const [provider, id, context, cacheRead, output, usedBy] = local.facts;
   return (
-    <div className="grid gap-6">
-      <div className="grid gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <Breadcrumbs items={local.crumbs} />
         <PageHeader
           title={local.modelTitle}
@@ -309,7 +334,7 @@ function TabsAndCrumbs({ f }: { f: Fixtures }) {
           </span>
         </div>
       </div>
-      <div className="grid gap-4">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
         <Tabs items={local.tabs} active={0} />
         <KeyValue
           items={[
@@ -349,38 +374,44 @@ function DockTabs({ f }: { f: Fixtures }) {
   );
 }
 
+/** The bottom dock: its tabs and panel actions in the head, the Subagents panel in the body. */
 function DockFrame({ f }: { f: Fixtures }) {
   const local = COPY[f.lang];
-  const sub = f.session.turns[1]!.items.find((i) => i.kind === "tool_call" && i.subagent)!;
-  const subagent = sub.kind === "tool_call" ? sub.subagent! : undefined;
+  const call = f.session.turns[1]!.items.find((i) => i.kind === "tool_call" && i.subagent);
+  const subagent = call?.kind === "tool_call" ? call.subagent : undefined;
+  const reply = subagent?.transcript.find((i) => i.kind === "text");
   const main = f.agents.find((a) => a.id === f.session.agentId)!;
   return (
-    <section className="ui-frame flex w-80 shrink-0 flex-col border-l border-line bg-canvas">
+    <section className="ui-frame flex h-64 shrink-0 flex-col border-t border-line bg-canvas">
       <div data-slot="head" className="flex items-center gap-2 border-b border-line px-2 py-1.5">
         <DockTabs f={f} />
         <span className="min-w-0 flex-1" />
         <IconButton label={local.panelActions.add} icon="plus" size="sm" />
-        <IconButton label={local.panelActions.move} icon="panelBottom" size="sm" />
+        <IconButton label={local.panelActions.move} icon="panelRight" size="sm" />
         <IconButton label={local.panelActions.close} icon="cross" size="sm" />
       </div>
-      <div data-slot="body" className="grid gap-1 p-3 text-sm">
-        <p className="pb-1 text-xs text-fg-muted">{f.copy.dock.topology}</p>
-        <span className="flex items-center gap-2 px-1 py-1 text-fg-muted">
-          <AgentTile id={main.id} name={main.name} />
-          <span className="truncate">{main.name}</span>
-          <span className="font-mono text-xs text-fg-subtle">{f.session.id.slice(-6)}</span>
-        </span>
-        {subagent && (
-          <span className="ml-4 flex items-center gap-2 rounded-md bg-accent-muted px-2 py-1 text-fg">
-            <AgentTile id={subagent.agentId} name={subagent.agentName} />
-            <span className="min-w-0 flex-1 truncate font-(--ui-weight-medium)">
-              {subagent.agentName}
-            </span>
-            <span className="flex items-center gap-1 text-xs text-tone-success-fg">
-              <RunSpinner />
-              {f.copy.dock.nodeRunning}
-            </span>
+      <div data-slot="body" className="grid min-h-0 flex-1 grid-cols-[16rem_minmax(0,1fr)]">
+        <div className="grid grid-cols-[minmax(0,1fr)] content-start gap-1 border-r border-line p-3 text-sm">
+          <p className="pb-1 text-xs text-fg-muted">{f.copy.dock.topology}</p>
+          <span className="flex items-center gap-2 px-1 py-1 text-fg-muted">
+            <AgentTile id={main.id} name={main.name} />
+            <span className="truncate">{main.name}</span>
+            <span className="font-mono text-xs text-fg-subtle">{f.session.id.slice(-6)}</span>
           </span>
+          {subagent && (
+            <span className="ml-4 flex items-center gap-2 rounded-md bg-accent-muted px-2 py-1 text-fg">
+              <AgentTile id={subagent.agentId} name={subagent.agentName} />
+              <span className="min-w-0 flex-1 truncate font-(--ui-weight-medium)">
+                {subagent.agentName}
+              </span>
+              <RunSpinner />
+            </span>
+          )}
+        </div>
+        {reply?.kind === "text" && (
+          <p className="overflow-hidden p-3 text-sm leading-relaxed text-fg-muted">
+            {reply.markdown}
+          </p>
         )}
       </div>
     </section>
@@ -389,11 +420,9 @@ function DockFrame({ f }: { f: Fixtures }) {
 
 function DockAndRail({ f }: { f: Fixtures }) {
   return (
-    <Window>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <ChatHead f={f} />
-        <ChatBody f={f} />
-      </div>
+    <Window height="h-[36rem]" column>
+      <ChatHead f={f} dock="bottom" />
+      <ChatBody f={f} />
       <DockFrame f={f} />
     </Window>
   );

@@ -239,7 +239,7 @@ function Th({
 }) {
   return (
     <th
-      className={`px-3 py-2 font-(--ui-weight-medium) ${align === "right" ? "text-right" : "text-left"} ${sorted ? "text-fg" : ""}`}
+      className={`whitespace-nowrap px-3 py-2 font-(--ui-weight-medium) ${align === "right" ? "text-right" : "text-left"} ${sorted ? "text-fg" : ""}`}
     >
       <span
         className={`inline-flex items-center gap-1 ${align === "right" ? "flex-row-reverse" : ""}`}
@@ -359,7 +359,7 @@ function ModelRows({
         <tr>
           <td colSpan={7} className="border-t border-line-muted bg-surface-muted px-10 pb-4 pt-3">
             <div className="grid grid-cols-2 gap-6">
-              <div className="grid gap-2">
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
                 <p className="text-xs text-fg-muted">{e.pricing}</p>
                 <KeyValue
                   columns={3}
@@ -374,7 +374,7 @@ function ModelRows({
                   ]}
                 />
               </div>
-              <div className="grid content-start gap-2">
+              <div className="grid grid-cols-[minmax(0,1fr)] content-start gap-2">
                 <p className="text-xs text-fg-muted">{e.capabilities}</p>
                 <p className="flex flex-wrap items-center gap-2">
                   <Badge tone={model.supportsVision ? "success" : "neutral"} variant="outline">
@@ -476,7 +476,7 @@ function Dense({ f }: { f: Fixtures }) {
   const p = LOCAL[f.lang].plugins;
   const [plugins, enabled, skills, servers, updates, synced] = LOCAL[f.lang].facts;
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <KeyValue
         items={[
           { label: plugins, value: "12" },
@@ -489,7 +489,7 @@ function Dense({ f }: { f: Fixtures }) {
       />
       <div>
         <GroupHeader label={p.label} count={12} />
-        <ul className="grid">
+        <ul className="grid grid-cols-[minmax(0,1fr)]">
           {p.rows.map((row) => (
             <ListRow
               key={row.name}

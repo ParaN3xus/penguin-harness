@@ -200,7 +200,7 @@ function SettingsForm({ f, disabled = false }: { f: Fixtures; disabled?: boolean
       </RuledSection>
       {disabled ? (
         <RuledSection title={s.groupServer}>
-          <div className="grid gap-3">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
             <Notice tone="neutral" title={local.managed.title}>
               {local.managed.body}
             </Notice>
@@ -265,7 +265,7 @@ function DialogForm({ f, errors = false }: { f: Fixtures; errors?: boolean }) {
           </>
         }
       >
-        <div className="grid gap-4 px-5 py-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 px-5 py-2">
           <div className="grid grid-cols-2 gap-4">
             <Field label={d.provider} required>
               <Select value={d.providerValue} />
@@ -300,7 +300,7 @@ function DialogForm({ f, errors = false }: { f: Fixtures; errors?: boolean }) {
             <Input value={d.notesValue} multiline />
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <fieldset className="grid gap-2">
+            <fieldset className="grid grid-cols-[minmax(0,1fr)] gap-2">
               <legend className="mb-2 text-sm font-(--ui-weight-medium) text-fg">
                 {d.capabilities}
               </legend>
@@ -308,7 +308,7 @@ function DialogForm({ f, errors = false }: { f: Fixtures; errors?: boolean }) {
               <Checkbox checked label={d.tools} />
               <Checkbox checked={false} label={d.reasoning} hint={d.reasoningHint} />
             </fieldset>
-            <fieldset className="grid content-start gap-2">
+            <fieldset className="grid grid-cols-[minmax(0,1fr)] content-start gap-2">
               <legend className="mb-2 text-sm font-(--ui-weight-medium) text-fg">
                 {d.pricing}
               </legend>

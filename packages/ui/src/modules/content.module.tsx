@@ -138,7 +138,7 @@ function Prose({ f }: { f: Fixtures }) {
         <InlineText parts={d.intro} />
       </p>
       <h2 className={`pt-2 text-(length:--ui-md-h2-size) leading-snug ${h}`}>{d.h2}</h2>
-      <ul className="grid list-disc gap-1 pl-5">
+      <ul className="grid grid-cols-[minmax(0,1fr)] list-disc gap-1 pl-5">
         {d.scopes.map((scope, i) => (
           <li key={i}>
             <InlineText parts={scope} />
@@ -230,7 +230,7 @@ function Code({ f }: { f: Fixtures }) {
   const d = DOCS[f.lang];
   const source = f.filePreview.content.split("\n").slice(0, 24).join("\n");
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <CodeBlock
         lang={f.filePreview.language}
         path={f.filePreview.path}
@@ -310,7 +310,7 @@ function Diff({ f }: { f: Fixtures }) {
     (i): i is ToolCallItem => i.kind === "tool_call" && i.diff !== undefined,
   );
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       {calls.map((call, i) => (
         <DiffViewer key={call.id} diff={call.diff!} limit={i === 0 ? undefined : 12} />
       ))}

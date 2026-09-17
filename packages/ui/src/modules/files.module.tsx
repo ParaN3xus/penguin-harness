@@ -124,7 +124,7 @@ function TreePane({ f }: { f: Fixtures }) {
   const local = COPY[f.lang];
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-line">
-      <div className="grid gap-2 border-b border-line p-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2 border-b border-line p-2">
         <div className="flex items-center gap-1 pl-1">
           <span className="min-w-0 flex-1 text-sm font-(--ui-weight-medium) text-fg">
             {local.title}

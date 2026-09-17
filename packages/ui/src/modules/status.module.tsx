@@ -29,7 +29,6 @@ import {
   ProgressBar,
   RunSpinner,
   Skeleton,
-  StatusWord,
   TONE_INK,
   Toast,
 } from "./parts";
@@ -59,7 +58,11 @@ const LOCAL: Readonly<
         inline: { body: string; action: string };
         toasts: readonly { tone: ToneName; title: string; body?: string; action?: string }[];
       };
-      budget: { title: string; spent: (spent: string, budget: string) => string };
+      budget: {
+        title: string;
+        evalTitle: string;
+        spent: (spent: string, budget: string) => string;
+      };
       sessionsTitle: string;
       empty: { title: string; body: string; action: string };
       slot: { title: string; body: string; action: string };
@@ -110,7 +113,11 @@ const LOCAL: Readonly<
         },
       ],
     },
-    budget: { title: "Monthly budget", spent: (spent, budget) => `${spent} of ${budget}` },
+    budget: {
+      title: "Monthly budget",
+      evalTitle: "Evaluation credits",
+      spent: (spent, budget) => `${spent} of ${budget}`,
+    },
     sessionsTitle: "Sessions",
     empty: {
       title: "No agents yet",
@@ -162,7 +169,11 @@ const LOCAL: Readonly<
         { tone: "danger", title: "密钥保存失败", body: "提供方拒绝了它：401。", action: "重试" },
       ],
     },
-    budget: { title: "月度预算", spent: (spent, budget) => `${spent} / ${budget}` },
+    budget: {
+      title: "月度预算",
+      evalTitle: "评估额度",
+      spent: (spent, budget) => `${spent} / ${budget}`,
+    },
     sessionsTitle: "Session",
     empty: {
       title: "还没有智能体",
@@ -212,10 +223,10 @@ function Live({ f }: { f: Fixtures }) {
   );
   const clock = running?.kind === "tool_call" ? liveDuration(running.elapsedMs ?? 0) : "";
   return (
-    <div className="grid gap-6">
-      <section className="grid gap-1">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-1">
         <Heading level={5}>{local.planTitle}</Heading>
-        <ul className="grid">
+        <ul className="grid grid-cols-[minmax(0,1fr)]">
           {local.plan.map((step) => {
             const mark = STATE_MARK[step.state]!;
             return (
@@ -236,12 +247,14 @@ function Live({ f }: { f: Fixtures }) {
                   {step.title}
                 </span>
                 {step.state === "waiting" ? (
-                  <StatusWord tone="attention" icon="hourglass">
+                  <span className="shrink-0 text-xs font-(--ui-weight-medium) text-tone-attention-fg">
                     {local.states.waiting}
-                  </StatusWord>
+                  </span>
+                ) : step.state === "stopped" ? (
+                  <span className="shrink-0 text-xs text-fg-muted">{local.states.stopped}</span>
                 ) : (
                   <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">
-                    {step.state === "running" ? clock : step.detail || local.states[step.state]}
+                    {step.state === "running" ? clock : step.detail}
                   </span>
                 )}
               </li>
@@ -249,7 +262,7 @@ function Live({ f }: { f: Fixtures }) {
           })}
         </ul>
       </section>
-      <nav className="grid max-w-xs gap-px">
+      <nav className="grid grid-cols-[minmax(0,1fr)] max-w-xs gap-px">
         <NavRow icon="kanban" label={local.ticketsTitle} count={f.company.tickets.length} active />
         <span className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-fg-muted">
           <GlyphIcon name="message" size={16} className="text-fg-subtle" />
@@ -281,10 +294,10 @@ function Settled({ f }: { f: Fixtures }) {
     error: "danger",
   };
   return (
-    <div className="grid gap-6">
-      <section className="grid gap-1">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-1">
         <Heading level={5}>{local.ticketsTitle}</Heading>
-        <ul className="grid">
+        <ul className="grid grid-cols-[minmax(0,1fr)]">
           {f.company.tickets.slice(0, 6).map((ticket) => {
             const status = TICKET_TONE[ticket.status];
             const priority = PRIORITY_TONE[ticket.priority];
@@ -310,7 +323,7 @@ function Settled({ f }: { f: Fixtures }) {
           })}
         </ul>
       </section>
-      <section className="grid gap-2">
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <Heading level={5}>{local.stopReasonsTitle}</Heading>
         <p className="flex flex-wrap items-center gap-2">
           {reasons.map((reason) => (
@@ -327,7 +340,7 @@ function Settled({ f }: { f: Fixtures }) {
 function Notices({ f }: { f: Fixtures }) {
   const n = LOCAL[f.lang].notices;
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <Notice tone="info" title={n.strip.title}>
         {n.strip.body}
       </Notice>
@@ -342,7 +355,7 @@ function Notices({ f }: { f: Fixtures }) {
       <Notice tone="danger" variant="inline" action={<Link>{n.inline.action}</Link>}>
         {n.inline.body}
       </Notice>
-      <div className="grid justify-items-end gap-2 pt-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] justify-items-end gap-2 pt-2">
         {n.toasts.map((toast) => (
           <Toast
             key={toast.title}
@@ -360,24 +373,36 @@ function Notices({ f }: { f: Fixtures }) {
 function LoadingAndEmpty({ f }: { f: Fixtures }) {
   const local = LOCAL[f.lang];
   const spend = f.company.org.spend;
-  const share = spend.costUsd / spend.budgetUsd;
   return (
-    <div className="grid gap-6">
-      <section className="grid gap-2">
-        <div className="flex items-baseline justify-between gap-2 text-sm">
-          <span className="text-fg">{local.budget.title}</span>
-          <span className="font-mono text-xs tabular-nums text-fg-muted">
-            {local.budget.spent(usd(spend.costUsd), usd(spend.budgetUsd))}
-          </span>
-        </div>
-        <ProgressBar value={share} label={local.budget.title} />
-        <ProgressBar value={0.96} tone="danger" label={local.budget.title} />
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-4">
+        {[
+          {
+            title: local.budget.title,
+            spent: spend.costUsd,
+            budget: spend.budgetUsd,
+            tone: "neutral" as const,
+          },
+          { title: local.budget.evalTitle, spent: 19.2, budget: 20, tone: "danger" as const },
+        ].map((row) => (
+          <div key={row.title} className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
+            <div className="flex items-baseline justify-between gap-2 text-sm">
+              <span className="text-fg">{row.title}</span>
+              <span
+                className={`text-xs tabular-nums ${row.tone === "danger" ? "text-tone-danger-fg" : "text-fg-muted"}`}
+              >
+                {local.budget.spent(usd(row.spent), usd(row.budget))}
+              </span>
+            </div>
+            <ProgressBar value={row.spent / row.budget} tone={row.tone} label={row.title} />
+          </div>
+        ))}
       </section>
-      <section aria-busy className="grid gap-3">
+      <section aria-busy className="grid grid-cols-[minmax(0,1fr)] gap-3">
         {[0, 1, 2].map((row) => (
           <span key={row} className="flex items-center gap-3">
             <Skeleton className="size-6" />
-            <span className="grid flex-1 gap-1.5">
+            <span className="grid grid-cols-[minmax(0,1fr)] flex-1 gap-1.5">
               <Skeleton className={`h-3 ${row === 1 ? "w-2/3" : "w-4/5"}`} />
               <Skeleton className="h-2.5 w-1/3" />
             </span>

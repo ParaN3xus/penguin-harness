@@ -184,8 +184,8 @@ function Overview({ f }: { f: Fixtures }) {
   const turn = f.trace.turns[1]!;
   const ctx = f.session.context;
   return (
-    <div className="grid gap-6">
-      <div className="flex divide-x divide-line border-b border-line pb-1">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <div className="flex divide-x divide-line">
         <StatTile
           label={local.tiles.cost}
           value={usd(o.costUsd)}
@@ -222,7 +222,7 @@ function Overview({ f }: { f: Fixtures }) {
           ]}
         />
       </RuledSection>
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-4 border-t border-line pt-4">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 border-t border-line pt-4">
         <span className="flex items-center gap-3">
           <Badge>{local.turnChips}</Badge>
           <StatChip icon="wrench" value={String(turn.toolCalls)} label={t.toolCalls} />
@@ -230,19 +230,20 @@ function Overview({ f }: { f: Fixtures }) {
           <StatChip icon="arrowDownLine" value={tokens(turn.outputTokens)} label={t.outputTokens} />
           <StatChip icon="cost" value={usd(turn.costUsd)} label={t.cost} />
         </span>
-        <span className="min-w-0 flex-1" />
-        <span className="flex items-center gap-2">
-          <Ring
-            share={ctx.tokens / ctx.window}
-            label={local.context(tokens(ctx.tokens), tokens(ctx.window))}
-          />
-          <span className="text-xs text-fg-muted">
-            {local.context(tokens(ctx.tokens), tokens(ctx.window))}
+        <span className="flex flex-wrap items-center gap-x-10 gap-y-4">
+          <span className="flex items-center gap-3">
+            <Ring
+              share={ctx.tokens / ctx.window}
+              label={local.context(tokens(ctx.tokens), tokens(ctx.window))}
+            />
+            <span className="text-xs text-fg-muted">
+              {local.context(tokens(ctx.tokens), tokens(ctx.window))}
+            </span>
           </span>
-        </span>
-        <span className="grid gap-1">
-          <Sparkline values={[612, 1_326, 480, 1_938, 842, 1_352]} label={local.sparkline} />
-          <span className="text-xs text-fg-muted">{local.sparkline}</span>
+          <span className="flex items-center gap-3">
+            <Sparkline values={[612, 1_326, 480, 1_938, 842, 1_352]} label={local.sparkline} />
+            <span className="text-xs text-fg-muted">{local.sparkline}</span>
+          </span>
         </span>
       </div>
     </div>
@@ -254,12 +255,12 @@ function Timeline({ f }: { f: Fixtures }) {
   const turn = f.trace.turns[1]!;
   const ticks = [0, 0.25, 0.5, 0.75, 1];
   return (
-    <div className="grid gap-6">
-      <section className="grid gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <p className="text-sm font-(--ui-weight-medium) text-fg">
           {t.turn(turn.index)} · {t.timeline}
         </p>
-        <div className="grid gap-1">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-1">
           {turn.lanes.map((lane) => (
             <div key={lane.name} className="flex items-center gap-2">
               <span className="w-28 shrink-0 truncate text-right font-mono text-xs text-fg-muted">
@@ -309,9 +310,9 @@ function Timeline({ f }: { f: Fixtures }) {
           ))}
         </div>
       </section>
-      <section className="grid gap-1">
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-1">
         <p className="text-sm font-(--ui-weight-medium) text-fg">{t.messages}</p>
-        <ul className="grid">
+        <ul className="grid grid-cols-[minmax(0,1fr)]">
           {turn.events.map((event, i) => (
             <li
               key={event.time}
@@ -356,8 +357,8 @@ function Usage({ f }: { f: Fixtures }) {
   const spend = f.company.org.spend;
   const share = spend.costUsd / spend.budgetUsd;
   return (
-    <div className="grid gap-10">
-      <section className="grid gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-10">
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <p className="text-sm font-(--ui-weight-medium) text-fg">{local.weekTitle}</p>
         <div className="flex gap-3">
           <div className="flex h-44 w-8 flex-col justify-between text-right font-mono text-xs tabular-nums text-fg-subtle">
@@ -365,7 +366,7 @@ function Usage({ f }: { f: Fixtures }) {
             <span>{max / 2}</span>
             <span>0</span>
           </div>
-          <div className="grid min-w-0 flex-1 gap-1">
+          <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 flex-1 gap-1">
             <div className="flex h-44 items-end gap-4 border-b border-[var(--ui-chart-axis)] border-t border-t-[var(--ui-chart-grid)] px-2">
               {u.days.map((day, i) => (
                 <span
@@ -412,7 +413,7 @@ function Usage({ f }: { f: Fixtures }) {
           ))}
         </div>
       </section>
-      <section className="grid gap-2">
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <div className="flex items-baseline justify-between gap-2">
           <p className="text-sm font-(--ui-weight-medium) text-fg">{local.budgetTitle}</p>
           <p className="font-mono text-xs tabular-nums text-fg-muted">

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { CatalogSection } from "../../ui/src/catalog";
 import { defineDemo } from "../../ui/src/demo";
 import type { Demo } from "../../ui/src/demo";
 import {
@@ -53,20 +52,7 @@ describe("variant keys", () => {
 });
 
 describe("collectDemos", () => {
-  const sections: CatalogSection[] = [
-    { kind: "foundation", id: "foundations-color", title: "Colour", description: "" },
-    {
-      kind: "component",
-      id: "actions-button",
-      title: "Button",
-      components: ["Button"],
-      description: "",
-      props: "",
-      replaces: "",
-      plan: "move",
-      wave: "W1",
-    },
-  ];
+  const sections = [{ id: "actions-button" }, { id: "feedback-badge" }];
   const demo = (id: string, extra: Partial<Demo> = {}): Demo =>
     ({ id, title: id, description: "", render: () => null, ...extra }) as Demo;
 
@@ -81,34 +67,33 @@ describe("collectDemos", () => {
     const registry = collectDemos({ "a/button.demo.tsx": { demo: button } }, sections);
     expect(registry.byId.get("actions-button")?.path).toBe("a/button.demo.tsx");
     expect(registry.problems).toEqual([]);
-    expect(registry.uncatalogued).toEqual([]);
   });
 
-  it("keeps an uncatalogued demo visible instead of dropping it", () => {
+  it("reports a demo no catalog section names, since no module would list it", () => {
     const registry = collectDemos({ "x.demo.tsx": { demo: demo("forms-new-thing") } }, sections);
-    expect(registry.uncatalogued.map((d) => d.demo.id)).toEqual(["forms-new-thing"]);
+    expect(registry.byId.size).toBe(0);
+    expect(registry.problems).toEqual([
+      'x.demo.tsx: "forms-new-thing" is not a catalog.ts section, so no module lists it',
+    ]);
   });
 
-  it("reports, and skips, what cannot be rendered as a section", () => {
+  it("reports, and skips, what cannot be rendered as a part", () => {
     const registry = collectDemos(
       {
         "a.demo.tsx": {},
         "b.demo.tsx": { demo: demo("actions-button") },
         "c.demo.tsx": { demo: demo("actions-button") },
-        "d.demo.tsx": { demo: demo("foundations-color") },
-        "e.demo.tsx": { demo: demo("forms-x", { axes: { size: ["Large", "a.b"] } }) },
-        "f.demo.tsx": { demo: demo("forms-y", { axes: { size: [] } }) },
+        "e.demo.tsx": { demo: demo("feedback-badge", { axes: { size: ["Large", "a.b"] } }) },
+        "f.demo.tsx": { demo: demo("feedback-badge", { axes: { size: [] } }) },
       },
       sections,
     );
     expect(registry.byId.get("actions-button")?.path).toBe("b.demo.tsx");
-    expect(registry.problems).toHaveLength(5);
-    expect(registry.problems.join("\n")).toMatch(/a\.demo\.tsx: no `demo` export/);
-    expect(registry.problems.join("\n")).toMatch(
-      /c\.demo\.tsx: demo id "actions-button" is already used by b\.demo\.tsx/,
-    );
-    expect(registry.problems.join("\n")).toMatch(/is a foundation section/);
-    expect(registry.problems.join("\n")).toMatch(/size=Large, size=a\.b/);
-    expect(registry.problems.join("\n")).toMatch(/size \(empty\)/);
+    expect(registry.problems).toHaveLength(4);
+    const text = registry.problems.join("\n");
+    expect(text).toMatch(/a\.demo\.tsx: no `demo` export/);
+    expect(text).toMatch(/c\.demo\.tsx: demo id "actions-button" is already used by b\.demo\.tsx/);
+    expect(text).toMatch(/size=Large, size=a\.b/);
+    expect(text).toMatch(/size \(empty\)/);
   });
 });

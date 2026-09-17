@@ -92,6 +92,7 @@ export function SpacingBoard() {
         />
         <Gap step={1} />
         <Row glyph="bell" label={t.notifications} value={<span className="gf-switch" data-on />} />
+        <p className="gf-caption gf-note gf-ruler-note">{S.foundations.stack0Note}</p>
       </div>
       <BoardGroup title={S.foundations.controlHeights}>
         <div className="gf-rungs">

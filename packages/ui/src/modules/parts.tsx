@@ -179,9 +179,9 @@ export function Dot({
 }
 
 /** The screens' spinner in a tone's ink: every module spinner goes through here. */
-export function RunSpinner({ tone = "success" }: { tone?: ToneName }) {
+export function RunSpinner({ tone = "success" }: { tone?: ToneName | "inherit" }) {
   return (
-    <span className={`inline-flex shrink-0 ${TONE_INK[tone]}`}>
+    <span className={`inline-flex shrink-0 ${tone === "inherit" ? "" : TONE_INK[tone]}`}>
       <Spinner size={12} />
     </span>
   );
@@ -246,7 +246,7 @@ export function Button({
       aria-disabled={state === "disabled" || undefined}
       className={`inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-control font-(--ui-weight-medium) transition-colors duration-150 ${BUTTON_SIZE[size]} ${look} ${focus} ${dim} ${pad}`}
     >
-      {state === "loading" ? <RunSpinner tone="neutral" /> : leading}
+      {state === "loading" ? <RunSpinner tone="inherit" /> : leading}
       {children}
       {trailing}
     </span>
@@ -653,12 +653,15 @@ export function NavRow({
 /** A collapsible group's header: the label names the rows below it. */
 export function GroupHeader({
   label,
+  name = false,
   count,
   icon,
   open = true,
   actions,
 }: {
   label: string;
+  /** The label is a name (a Workspace folder), set as written rather than as a group label. */
+  name?: boolean;
   count?: number;
   icon?: IconName;
   open?: boolean;
@@ -667,9 +670,15 @@ export function GroupHeader({
   return (
     <div className="flex items-center gap-1.5 px-2 pb-1 pt-3 text-fg-subtle">
       {icon && <GlyphIcon name={icon} size={14} />}
-      <span className="ui-eyebrow min-w-0 truncate text-xs font-(--ui-weight-medium) text-fg-muted">
-        {label}
-      </span>
+      {name ? (
+        <span className="min-w-0 truncate text-xs font-(--ui-weight-medium) text-fg-muted">
+          {label}
+        </span>
+      ) : (
+        <span className="ui-eyebrow min-w-0 truncate text-xs font-(--ui-weight-medium) text-fg-muted">
+          {label}
+        </span>
+      )}
       {count !== undefined && <span className="text-xs tabular-nums">{count}</span>}
       <GlyphIcon name={open ? "chevronDown" : "chevronRight"} size={12} />
       <span className="min-w-0 flex-1" />
@@ -863,7 +872,7 @@ export function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-1.5">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
       <span className="flex items-center gap-1 text-sm font-(--ui-weight-medium) text-fg">
         {label}
         {required && (

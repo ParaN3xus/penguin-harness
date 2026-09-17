@@ -96,8 +96,8 @@
 }
 .g-frame {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  max-width: 1064px;
+  grid-template-columns: 256px minmax(0, 1fr);
+  max-width: 1080px;
   margin: 0 auto;
   min-height: 100vh;
   background: var(--g-canvas);
@@ -140,10 +140,15 @@
   border-radius: 7px;
   flex-shrink: 0;
 }
+.g-brand > span {
+  min-width: 0;
+}
 .g-brand strong,
 .g-brand small {
   display: block;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .g-brand strong {
   font-size: 14px;
@@ -333,9 +338,7 @@
   border-radius: 6px;
   background: var(--g-inset);
   color: var(--g-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 /* ---- Main column ------------------------------------------------------------------------- */

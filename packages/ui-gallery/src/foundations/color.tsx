@@ -55,7 +55,9 @@ function Surfaces() {
             <span className="gf-lines">
               {LINES.map((line) => (
                 <span key={line} className="gf-line" style={{ borderColor: `var(${line})` }}>
-                  <span className="gf-caption gf-mono">{line.slice(5)}</span>
+                  <span className="gf-caption gf-mono">
+                    {line === "--ui-line" ? "line" : line.slice("--ui-line-".length)}
+                  </span>
                 </span>
               ))}
             </span>

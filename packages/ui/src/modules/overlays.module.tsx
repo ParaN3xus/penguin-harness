@@ -247,9 +247,17 @@ const LOCAL: Readonly<
   },
 };
 
-function settledTurn(f: Fixtures): ChatTurn {
-  const turn1 = f.session.turns[0]!;
-  return { ...turn1, items: turn1.items.filter((i) => ["u1", "tx3"].includes(i.id)) };
+/**
+ * The quiet part of the conversation — prompts and short replies, no code or tables — so an
+ * overlay reads against the page it covers instead of competing with it.
+ */
+function quietTurns(f: Fixtures): ChatTurn[] {
+  const [turn1, turn2] = f.session.turns;
+  const pick = (turn: ChatTurn | undefined, ids: readonly string[]): ChatTurn[] =>
+    turn
+      ? [{ index: turn.index, running: false, items: turn.items.filter((i) => ids.includes(i.id)) }]
+      : [];
+  return [...pick(turn1, ["u1", "tx1", "tx2"]), ...pick(turn2, ["u2", "tx4"])];
 }
 
 /** The chat every overlay opens over; `dim` lays the modal backdrop on it. */
@@ -268,7 +276,9 @@ function Stage({
     <div className="relative h-[36rem] overflow-hidden rounded-lg border border-line bg-canvas">
       <div aria-hidden className="h-full overflow-hidden px-10 py-4">
         <div className="mx-auto max-w-2xl">
-          <Turn turn={settledTurn(f)} f={f} />
+          {quietTurns(f).map((turn) => (
+            <Turn key={turn.index} turn={turn} f={f} />
+          ))}
         </div>
       </div>
       {dim && <div className="absolute inset-0 bg-[var(--ui-overlay-backdrop)]" />}
@@ -281,7 +291,7 @@ function InfoPopover({ f }: { f: Fixtures }) {
   const info = LOCAL[f.lang].info;
   return (
     <FloatingPanel className="w-72">
-      <div className="grid gap-1 px-2 py-1.5 text-sm">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1 px-2 py-1.5 text-sm">
         <p className="font-(--ui-weight-medium) text-fg">{info.title}</p>
         <p className="text-fg-muted">{info.body}</p>
         <p className="pt-1">
@@ -296,7 +306,7 @@ function Menus({ f }: { f: Fixtures }) {
   const local = LOCAL[f.lang];
   return (
     <Stage f={f} className="items-start justify-between">
-      <div className="grid w-60 gap-6">
+      <div className="grid grid-cols-[minmax(0,1fr)] w-60 gap-6">
         <FloatingPanel>
           {local.menus.message.map((item, i) =>
             item === "separator" ? (
@@ -318,7 +328,7 @@ function Menus({ f }: { f: Fixtures }) {
           <Tooltip label={local.tooltip} />
         </span>
       </div>
-      <div className="grid w-80 justify-items-end gap-6">
+      <div className="grid grid-cols-[minmax(0,1fr)] w-80 justify-items-end gap-6">
         <FloatingPanel className="w-full">
           <MenuLabel>{local.menus.panelsLabel}</MenuLabel>
           {local.menus.panels.map((panel, i) => (
@@ -349,9 +359,9 @@ function PagedDialog({ f }: { f: Fixtures }) {
   ];
   return (
     <Modal className="flex h-[28rem] w-full max-w-3xl">
-      <nav className="grid w-44 shrink-0 content-start gap-4 border-r border-line p-3">
+      <nav className="grid grid-cols-[minmax(0,1fr)] w-44 shrink-0 content-start gap-4 border-r border-line p-3">
         {groups.map((group) => (
-          <div key={group.label} className="grid gap-px">
+          <div key={group.label} className="grid grid-cols-[minmax(0,1fr)] gap-px">
             <p className="ui-eyebrow px-2 pb-1 text-xs font-(--ui-weight-medium) text-fg-muted">
               {group.label}
             </p>
@@ -425,7 +435,7 @@ function DrawerPanel({ f }: { f: Fixtures }) {
         </p>
         <IconButton label={f.copy.dock.close} icon="cross" size="sm" />
       </div>
-      <div className="grid min-h-0 flex-1 content-start gap-6 overflow-hidden p-4">
+      <div className="grid grid-cols-[minmax(0,1fr)] min-h-0 flex-1 content-start gap-6 overflow-hidden p-4">
         <KeyValue
           columns={2}
           items={[
@@ -435,7 +445,7 @@ function DrawerPanel({ f }: { f: Fixtures }) {
             { label: model, value: f.session.model.modelId, mono: true },
           ]}
         />
-        <div className="grid gap-1">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-1">
           <p className="text-xs text-fg-muted">{d.eventsLabel}</p>
           {turn.events.slice(-5).map((event) => (
             <p
@@ -498,7 +508,7 @@ function CommandPalette({ f }: { f: Fixtures }) {
         </span>
         <Kbd keys={["Esc"]} />
       </div>
-      <div className="grid gap-2 p-2 [--radius-inner:max(var(--ui-radius-xs),calc(var(--ui-radius-lg)-0.5rem))]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2 p-2 [--radius-inner:max(var(--ui-radius-xs),calc(var(--ui-radius-lg)-0.5rem))]">
         {p.groups.map((group) => (
           <div key={group.label}>
             <p className="px-2 pb-1 pt-1.5 text-xs text-fg-muted">{group.label}</p>

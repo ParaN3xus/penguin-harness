@@ -70,13 +70,19 @@ export function HooksBoard() {
       <Hook name="ui-live">
         <div className="gh-row">
           <span>
-            {specimen.heading}
+            {t.streaming}
             <span className="ui-live gh-caret" data-live="caret">
               ▌
             </span>
           </span>
-          <span className="ui-live gh-dot" data-live="dot" />
-          <span className="ui-live gh-spinner" data-live="spinner" />
+          <span className="gh-live">
+            <span className="ui-live gh-dot" data-live="dot" />
+            {S.foundations.toneWords.success}
+          </span>
+          <span className="gh-live">
+            <span className="ui-live gh-spinner" data-live="spinner" />
+            {S.foundations.loading}
+          </span>
         </div>
       </Hook>
 
@@ -87,7 +93,7 @@ export function HooksBoard() {
             <span>{t.copy}</span>
           </div>
           <pre data-slot="body" className="gh-frame-body">
-            {specimen.code}
+            {specimen.code.split("\n").slice(0, 2).join("\n")}
           </pre>
           <div data-slot="foot" className="gh-frame-foot">
             <span className="gf-mono">412ms · exit 0</span>

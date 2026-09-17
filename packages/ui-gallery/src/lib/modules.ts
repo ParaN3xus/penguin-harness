@@ -38,6 +38,8 @@ export function collectModules(
   const known = new Set(catalog.map((section) => section.id));
   const byId = new Map<string, CollectedModule>();
   const problems: string[] = [];
+  /** Ids some file tried to define, valid or not: a rejected module is reported once, not twice. */
+  const attempted = new Set<string>();
 
   for (const path of Object.keys(files).sort()) {
     const module = files[path]?.module;
@@ -45,6 +47,7 @@ export function collectModules(
       problems.push(`${path}: no \`module\` export (export const module = defineModule({ … }))`);
       continue;
     }
+    attempted.add(module.id);
     if (!(MODULE_IDS as readonly string[]).includes(module.id)) {
       problems.push(`${path}: "${module.id}" is not in MODULE_IDS (packages/ui/src/module.ts)`);
       continue;
@@ -75,9 +78,7 @@ export function collectModules(
     byId.set(module.id, { module, path });
   }
   for (const id of MODULE_IDS) {
-    if (!byId.has(id) && !problems.some((problem) => problem.includes(`"${id}"`))) {
-      problems.push(`module "${id}" has no ${id}.module.tsx`);
-    }
+    if (!attempted.has(id)) problems.push(`module "${id}" has no ${id}.module.tsx`);
   }
   const list = MODULE_IDS.flatMap((id) => {
     const found = byId.get(id);
