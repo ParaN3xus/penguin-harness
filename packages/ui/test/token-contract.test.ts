@@ -134,14 +134,25 @@ describe("token reads", () => {
   const contract = new Set<string>(TOKEN_NAMES);
   const NAME = /--ui-[a-z0-9]+(?:-[a-z0-9]+)*/g;
 
+  /**
+   * The whole names in one piece of text. A name that goes on past what the pattern reads is only a
+   * prefix, built at runtime or written as a wildcard — `--ui-tone-${tone}-fg`, `--ui-h${n}-size`,
+   * `--ui-chart-*` — and is not judged.
+   */
+  const namesIn = (text: string, openEnd: boolean) =>
+    [...text.matchAll(NAME)].filter((m) => {
+      const end = m.index + m[0].length;
+      return text[end] !== "-" && !(openEnd && end === text.length);
+    });
+
   const spelled = (file: SourceFile): { name: string; line: number }[] => {
     if (file.name.endsWith(".css")) {
       return stripCssComments(file.text)
         .split("\n")
-        .flatMap((text, i) => [...text.matchAll(NAME)].map((m) => ({ name: m[0], line: i + 1 })));
+        .flatMap((text, i) => namesIn(text, false).map((m) => ({ name: m[0], line: i + 1 })));
     }
     return analyzeFile(file).strings.flatMap((chunk) =>
-      [...chunk.text.matchAll(NAME)].map((m) => ({ name: m[0], line: chunk.line })),
+      namesIn(chunk.text, chunk.openEnd).map((m) => ({ name: m[0], line: chunk.line })),
     );
   };
 
@@ -154,17 +165,48 @@ describe("token reads", () => {
     }
   });
 
+  /**
+   * Names the file spells that are not tokens. A family prefix (`startsWith("--ui-chart")`) names
+   * tokens that exist; a removed or misspelt token prefixes none.
+   */
+  const strays = (file: SourceFile) =>
+    spelled(file).filter(
+      (found) =>
+        !contract.has(found.name) && !TOKEN_NAMES.some((t) => t.startsWith(`${found.name}-`)),
+    );
+
+  it("reads whole names only — the check is exercised on known shapes", () => {
+    const probe = (text: string) =>
+      strays({
+        root: "ui",
+        rel: "probe.tsx",
+        id: "packages/ui/src/probe.tsx",
+        path: "/virtual/probe.tsx",
+        name: "probe.tsx",
+        text,
+      }).map((found) => found.name);
+    expect(
+      probe(
+        [
+          'const a = "var(--ui-glass-highlight)";',
+          'const b = "var(--ui-canvas)";',
+          "const c = (t: string) => `var(--ui-tone-${t}-fg)`;",
+          "const d = (n: number) => `var(--ui-h${n}-size)`;",
+          'const e = "chart inks read --ui-chart-* through the bridge";',
+          'const f = (name: string) => name.startsWith("--ui-chart");',
+          "// --ui-comment-only is not read",
+        ].join("\n"),
+      ),
+    ).toEqual(["--ui-glass-highlight"]);
+  });
+
   it("name only contract tokens", () => {
-    const strays = scan.files
+    const found = scan.files
       // The test machinery spells names in its own messages.
       .filter((file) => !(file.root === "ui" && matchesPolicyPath(file.rel, ["testing/"])))
-      .flatMap((file) =>
-        spelled(file)
-          .filter((found) => !contract.has(found.name))
-          .map((found) => `${file.id}:${found.line} ${found.name}`),
-      );
+      .flatMap((file) => strays(file).map((stray) => `${file.id}:${stray.line} ${stray.name}`));
     expect(
-      strays,
+      found,
       "Read a name tokens.ts lists, or add the name to the contract (and to every theme file).",
     ).toEqual([]);
   });

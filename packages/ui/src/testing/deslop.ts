@@ -206,6 +206,8 @@ function toTokens(words: readonly Word[], base: number, lineAt: (pos: number) =>
 export interface StringChunk {
   readonly text: string;
   readonly line: number;
+  /** The chunk runs into an interpolation: its last word continues at runtime (`h-${n}`). */
+  readonly openEnd: boolean;
 }
 
 /** Tokens that land on one element together. */
@@ -340,7 +342,7 @@ function analyzeMarkup(file: SourceFile): FileAnalysis {
     attribute: ts.JsxAttribute | null,
     classes: boolean,
   ) => {
-    strings.push({ text, line: lineAt(start) });
+    strings.push({ text, line: lineAt(start), openEnd: open[1] });
     if (!classes) return;
     const words = splitWords(text, open[0], open[1]);
     const classString =
