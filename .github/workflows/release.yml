@@ -614,7 +614,8 @@ jobs:
           pnpm --filter @prismshadow/penguin-server test
           pnpm --filter @prismshadow/penguin-cli test
 
-      # Copy LICENSE into the package dirs (the files allowlist includes it, so artifacts ship the license)
+      # Copy LICENSE and NOTICE into the package dirs (the files allowlists include them, so artifacts ship
+      # the license and the third-party notices; plugin packages carry LICENSE only)
       # and the built web assets into the server package (web-dist/, in its files allowlist: an npm install
       # serves the Web UI from there without PENGUIN_WEB_DIST).
       # Idempotent: a version already on the registry is skipped. The check tests `npm view`'s output
@@ -633,9 +634,10 @@ jobs:
         run: |
           TAG="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
           V="${TAG#v}"
-          cp LICENSE packages/core/LICENSE
-          cp LICENSE packages/server/LICENSE
-          cp LICENSE packages/cli/LICENSE
+          for p in core server cli; do
+            cp LICENSE "packages/$p/LICENSE"
+            cp NOTICE "packages/$p/NOTICE"
+          done
           for dir in plugins/*/; do
             cp LICENSE "$dir/LICENSE"
           done

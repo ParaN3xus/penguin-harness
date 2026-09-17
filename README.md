@@ -283,6 +283,6 @@ If you use PenguinHarness in your research, please cite:
 
 ## License
 
-[Apache-2.0](LICENSE) © 2026 Prism Shadow
+[Apache-2.0](LICENSE) © 2026 Prism Shadow · third-party notices: [NOTICE](NOTICE)
 
 Built with ❤️ by [Yaowei Zheng](https://github.com/hiyouga) (author of [LlamaFactory](https://github.com/hiyouga/LlamaFactory)), the [PrismShadow AI Team](https://github.com/Prism-Shadow), and [Fable 5](https://www.anthropic.com/news/claude-fable-5-mythos-5).

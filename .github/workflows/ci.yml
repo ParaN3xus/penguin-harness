@@ -88,14 +88,15 @@ jobs:
         run: node scripts/check-publishable.mjs --registry
       - name: Build the whole workspace, as the release does
         run: pnpm -r build
-      # The release stages two things into the package directories before it publishes: the root
-      # LICENSE, and the built web assets as the server's web-dist/. Neither exists in the repo, and
-      # npm silently skips a `files` entry that is not on disk -- so packing without them proves the
-      # manifest is well formed and says nothing about what actually ships. Stage them the same way
+      # The release stages these into the package directories before it publishes: the root
+      # LICENSE and NOTICE, and the built web assets as the server's web-dist/. None of them is in
+      # the package directories in the repo, and npm silently skips a `files` entry that is not on
+      # disk -- so packing without them proves the manifest is well formed and says nothing about
+      # what actually ships. Stage them the same way
       # release.yml does, so the dry run lists the real tarball.
       - name: Stage what the release stages
         run: |
-          for p in core server cli; do cp LICENSE "packages/$p/LICENSE"; done
+          for p in core server cli; do cp LICENSE NOTICE "packages/$p/"; done
           rm -rf packages/server/web-dist
           cp -r packages/web/dist packages/server/web-dist
       - name: Pack the publishable packages
@@ -106,13 +107,13 @@ jobs:
           done
       # A tarball that lost web-dist/ serves no Web UI from an npm install, and the failure is a
       # blank page at runtime rather than anything the pack step reports.
-      - name: The server tarball carries the Web UI and the license
+      - name: The server tarball carries the Web UI, the license and the notices
         run: |
           listing="$(cd packages/server && npm pack --dry-run 2>&1)"
-          for want in web-dist/ LICENSE; do
+          for want in web-dist/ LICENSE NOTICE; do
             echo "$listing" | grep -q -- "$want" || { echo "::error::packages/server tarball is missing $want"; exit 1; }
           done
-          echo "server tarball carries web-dist/ and LICENSE"
+          echo "server tarball carries web-dist/, LICENSE and NOTICE"
 
   # tsc over every package, so this one does need the whole build. Results are
   # platform-independent, which is why neither macOS nor Windows repeats it.

@@ -1,7 +1,8 @@
 # Third-party notices
 
-PenguinHarness itself is licensed under Apache-2.0 (see [LICENSE](LICENSE)). Some **distributed
-release artifacts** additionally bundle third-party programs and files, which keep their own
+PenguinHarness itself is licensed under Apache-2.0 (see [LICENSE](LICENSE)); [NOTICE](NOTICE) carries
+the attribution notices, including the license of the MiSans typeface. Some **distributed release
+artifacts** additionally bundle third-party programs and files, which keep their own
 licenses. This file records those, and how to obtain their source.
 
 Nothing listed here is source code of this repository. The programs below are downloaded by the

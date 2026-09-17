@@ -87,7 +87,8 @@
   },
   "files": [
     "dist",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "publishConfig": {
     "access": "public"
