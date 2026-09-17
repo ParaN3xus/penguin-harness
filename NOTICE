@@ -16,9 +16,11 @@ The MiSans Font Intellectual Property License Agreement
   https://hyperos.mi.com/font/
   Copyright (c) Xiaomi Inc. All rights reserved.
 
-  This product uses the MiSans font as its light (thin) typeface in rendered
-  pages and screenshots. MiSans is used unmodified, and this project does not
-  distribute the MiSans font files, or any component of them, on their own.
+  This product uses the MiSans font, unmodified, as its light (thin) typeface
+  in its pages and screenshots, and may bundle the MiSans font files inside the
+  application; the license permits distributing an application made with
+  MiSans. The font files, or any component of them, are never distributed,
+  sublicensed or offered for download on their own.
 
 The license text follows as published by the licensor, in Chinese.
 ================================================================================

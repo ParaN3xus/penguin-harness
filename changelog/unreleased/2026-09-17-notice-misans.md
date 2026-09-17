@@ -7,7 +7,7 @@
 
 [中文版](2026-09-17-notice-misans.zh.md)
 
-A root `NOTICE` file was added in the style of the Apache Arrow and Typst notices: the project's copyright and license, then one section per third-party component with the license that applies to it. Its first section attributes MiSans (MiSans Light), the light typeface PenguinHarness uses in rendered pages and screenshots, and carries the full text of the MiSans Font Intellectual Property License Agreement as Xiaomi publishes it: the software must state that it uses MiSans, the font may not be adapted, and its files may not be distributed on their own.
+A root `NOTICE` file was added in the style of the Apache Arrow and Typst notices: the project's copyright and license, then one section per third-party component with the license that applies to it. Its first section attributes MiSans (MiSans Light), the light typeface PenguinHarness uses in rendered pages and screenshots, and carries the full text of the MiSans Font Intellectual Property License Agreement as Xiaomi publishes it: the software must state that it uses MiSans, the font may not be adapted, and its files may not be distributed on their own — an application that bundles it may be.
 
 ## Details
 

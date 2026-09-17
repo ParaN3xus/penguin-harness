@@ -7,7 +7,7 @@
 
 [English](2026-09-17-notice-misans.md)
 
-仓库根目录新增 `NOTICE` 文件，格式参照 Apache Arrow 与 Typst 的声明文件：先写本项目的版权与许可，再为每个第三方组件单列一节并附上适用的许可。第一节注明 MiSans（MiSans Light）：PenguinHarness 在渲染的页面与截图中以它作细字体；并按小米公布的原文收录《MiSans 字体知识产权许可协议》全文，即软件中须注明使用了 MiSans 字体、不得改编字体、不得单独分发字体文件。
+仓库根目录新增 `NOTICE` 文件，格式参照 Apache Arrow 与 Typst 的声明文件：先写本项目的版权与许可，再为每个第三方组件单列一节并附上适用的许可。第一节注明 MiSans（MiSans Light）：PenguinHarness 在渲染的页面与截图中以它作细字体；并按小米公布的原文收录《MiSans 字体知识产权许可协议》全文，即软件中须注明使用了 MiSans 字体、不得改编字体、不得单独分发字体文件——打包了该字体的应用则可以分发。
 
 ## 细节
 
