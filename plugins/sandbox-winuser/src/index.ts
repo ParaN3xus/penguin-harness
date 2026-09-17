@@ -25,15 +25,18 @@
  * account, so anything readable by every local user stays readable, and isolation ends at the
  * filesystem and the network. In exchange the agent gets the shell it actually uses.
  *
- * SETUP IS ELEVATED, ONCE. Creating local accounts and firewall rules needs an administrator,
- * which the harness is not, so a person runs `setup/penguin-sandbox-setup.ps1` from an elevated
- * PowerShell. Until it has run, this backend declines with what to do, never silently and never
- * by failing the first agent command.
+ * SETUP IS ELEVATED, ONCE, AND ASKED FOR. Creating local accounts and firewall rules needs an
+ * administrator, which the harness is not. So the card offers to do it: the action raises
+ * Windows' own consent prompt for `setup/penguin-sandbox-setup.ps1` (see setup.ts), the person
+ * clicks Yes on the machine, and the accounts exist — no PowerShell to find, no path to type,
+ * and nothing done behind their back, since the prompt is theirs to refuse. The script is also
+ * plainly runnable by hand. Until it has run, this backend declines with what to do, never
+ * silently and never by failing the first agent command.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Bind, Component } from "@prismshadow/penguin-core/plugin";
+import { Bind, Component, Interface, Use } from "@prismshadow/penguin-core/plugin";
 import type {
   ConfinedArgv,
   Plugin,
@@ -44,9 +47,24 @@ import type {
 import { readState, stateFile } from "./state.js";
 import type { WinUserState } from "./state.js";
 import type { LaunchJob } from "./launch.js";
+import { runSetup } from "./setup.js";
 
 export { readState, stateFile, sandboxTemp } from "./state.js";
 export type { WinUserState, SandboxAccount } from "./state.js";
+
+/** The settings group this backend declares (its contribution id), drawn inside the Sandbox card. */
+export const WINUSER_GROUP = "sandbox-winuser";
+
+/** This backend's own settings, as it reads them from its group. */
+export interface WinUserSettings {
+  /** Open the shell's own directory to the sandbox accounts, so the shell can load its files. */
+  grantProgramDir: boolean;
+}
+
+/** Its group's stored document as settings; an absent value is the default. */
+export function winUserSettingsOf(doc: Record<string, unknown>): WinUserSettings {
+  return { grantProgramDir: doc.grantProgramDir !== false };
+}
 
 /**
  * Quotes one argument the way `CommandLineToArgvW` parses it: the command travels to
@@ -171,23 +189,30 @@ export interface WinUserInternals {
  */
 export async function loadWinUserProvider(
   internals: WinUserInternals = {},
+  settings: () => WinUserSettings = () => ({ grantProgramDir: true }),
 ): Promise<SandboxProvider | null> {
   const platform = internals.platform ?? process.platform;
   if (platform !== "win32") return null;
   const state = internals.state !== undefined ? internals.state : readState();
   if (state === null) throw new Error(setupInstructions());
-  return createWinUserProvider(internals);
+  return createWinUserProvider(internals, settings);
 }
 
 /** The backend itself: every confined command becomes the launcher, run as a sandbox account. */
-export function createWinUserProvider(internals: WinUserInternals = {}): SandboxProvider {
+export function createWinUserProvider(
+  internals: WinUserInternals = {},
+  settings: () => WinUserSettings = () => ({ grantProgramDir: true }),
+): SandboxProvider {
   const node = internals.node ?? process.execPath;
   const launcher = internals.launcher ?? launcherPath();
   return {
     dimensions: ["fs-write", "network", "mask-paths"],
     confine(argv, policy): ConfinedArgv {
       const job = jobFor(policy, argv);
-      const encoded = Buffer.from(JSON.stringify(job), "utf8").toString("base64");
+      const encoded = Buffer.from(
+        JSON.stringify(settings().grantProgramDir ? job : { ...job, programDir: undefined }),
+        "utf8",
+      ).toString("base64");
       return {
         // The job travels base64-encoded, and the password never travels at all: the launcher
         // reads it from a file only the harness's account and administrators can open.
@@ -207,6 +232,79 @@ export function createWinUserProvider(internals: WinUserInternals = {}): Sandbox
 }
 
 /**
+ * What this backend puts on its card, as the page asks for it: the notices, the actions, and
+ * what running one reported. The shape is the consumer's own — the package depends on no
+ * harness type, only on the contract both halves agree to.
+ */
+export interface SettingsGroupStatus {
+  notices(): Array<{ tone: "attention" | "muted"; text: string; textZh?: string }>;
+  actions(): Array<{
+    id: string;
+    title: string;
+    titleZh?: string;
+    description?: string;
+    descriptionZh?: string;
+  }>;
+  run(action: string): Promise<{ ok: boolean; message: string; messageZh?: string }>;
+}
+
+/**
+ * What this backend requires of plugin configuration: to read the group it declares. The
+ * interface is the consumer's own, so the package depends on no harness type.
+ */
+export abstract class WinUserConfigReader extends Interface<{
+  get(name: string): Record<string, unknown>;
+}>() {}
+
+/**
+ * The card's live half: whether this host has been set up, and the button that does it.
+ *
+ * The accounts need an administrator, and the harness is not one — but it can ASK. The action
+ * raises Windows' own consent prompt (see setup.ts), so the person clicks Yes on the machine
+ * instead of finding a PowerShell, a path and an elevation for themselves. A host already set up
+ * is told nothing here; the sandbox's own card lists the backend among those in use.
+ */
+@Component({
+  contributes: {
+    "PluginConfigPage.status": [{ id: "sandbox-winuser.status", group: "sandbox-winuser" }],
+  },
+})
+export class SandboxWinUserStatus {
+  @Bind("sandbox-winuser.status") status!: SettingsGroupStatus;
+  setup() {
+    const ready = () => process.platform === "win32" && readState() !== null;
+    this.status = {
+      notices: () => {
+        if (process.platform !== "win32" || ready()) return [];
+        return [
+          {
+            tone: "attention",
+            text: "This host has no sandbox accounts yet, so nothing confines an agent's commands. Set them up below: Windows will ask for permission once.",
+            textZh:
+              "本机还没有沙盒账户，因此没有任何东西在封禁 Agent 的命令。在下方完成安装即可：Windows 会请求一次授权。",
+          },
+        ];
+      },
+      actions: () =>
+        process.platform !== "win32" || ready()
+          ? []
+          : [
+              {
+                id: "setup",
+                title: "Set up sandbox accounts",
+                titleZh: "创建沙盒账户",
+                description:
+                  "Windows asks for permission, then the sandbox accounts, their firewall rules, and read access on your profile (so a confined command sees your real home) are created. The first run is slower while it grants that access.",
+                descriptionZh:
+                  "Windows 会请求授权，然后创建沙盒账户及其防火墙规则，并授予它们对你用户目录的读取权（这样被封禁的命令能看到真实的 home）。首次运行会因授予该权限而稍慢。",
+              },
+            ],
+      run: async () => runSetup(),
+    };
+  }
+}
+
+/**
  * The plugin's one module: a provider on the sandbox slot, the code half of the contribution
  * the decorator declares. Created per App, so a hot swap gets a fresh provider.
  */
@@ -219,15 +317,36 @@ export function createWinUserProvider(internals: WinUserInternals = {}): Sandbox
         dimensions: ["fs-write", "network", "mask-paths"],
       },
     ],
+    "PluginConfigProvider.groups": [
+      {
+        id: "sandbox-winuser",
+        parent: "sandbox",
+        title: "Windows account",
+        properties: {
+          grantProgramDir: {
+            type: "boolean",
+            title: "Open the shell's directory",
+            titleZh: "开放 Shell 所在目录",
+            description:
+              "Let the sandbox accounts read and execute the shell's own install directory. A shell installed under your profile is unreadable to any other account, and the command cannot start without it.",
+            descriptionZh:
+              "允许沙盒账户读取并执行 Shell 自身的安装目录。装在你的用户目录下的 Shell 对其他账户不可读，缺少它命令无法启动。",
+            default: true,
+          },
+        },
+      },
+    ],
   },
 })
 export class SandboxWinUser {
+  @Use() private readonly config!: WinUserConfigReader;
   @Bind("sandbox-winuser.provider") provider!: SandboxProviderSource;
 
   setup() {
-    this.provider = loadWinUserProvider();
+    const config = this.config;
+    this.provider = loadWinUserProvider({}, () => winUserSettingsOf(config.get(WINUSER_GROUP)));
   }
 }
 
-const plugin: Plugin = { modules: [SandboxWinUser] };
+const plugin: Plugin = { modules: [SandboxWinUser, SandboxWinUserStatus] };
 export default plugin;

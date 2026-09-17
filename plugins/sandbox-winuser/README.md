@@ -47,8 +47,15 @@ and the account the harness runs as (`-ServerUser`, by default whoever runs the 
 
 `-Remove` takes all of it away again.
 
-Until the setup has run, the backend declines to load and a command that needs it fails closed
-with the command to run. It never lets an agent command fail with a raw Windows error instead.
+Until the setup has run, the backend declines to load and the Sandbox card says so, with the
+command to run. It never lets an agent command fail with a raw Windows error instead.
+
+## Settings
+
+On **Settings → Plugins**, inside the Sandbox card: **Open the shell's directory** (on by
+default). A shell installed under your profile is unreadable to any other account, so the
+sandbox accounts are given read and execute on its install directory; without it the command
+cannot start at all.
 
 ## Install
 

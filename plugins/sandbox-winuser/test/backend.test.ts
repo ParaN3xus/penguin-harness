@@ -12,10 +12,18 @@ import {
   resolveProgram,
   quoteWindowsArg,
   toCommandLine,
+  winUserSettingsOf,
   readState,
 } from "../src/index.js";
 import type { WinUserState } from "../src/index.js";
 import { sandboxEnvironment, workingDirectory } from "../src/launch.js";
+import {
+  elevationCommand,
+  powershellPath,
+  runSetup,
+  setupArgs,
+  setupScript,
+} from "../src/setup.js";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -141,6 +149,17 @@ describe("confining", () => {
     expect(job).toMatchObject({ access: "modify", full: true, network: "none" });
   });
 
+  it("the setting withholds the shell's directory when a deployment wants it withheld", () => {
+    const provider = createWinUserProvider(
+      { state: STATE, node: "node", launcher: "launch.js" },
+      () => winUserSettingsOf({ grantProgramDir: false }),
+    );
+    const job = jobOf(
+      provider.confine([BASH, "-lc", "true"], { mode: "read-only", workspaceRoot: WS }).argv,
+    );
+    expect(job.programDir).toBeUndefined();
+  });
+
   it("implements every dimension of the sandbox interface", () => {
     expect(createWinUserProvider({ state: STATE }).dimensions).toEqual([
       "fs-write",
@@ -191,6 +210,145 @@ describe("the confined environment", () => {
     const env = sandboxEnvironment({ ...REAL, TEMP: "C:\\Users\\k\\AppData\\Local\\Temp" }, null);
     expect(env.HOME).toBe("C:\\Users\\k");
     expect(env.TEMP).toBe("C:\\Users\\k\\AppData\\Local\\Temp");
+  });
+});
+
+describe("asking Windows for the accounts", () => {
+  it("reports success once the accounts exist, not on the prompt's exit code", async () => {
+    let asked = 0;
+    let created = false;
+    const outcome = await runSetup({
+      raise: () => {
+        asked++;
+        created = true; // the elevated run left its state behind
+        return { failure: "" };
+      },
+      state: () => created,
+      waitMs: 1_000,
+      pollMs: 10,
+    });
+    expect(asked).toBe(1);
+    expect(outcome.ok).toBe(true);
+    expect(outcome.message).toMatch(/accounts are ready/);
+    expect(outcome.messageZh).toMatch(/沙盒账户已就绪/);
+  });
+
+  it("an unanswered prompt does not hold the page: it reports and lets the person answer", async () => {
+    const started = Date.now();
+    const outcome = await runSetup({
+      raise: () => ({ failure: "" }),
+      state: () => false,
+      waitMs: 60,
+      pollMs: 10,
+    });
+    // The prompt may still be open on the machine's screen; this call is already back.
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.message).toMatch(/asking for permission/);
+    expect(outcome.message).toMatch(/penguin-sandbox-setup\.ps1/);
+  });
+
+  it("ships the script the prompt runs", () => {
+    expect(existsSync(setupScript())).toBe(true);
+  });
+});
+
+describe("who the setup grants access to", () => {
+  it("names the harness's own user and home, not the elevated administrator's", () => {
+    const args = setupArgs({
+      USERDOMAIN: "PRISM",
+      USERNAME: "k",
+      USERPROFILE: "C:\\Users\\k",
+    } as NodeJS.ProcessEnv);
+    expect(args).toEqual(["-ServerUser", "PRISM\\k", "-UserProfile", "C:\\Users\\k"]);
+  });
+});
+
+describe("the elevation request", () => {
+  it("quotes each argument exactly once, so PowerShell can parse it", () => {
+    const command = elevationCommand("C:\\plugin\\setup\\penguin-sandbox-setup.ps1");
+    expect(command).toContain(
+      "-ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File','C:\\plugin\\setup\\penguin-sandbox-setup.ps1')",
+    );
+    // The bug this replaces: a doubled quote, which parses as nothing and prompts for nothing.
+    expect(command).not.toContain("''C:");
+    expect(command).not.toContain("ps1''");
+  });
+
+  it("survives a path with a quote in it, the way PowerShell escapes one", () => {
+    expect(elevationCommand("C:\\it's\\setup.ps1")).toContain("'C:\\it''s\\setup.ps1'");
+  });
+});
+
+describe("the setup script this package ships", () => {
+  /**
+   * PowerShell reads `$Name:` inside a string as a SCOPE reference, not as a variable and a
+   * colon — so `"account $Name: created"` is a parse error, and a script that cannot parse dies
+   * before its first line, leaving no transcript and no accounts. That is exactly how it failed
+   * on a real host: the elevated process started and vanished. Nothing here can run PowerShell,
+   * so the shape that bit us is the thing asserted.
+   */
+  it("never interpolates a bare variable before a colon", () => {
+    const text = readFileSync(setupScript(), "utf8");
+    const offenders = text
+      .split(/\r?\n/)
+      .map((line, i) => [i + 1, line] as const)
+      .filter(([, line]) =>
+        /\$(?!\{)(?!env:)(?!script:)(?!global:)(?!using:)[A-Za-z_]\w*:/.test(line),
+      );
+    expect(offenders.map(([n, line]) => `${n}: ${line.trim()}`)).toEqual([]);
+  });
+
+  it("is what the elevation request runs", () => {
+    expect(setupScript()).toMatch(/setup[\\/]penguin-sandbox-setup\.ps1$/);
+    expect(readFileSync(setupScript(), "utf8")).toContain("New-LocalUser");
+  });
+});
+
+describe("what Windows will accept", () => {
+  /**
+   * A local account name may be at most 20 characters. The first names here were 21, and
+   * New-LocalUser's refusal named neither the account nor the rule — the setup simply exited 1
+   * with nothing written anywhere, which from the page looked like an unanswered prompt.
+   */
+  it("the account names the script defaults to fit", () => {
+    const text = readFileSync(setupScript(), "utf8");
+    const defaults = [...text.matchAll(/\$(?:Offline|Online)User = '([^']+)'/g)].map((m) => m[1]!);
+    expect(defaults.length).toBe(2);
+    for (const name of defaults) expect(name.length).toBeLessThanOrEqual(20);
+  });
+
+  it("and the account description fits too", () => {
+    const text = readFileSync(setupScript(), "utf8");
+    const description = /\$accountDescription = '([^']+)'/.exec(text)?.[1];
+    expect(description).toBeDefined();
+    expect(description!.length).toBeLessThanOrEqual(48);
+  });
+
+  it("the script states both limits itself, so its refusal explains them", () => {
+    const text = readFileSync(setupScript(), "utf8");
+    expect(text).toContain("$accountNameLimit = 20");
+    expect(text).toContain("$accountDescriptionLimit = 48");
+  });
+});
+
+describe("raising the prompt at all", () => {
+  it("names Windows PowerShell by its full path, never by a PATH lookup", () => {
+    expect(powershellPath({ SystemRoot: "D:\\Windows" })).toBe(
+      "D:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    );
+  });
+
+  it("a request that could not be made is reported as that, not as a waiting prompt", async () => {
+    const outcome = await runSetup({
+      raise: () => ({ failure: "the elevation request could not be started: spawn ENOENT" }),
+      state: () => false,
+      waitMs: 30,
+      pollMs: 10,
+    });
+    expect(outcome.ok).toBe(false);
+    expect(outcome.message).toMatch(/could not be started/);
+    expect(outcome.message).not.toMatch(/asking for permission/);
   });
 });
 
