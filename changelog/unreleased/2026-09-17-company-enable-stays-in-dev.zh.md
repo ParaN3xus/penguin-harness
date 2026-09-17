@@ -3,6 +3,7 @@
 - **Date:** 2026-09-17
 - **Type:** fix
 - **Scope:** `web`
+- **PR:** [#781](https://github.com/Prism-Shadow/penguin-harness/pull/781)
 
 [English](2026-09-17-company-enable-stays-in-dev.md)
 
