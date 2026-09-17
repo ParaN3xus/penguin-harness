@@ -1,0 +1,393 @@
+/**
+ * Markdown & code: what an answer is written in.
+ *
+ * - Prose: a docs answer — headings on the Markdown scale, a paragraph with a link and inline code,
+ *   a list, a table, a quoted note, a formula;
+ * - Code: `src/rag.ts` in a code block with its header, copy button and line numbers, and the
+ *   command that runs it;
+ * - Diff: the session's two changes as unified diffs;
+ * - Log: the corpus clone's command log, with its exit status and duration.
+ *
+ * Static stand-ins for W5's `Prose`, `CodeBlock`, `InlineCode`, `DiffViewer` and W4's `LogView`.
+ * Code is monochrome until W5 picks each theme's Shiki pair.
+ */
+import type { ReactNode } from "react";
+import { fixturesFor } from "../fixtures";
+import type { FileDiff, FixtureLang, Fixtures, ToolCallItem } from "../fixtures";
+import { defineModule } from "../module";
+import { duration } from "../screens/format";
+import { GlyphIcon, IconButton } from "./parts";
+
+type Inline = string | { code: string } | { link: string };
+
+/** Local fixture (K3): a docs answer in Markdown's shapes. Not part of K-redesign §4.6. */
+const DOCS: Readonly<
+  Record<
+    FixtureLang,
+    {
+      h1: string;
+      intro: readonly Inline[];
+      h2: string;
+      scopes: readonly (readonly Inline[])[];
+      table: { head: readonly string[]; rows: readonly (readonly string[])[] };
+      note: readonly Inline[];
+      h3: string;
+      ranking: string;
+      copy: string;
+      exit: (code: number, ms: string) => string;
+      tail: string;
+    }
+  >
+> = {
+  en: {
+    h1: "Configure hooks in Claude Code",
+    intro: [
+      "Hooks run your own commands at fixed points of a Session. They live under ",
+      { code: "hooks" },
+      " in ",
+      { code: "settings.json" },
+      ", and the full list of events is in the ",
+      { link: "hooks reference" },
+      " [1].",
+    ],
+    h2: "Where hooks are read from",
+    scopes: [
+      [{ code: "~/.claude/settings.json" }, " — every project on this machine"],
+      [{ code: ".claude/settings.json" }, " — this project, checked in"],
+      [{ code: ".claude/settings.local.json" }, " — this project, ignored by git"],
+    ],
+    table: {
+      head: ["Event", "Fires", "Can block"],
+      rows: [
+        ["PreToolUse", "before a tool call runs", "yes"],
+        ["PostToolUse", "after the tool returns", "no"],
+        ["Stop", "when the reply ends", "yes"],
+      ],
+    },
+    note: ["A hook that exits with code 2 blocks the call and shows its stderr to the model [2]."],
+    h3: "How the sources were ranked",
+    ranking: "Each chunk of the corpus was scored against the question with BM25:",
+    copy: "Copy",
+    exit: (code, ms) => `exit ${code} · ${ms}`,
+    tail: "Output complete",
+  },
+  zh: {
+    h1: "在 Claude Code 中配置 Hooks",
+    intro: [
+      "Hooks 会在 Session 的固定时机运行你自己的命令。它们写在 ",
+      { code: "settings.json" },
+      " 的 ",
+      { code: "hooks" },
+      " 字段下，完整的事件列表见 ",
+      { link: "Hooks 参考" },
+      " [1]。",
+    ],
+    h2: "Hooks 从哪里读取",
+    scopes: [
+      [{ code: "~/.claude/settings.json" }, "：本机上的所有项目"],
+      [{ code: ".claude/settings.json" }, "：当前项目，纳入版本库"],
+      [{ code: ".claude/settings.local.json" }, "：当前项目，被 git 忽略"],
+    ],
+    table: {
+      head: ["事件", "触发时机", "能否阻止"],
+      rows: [
+        ["PreToolUse", "工具调用执行之前", "能"],
+        ["PostToolUse", "工具返回之后", "不能"],
+        ["Stop", "回复结束时", "能"],
+      ],
+    },
+    note: ["以退出码 2 结束的 hook 会阻止这次调用，并把它的 stderr 交给模型 [2]。"],
+    h3: "来源是如何排序的",
+    ranking: "语料中的每个片段都用 BM25 与问题计算得分：",
+    copy: "复制",
+    exit: (code, ms) => `退出码 ${code} · ${ms}`,
+    tail: "输出完毕",
+  },
+};
+
+function InlineText({ parts }: { parts: readonly Inline[] }) {
+  return (
+    <>
+      {parts.map((part, i) =>
+        typeof part === "string" ? (
+          part
+        ) : "code" in part ? (
+          <code
+            key={i}
+            className="rounded-sm bg-surface-muted px-1 py-0.5 font-mono text-[0.85em] text-fg"
+          >
+            {part.code}
+          </code>
+        ) : (
+          <span key={i} className="text-link underline decoration-current/40 underline-offset-2">
+            {part.link}
+          </span>
+        ),
+      )}
+    </>
+  );
+}
+
+function Prose({ f }: { f: Fixtures }) {
+  const d = DOCS[f.lang];
+  const h = "text-fg font-(--ui-weight-strong)";
+  return (
+    <article className="mx-auto grid max-w-2xl gap-4 text-(length:--ui-text-prose-size) leading-(--ui-text-prose-lh) text-fg">
+      <h1 className={`text-(length:--ui-md-h1-size) leading-snug ${h}`}>{d.h1}</h1>
+      <p>
+        <InlineText parts={d.intro} />
+      </p>
+      <h2 className={`pt-2 text-(length:--ui-md-h2-size) leading-snug ${h}`}>{d.h2}</h2>
+      <ul className="grid list-disc gap-1 pl-5">
+        {d.scopes.map((scope, i) => (
+          <li key={i}>
+            <InlineText parts={scope} />
+          </li>
+        ))}
+      </ul>
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr>
+            {d.table.head.map((cell) => (
+              <th
+                key={cell}
+                className="border border-line bg-surface-muted px-3 py-1.5 text-left font-(--ui-weight-strong)"
+              >
+                {cell}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {d.table.rows.map((row) => (
+            <tr key={row[0]}>
+              {row.map((cell, i) => (
+                <td
+                  key={i}
+                  className={`border border-line px-3 py-1.5 ${i === 0 ? "font-mono text-xs" : ""}`}
+                >
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <blockquote className="border-l-2 border-line-emphasis pl-4 text-fg-muted">
+        <InlineText parts={d.note} />
+      </blockquote>
+      <h3 className={`pt-2 text-(length:--ui-md-h3-size) leading-snug ${h}`}>{d.h3}</h3>
+      <p>{d.ranking}</p>
+      <p className="overflow-x-auto text-center font-mono text-sm text-fg">
+        score(D, Q) = Σ IDF(qᵢ) · f(qᵢ, D) · (k₁ + 1) / (f(qᵢ, D) + k₁ · (1 − b + b · |D| / avgdl))
+      </p>
+    </article>
+  );
+}
+
+/** A code block: the language and path in its head, a copy button, numbered lines. */
+function CodeBlock({
+  lang,
+  path,
+  code,
+  copy,
+}: {
+  lang: string;
+  path?: string;
+  code: string;
+  copy: string;
+}) {
+  const lines = code.split("\n");
+  return (
+    <section className="ui-frame overflow-hidden rounded-md border border-line">
+      <div
+        data-slot="head"
+        className="flex items-center gap-2 border-b border-line bg-surface-muted px-3 py-1"
+      >
+        <span className="font-mono text-xs text-fg-muted">{lang}</span>
+        {path && <span className="min-w-0 truncate font-mono text-xs text-fg-subtle">{path}</span>}
+        <span className="min-w-0 flex-1" />
+        <IconButton label={copy} icon="copy" size="sm" />
+      </div>
+      <pre
+        data-slot="body"
+        className="overflow-x-auto bg-[var(--ui-code-bg)] py-2 font-mono text-xs leading-relaxed text-fg"
+      >
+        {lines.map((line, i) => (
+          <span key={i} className="flex">
+            <span className="w-10 shrink-0 select-none pr-3 text-right text-[var(--ui-code-gutter)]">
+              {i + 1}
+            </span>
+            <span className="whitespace-pre pr-4">{line}</span>
+          </span>
+        ))}
+      </pre>
+    </section>
+  );
+}
+
+function Code({ f }: { f: Fixtures }) {
+  const d = DOCS[f.lang];
+  const source = f.filePreview.content.split("\n").slice(0, 24).join("\n");
+  return (
+    <div className="grid gap-4">
+      <CodeBlock
+        lang={f.filePreview.language}
+        path={f.filePreview.path}
+        code={source}
+        copy={d.copy}
+      />
+      <CodeBlock
+        lang="bash"
+        code={"cd claude-code-expert && npm install && npm start"}
+        copy={d.copy}
+      />
+    </div>
+  );
+}
+
+/** A unified diff: the file and its counts, then hunk headers and numbered old/new lines. */
+function DiffViewer({ diff, limit }: { diff: FileDiff; limit?: number }) {
+  return (
+    <section className="ui-frame overflow-hidden rounded-md border border-line font-mono text-xs leading-5">
+      <div
+        data-slot="head"
+        className="flex items-center justify-between gap-2 border-b border-line bg-surface-muted px-3 py-1 text-fg-muted"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <GlyphIcon name="file" size={12} />
+          <span className="min-w-0 truncate">{diff.path}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2 tabular-nums">
+          <span className="text-tone-success-fg">+{diff.added}</span>
+          <span className="text-tone-danger-fg">−{diff.removed}</span>
+        </span>
+      </div>
+      <div data-slot="body" className="overflow-x-auto bg-[var(--ui-code-bg)]">
+        {diff.hunks.map((hunk) => (
+          <div key={hunk.header}>
+            <div className="bg-[var(--ui-diff-hunk-bg)] px-3 text-fg-subtle">{hunk.header}</div>
+            {hunk.lines.slice(0, limit).map((line, i) => (
+              <div
+                key={i}
+                className={`flex whitespace-pre ${
+                  line.kind === "add"
+                    ? "bg-[var(--ui-diff-add-bg)]"
+                    : line.kind === "del"
+                      ? "bg-[var(--ui-diff-del-bg)]"
+                      : ""
+                }`}
+              >
+                <span className="w-9 shrink-0 select-none pr-1.5 text-right text-[var(--ui-code-gutter)]">
+                  {line.oldNo ?? ""}
+                </span>
+                <span className="w-9 shrink-0 select-none pr-1.5 text-right text-[var(--ui-code-gutter)]">
+                  {line.newNo ?? ""}
+                </span>
+                <span
+                  className={`w-4 shrink-0 select-none text-center ${
+                    line.kind === "add"
+                      ? "text-tone-success-fg"
+                      : line.kind === "del"
+                        ? "text-tone-danger-fg"
+                        : "text-fg-subtle"
+                  }`}
+                >
+                  {line.kind === "add" ? "+" : line.kind === "del" ? "−" : ""}
+                </span>
+                <span className="pr-3 text-fg">{line.text}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Diff({ f }: { f: Fixtures }) {
+  const calls = f.session.turns[1]!.items.filter(
+    (i): i is ToolCallItem => i.kind === "tool_call" && i.diff !== undefined,
+  );
+  return (
+    <div className="grid gap-4">
+      {calls.map((call, i) => (
+        <DiffViewer key={call.id} diff={call.diff!} limit={i === 0 ? undefined : 12} />
+      ))}
+    </div>
+  );
+}
+
+/** A command log: the command in its head, the output, and the exit status in its foot. */
+function LogView({ command, output, foot }: { command: string; output: string; foot: ReactNode }) {
+  return (
+    <section className="ui-frame overflow-hidden rounded-md border border-line font-mono text-xs">
+      <div
+        data-slot="head"
+        className="flex items-center gap-2 border-b border-line bg-surface-muted px-3 py-1.5 text-fg-muted"
+      >
+        <GlyphIcon name="terminal" size={13} />
+        <span className="min-w-0 truncate text-fg">{command.split("\n")[0]}</span>
+      </div>
+      <pre
+        data-slot="body"
+        className="overflow-x-auto whitespace-pre bg-[var(--ui-code-bg)] px-3 py-2 leading-5 text-fg-muted"
+      >
+        {output}
+      </pre>
+      <div
+        data-slot="foot"
+        className="flex items-center gap-2 border-t border-line px-3 py-1.5 text-fg-subtle"
+      >
+        {foot}
+      </div>
+    </section>
+  );
+}
+
+function Log({ f }: { f: Fixtures }) {
+  const d = DOCS[f.lang];
+  const clone = f.session.turns[0]!.items.find((i): i is ToolCallItem => i.kind === "tool_call")!;
+  const args = JSON.parse(clone.argumentsJson) as { cmd: string };
+  return (
+    <LogView
+      command={`$ ${args.cmd}`}
+      output={clone.output ?? ""}
+      foot={
+        <>
+          <GlyphIcon name="circleCheck" size={13} className="text-tone-success-fg" />
+          <span className="tabular-nums">{d.exit(0, duration(clone.durationMs ?? 0))}</span>
+          <span className="min-w-0 flex-1" />
+          <span>{d.tail}</span>
+        </>
+      }
+    />
+  );
+}
+
+const VARIANTS = { prose: Prose, code: Code, diff: Diff, log: Log } as const;
+
+export const module = defineModule({
+  id: "content",
+  title: "Markdown & code",
+  description:
+    "A docs answer in Markdown — headings, links, inline code, a table, math and a quote — a code block, a unified diff and a command log.",
+  width: "wide",
+  variants: [
+    { key: "prose", title: "Prose" },
+    { key: "code", title: "Code" },
+    { key: "diff", title: "Diff" },
+    { key: "log", title: "Log" },
+  ],
+  parts: [
+    "content-prose",
+    "content-code-block",
+    "content-typography",
+    "content-diff-viewer",
+    "data-log-view",
+  ],
+  render: (variant, { lang }) => {
+    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Prose;
+    return <View f={fixturesFor(lang)} />;
+  },
+});
