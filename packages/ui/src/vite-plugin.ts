@@ -13,10 +13,10 @@
  * node_modules — so the package-name import would load this file from the stale snapshot, and as
  * a `.ts` file under node_modules, which Node refuses to strip types from.
  *
- * On a build it also emits the bundled fonts' licence texts (`src/fonts/LICENSES/*.txt`, mirrored
- * by `scripts/sync-font-licenses.mjs`) as `fonts-licenses/<package>.txt`, so every dist that
- * carries the fonts — the served app, the desktop bundle, the gallery — carries their OFL texts
- * beside them.
+ * On a build it also emits the bundled fonts' licence texts (`src/fonts/LICENSES/*.txt`: mirrored
+ * from the font packages by `scripts/sync-font-licenses.mjs`, and MiSans's transcribed from its
+ * licensor) as `fonts-licenses/<name>.txt`, so every dist that carries the fonts — the served app,
+ * the desktop bundle, the gallery — carries their licences beside them.
  *
  * Structural types only, so the package needs no `vite` dependency.
  */
@@ -42,7 +42,7 @@ export interface PenguinUiPlugin {
 /** Where the emitted licence texts land in a consumer's dist. */
 export const FONT_LICENSES_DIR = "fonts-licenses";
 
-/** The mirrored licence texts, `{ fileName, source }` per font package, sorted by file name. */
+/** The licence texts in `src/fonts/LICENSES/`, `{ fileName, source }` per font, sorted by file name. */
 export function fontLicenseAssets(): { fileName: string; source: string }[] {
   const dir = new URL("./fonts/LICENSES/", import.meta.url);
   return readdirSync(dir)

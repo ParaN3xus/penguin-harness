@@ -1,57 +1,17 @@
 /**
- * Frost (`modern`) Latin faces: Geist (sans) and Geist Mono, variable `wght`, latin + latin-ext
- * slices only, from @fontsource-variable/geist and @fontsource-variable/geist-mono (OFL-1.1).
+ * Frost (`modern`) faces:
+ * - MiSans (sans), Latin and Chinese in one family, so zh text sits in the same face as the Latin
+ *   around it. MiSans Regular is weight 400 and MiSans Medium is 500, each cut into `unicode-range`
+ *   slices under `misans/`, which `scripts/build-misans.py` writes from Xiaomi's official package.
+ *   It is the one font this package vendors: MiSans has no official npm package. Licence: the MiSans
+ *   Font Intellectual Property License Agreement (`LICENSES/misans.txt`). The software must credit
+ *   MiSans (the Web App does, in the account menu), may not adapt the font, and never offers it for
+ *   download on its own.
+ * - JetBrains Mono (mono): the variable face Primer also names, declared once in `github.css`, so
+ *   Frost's mono adds no bytes.
  *
- * Only `themes/modern.css` names these families, so no other theme ever downloads them. The
- * `url()`s are relative to this file on purpose — see `index.css`.
+ * Only `themes/modern.css` names MiSans, so only a Frost session downloads its slices, and only the
+ * slices its text touches. Frost uses weights 400 and 500 alone; its theme turns weight synthesis
+ * off, so a 600 or 700 request renders in Medium rather than as a smeared fake bold.
  */
-
-@font-face {
-  font-family: "Geist Variable";
-  font-style: normal;
-  font-display: swap;
-  font-weight: 100 900;
-  src: url("../../node_modules/@fontsource-variable/geist/files/geist-latin-ext-wght-normal.woff2")
-    format("woff2-variations");
-  unicode-range:
-    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
-    U+A720-A7FF;
-}
-
-@font-face {
-  font-family: "Geist Variable";
-  font-style: normal;
-  font-display: swap;
-  font-weight: 100 900;
-  src: url("../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2")
-    format("woff2-variations");
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-  font-family: "Geist Mono Variable";
-  font-style: normal;
-  font-display: swap;
-  font-weight: 100 900;
-  src: url("../../node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-ext-wght-normal.woff2")
-    format("woff2-variations");
-  unicode-range:
-    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
-    U+A720-A7FF;
-}
-
-@font-face {
-  font-family: "Geist Mono Variable";
-  font-style: normal;
-  font-display: swap;
-  font-weight: 100 900;
-  src: url("../../node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2")
-    format("woff2-variations");
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
+@import "./misans/misans.css";

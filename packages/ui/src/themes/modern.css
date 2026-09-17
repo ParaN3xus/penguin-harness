@@ -11,7 +11,8 @@
  *   warm-neutral hue, never blue-grey.
  * - Semantic tones use Sierra's hues, tuned until every tone reads at 4.5:1 as text on its own
  *   tint and 3:1 as a mark on every surface (proposal). Chart and code colours are proposals.
- * - Fonts: Geist and Geist Mono stand in for Sierra's commercial GT America (`fonts/modern.css`).
+ * - Fonts: MiSans (Xiaomi) in place of Sierra's commercial GT America, Latin and Chinese in one
+ *   family at weights 400 and 500, with JetBrains Mono for code (`fonts/modern.css`).
  * - The type scale, line-heights and control padding-block are the shared values, so switching
  *   themes never reflows a layout vertically; this theme changes radius, colour, font, shadow,
  *   tracking, weight and padding-inline only.
@@ -148,11 +149,12 @@
     --ui-glass-saturate: 1.2;
     --ui-glass-line: rgb(48 46 45 / 0.12);
 
-    /* Typography — families. Latin face first, so ASCII always renders in the theme's face. */
-    --ui-font-cjk: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei";
-    --ui-font-sans: "Geist Variable", var(--ui-font-cjk), ui-sans-serif, system-ui, sans-serif;
+    /* Typography — families. MiSans sets Latin and Chinese alike; the system CJK faces stay ahead
+       of the generic fallbacks for the rare ideograph MiSans's slices do not carry. */
+    --ui-font-cjk: "MiSans", "PingFang SC", "Microsoft YaHei";
+    --ui-font-sans: "MiSans", var(--ui-font-cjk), ui-sans-serif, system-ui, sans-serif;
     --ui-font-mono:
-      "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+      "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
       var(--ui-font-cjk), monospace;
     --ui-font-display: var(--ui-font-sans);
 
@@ -392,10 +394,10 @@
     --ui-glass-line: rgb(255 255 255 / 0.1);
 
     /* Typography — families */
-    --ui-font-cjk: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei";
-    --ui-font-sans: "Geist Variable", var(--ui-font-cjk), ui-sans-serif, system-ui, sans-serif;
+    --ui-font-cjk: "MiSans", "PingFang SC", "Microsoft YaHei";
+    --ui-font-sans: "MiSans", var(--ui-font-cjk), ui-sans-serif, system-ui, sans-serif;
     --ui-font-mono:
-      "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+      "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
       var(--ui-font-cjk), monospace;
     --ui-font-display: var(--ui-font-sans);
 
@@ -590,6 +592,12 @@
   }
   :root[data-theme="modern"] .ui-underline-nav [role="tab"][aria-selected="true"]::after {
     background-color: var(--ui-accent);
+  }
+
+  /* MiSans ships Regular (400) and Medium (500) only. A heavier request renders in Medium rather
+     than as a synthesized bold, which smears Han strokes; Frost's own weights stop at 500. */
+  :root[data-theme="modern"] {
+    font-synthesis-weight: none;
   }
 
   /* Scrollbar thumbs show only while the pointer is over their scroller (--ui-scrollbar-visibility). */

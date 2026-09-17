@@ -7,16 +7,18 @@
  * faces plus the Noto Sans SC slices its CJK text touches — which is why every theme's faces are
  * declared unconditionally here.
  *
- * | theme           | sans                        | mono                          | display                          |
- * | --------------- | --------------------------- | ----------------------------- | -------------------------------- |
- * | Primer `github` | Mona Sans Variable (W1a)    | JetBrains Mono Variable (W1a) | —                                |
- * | Frost `modern`  | Geist Variable              | Geist Mono Variable           | —                                |
- * | Console `geek`  | IBM Plex Sans Variable      | Commit Mono 400 / 700         | IBM Plex Sans Condensed 500 / 600 |
- * | all             | CJK: Noto Sans SC Variable (101 unicode-range slices)                                           |
+ * | theme           | sans                               | mono                          | display                       | CJK                          |
+ * | --------------- | ---------------------------------- | ----------------------------- | ----------------------------- | ---------------------------- |
+ * | Primer `github` | Mona Sans Variable (W1a)           | JetBrains Mono Variable (W1a) | —                             | Noto Sans SC Variable (W1a)  |
+ * | Frost `modern`  | MiSans 400 / 500                   | JetBrains Mono Variable       | —                             | MiSans (the same family)     |
+ * | Console `geek`  | IBM Plex Sans Variable             | Commit Mono 400 / 700         | IBM Plex Sans Condensed 600   | Noto Sans SC Variable        |
  *
- * All are SIL Open Font License 1.1, shipped through fontsource packages. The licence texts are
- * mirrored into `LICENSES/` by `scripts/sync-font-licenses.mjs` and emitted beside the build as
- * `fonts-licenses/<package>.txt` by the `penguinUi()` Vite plugin.
+ * Every face but MiSans is SIL Open Font License 1.1 and arrives through a fontsource package,
+ * whose licence text `scripts/sync-font-licenses.mjs` mirrors into `LICENSES/`. MiSans has no
+ * official package: `scripts/build-misans.py` cuts its slices from Xiaomi's download into
+ * `misans/`, and its licence is transcribed into `LICENSES/misans.txt` (`vendored-fonts.json`
+ * lists it). The `penguinUi()` Vite plugin emits every text in `LICENSES/` beside the build as
+ * `fonts-licenses/<name>.txt`. `README.md` has the families, licences, sources and bytes.
  *
  * The Latin faces are hand-declared (latin + latin-ext only, normal style, woff2) instead of
  * importing fontsource's stylesheets, which would also bundle the cyrillic, greek and vietnamese
