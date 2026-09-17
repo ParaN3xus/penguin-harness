@@ -11,12 +11,18 @@
  *
  * Naming: a dependency `@fontsource[-variable]/<family>` mirrors to `LICENSES/<family>.txt`, the
  * text normalized the way the sync script writes it (LF endings, no trailing spaces, one final
- * newline). Fonts arrive as dependencies only; a font binary checked into the package is refused.
+ * newline).
+ *
+ * Fonts arrive as dependencies, with one exception the manifest `src/fonts/vendored-fonts.json`
+ * declares: a font with no package (MiSans) is vendored as woff2 slices in its own directory, and its
+ * licence is the licensor's own text, transcribed into `LICENSES/` by hand and naming its title. Any
+ * other font binary checked into the package is refused, and a TTF or OTF is refused everywhere — the
+ * package never carries a whole font file that could be offered on its own.
  *
  * Until the package ships a font, the checks have nothing to hold and say so as a skipped case.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { scanSourceRoots, stripCssComments } from "../src/testing";
 import { PACKAGE_DIR, REPO_ROOT, SRC_DIR } from "./helpers/paths";
@@ -29,6 +35,26 @@ const FONT_FILE = /\.(?:woff2?|ttf|otf|eot)$/i;
 /** The licences a bundled font may carry. */
 const KNOWN_LICENSE = /SIL OPEN FONT LICENSE|Apache License|Permission is hereby granted/i;
 const LICENSE_FILES = ["LICENSE", "LICENSE.txt", "LICENSE.md", "OFL.txt"];
+
+/** An entry of `src/fonts/vendored-fonts.json`: a font with no package, cut into the package. */
+interface VendoredFont {
+  readonly family: string;
+  /** Package-relative directory holding its woff2 slices, ending in `/`. */
+  readonly files: string;
+  /** Package-relative path of its licence text, under `src/fonts/LICENSES/`. */
+  readonly license: string;
+  /** The licence's title; the text must contain it. */
+  readonly licenseTitle: string;
+}
+const VENDORED_MANIFEST = join(FONTS_DIR, "vendored-fonts.json");
+const vendoredManifest: readonly VendoredFont[] = existsSync(VENDORED_MANIFEST)
+  ? Object.values(
+      JSON.parse(readFileSync(VENDORED_MANIFEST, "utf8")) as Record<string, VendoredFont>,
+    )
+  : [];
+const vendoredLicenseNames = new Set(vendoredManifest.map((font) => basename(font.license)));
+/** The vendored font a package-relative path belongs to, if it sits in one's slice directory. */
+const vendoredFontOf = (rel: string) => vendoredManifest.find((font) => rel.startsWith(font.files));
 
 const manifest = JSON.parse(readFileSync(join(PACKAGE_DIR, "package.json"), "utf8")) as {
   dependencies?: Record<string, string>;
@@ -91,13 +117,13 @@ function fontReferences(): FontReference[] {
   return refs;
 }
 
-/** Font binaries checked into the package itself (node_modules excluded). */
-function vendoredFonts(dir = PACKAGE_DIR, out: string[] = []): string[] {
+/** Font binaries checked into the package itself (node_modules excluded), package-relative with `/`. */
+function fontBinaries(dir = PACKAGE_DIR, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules") continue;
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) vendoredFonts(path, out);
-    else if (FONT_FILE.test(name)) out.push(path.slice(PACKAGE_DIR.length));
+    if (statSync(path).isDirectory()) fontBinaries(path, out);
+    else if (FONT_FILE.test(name)) out.push(relative(PACKAGE_DIR, path).split(sep).join("/"));
   }
   return out;
 }
@@ -120,14 +146,14 @@ const normalize = (text: string) =>
 
 describe("font licences", () => {
   const references = fontReferences();
-  const vendored = vendoredFonts();
+  const binaries = fontBinaries();
   const mirrored = existsSync(LICENSES_DIR)
     ? readdirSync(LICENSES_DIR).filter((name) => name.endsWith(".txt"))
     : [];
   const shipsFonts =
     fontDependencies.length > 0 ||
     references.some((ref) => ref.dependency !== null) ||
-    vendored.length > 0 ||
+    binaries.length > 0 ||
     mirrored.length > 0;
 
   if (!shipsFonts) {
@@ -142,9 +168,13 @@ describe("font licences", () => {
     expect(missing, "Run `pnpm --filter @prismshadow/penguin-ui sync:font-licenses`.").toEqual([]);
   });
 
-  it("are not kept for fonts the package no longer depends on", () => {
+  it("are not kept for fonts the package no longer depends on or vendors", () => {
     const families = new Set(fontDependencies.map(family));
-    expect(mirrored.filter((name) => !families.has(name.replace(/\.txt$/, "")))).toEqual([]);
+    expect(
+      mirrored.filter(
+        (name) => !families.has(name.replace(/\.txt$/, "")) && !vendoredLicenseNames.has(name),
+      ),
+    ).toEqual([]);
   });
 
   it("match the licence each dependency ships, and are a licence a bundled font may carry", () => {
@@ -164,10 +194,59 @@ describe("font licences", () => {
     expect(problems).toEqual([]);
   });
 
+  it("name their licence for every vendored font, beside the slices they cover", () => {
+    const problems: string[] = [];
+    for (const font of vendoredManifest) {
+      if (!font.files.endsWith("/") || !existsSync(join(PACKAGE_DIR, font.files))) {
+        problems.push(`${font.family}: files "${font.files}" is not a directory of the package`);
+      } else if (
+        !fontBinaries().some((rel) => rel.startsWith(font.files) && rel.endsWith(".woff2"))
+      ) {
+        problems.push(`${font.family}: ${font.files} holds no woff2 slice — drop the entry`);
+      }
+      if (dirname(join(PACKAGE_DIR, font.license)) !== LICENSES_DIR) {
+        problems.push(
+          `${font.family}: ${font.license} is outside src/fonts/LICENSES/, so no build ships it`,
+        );
+      } else if (!existsSync(join(PACKAGE_DIR, font.license))) {
+        problems.push(`${font.family}: ${font.license} is missing`);
+      } else {
+        const text = readFileSync(join(PACKAGE_DIR, font.license), "utf8");
+        if (!text.includes(font.licenseTitle)) {
+          problems.push(`${font.family}: ${font.license} does not name ${font.licenseTitle}`);
+        }
+        if (normalize(text) !== text) {
+          problems.push(`${font.family}: ${font.license} is not whitespace-normalized`);
+        }
+      }
+      if (
+        fontDependencies.some(
+          (dependency) => `${family(dependency)}.txt` === basename(font.license),
+        )
+      ) {
+        problems.push(`${font.family}: ${basename(font.license)} is also a dependency's mirror`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
   it("cover every font the stylesheets load, which must exist in its package", () => {
     const problems: string[] = [];
     for (const { file, specifier, dependency, target } of references) {
-      if (dependency === null) continue; // one of our own sheets
+      if (dependency === null) {
+        // One of our own files: a sheet, or a vendored font's slice.
+        if (!FONT_FILE.test(specifier.replace(/[?#].*$/, ""))) continue;
+        const sheet = join(REPO_ROOT, file);
+        const rel = relative(PACKAGE_DIR, resolve(dirname(sheet), specifier.replace(/[?#].*$/, "")))
+          .split(sep)
+          .join("/");
+        if (vendoredFontOf(rel) === undefined) {
+          problems.push(`${file}: ${specifier} is a font file of no vendored font`);
+        } else if (!existsSync(join(PACKAGE_DIR, rel))) {
+          problems.push(`${file}: ${specifier} does not exist`);
+        }
+        continue;
+      }
       if (!fontDependencies.includes(dependency)) {
         problems.push(`${file}: ${specifier} is from ${dependency}, not a font dependency`);
       } else if (!mirrored.includes(`${family(dependency)}.txt`)) {
@@ -184,7 +263,11 @@ describe("font licences", () => {
     expect(references.filter((ref) => ref.dependency !== null).length).toBeGreaterThan(0);
   });
 
-  it("arrive as dependencies, never as binaries checked into the package", () => {
-    expect(vendored).toEqual([]);
+  it("arrive as dependencies or as a vendored font's woff2 slices, never as other binaries", () => {
+    expect(
+      binaries.filter((rel) => !(rel.endsWith(".woff2") && vendoredFontOf(rel) !== undefined)),
+      "A font binary in the package must be a woff2 slice under a vendored-fonts.json entry's " +
+        "files directory; a TTF or OTF is never checked in.",
+    ).toEqual([]);
   });
 });
