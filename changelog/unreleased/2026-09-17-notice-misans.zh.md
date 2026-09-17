@@ -1,4 +1,4 @@
-# 第三方声明载明 MiSans 字体的许可
+# 第三方声明涵盖随应用分发的字体
 
 - **Date:** 2026-09-17
 - **Type:** process
@@ -7,4 +7,4 @@
 
 [English](2026-09-17-notice-misans.md)
 
-`THIRD-PARTY-NOTICES.md` 新增 MiSans（MiSans Light）一节：PenguinHarness 在其页面与截图中以它作细字体。该节注明字体出自小米、以原样使用，应用可以把它打包在内但从不单独提供字体，打包了它的应用会注明使用了该字体；并按小米公布的中英文原文收录《MiSans 字体知识产权许可协议》全文：软件中须注明使用了 MiSans 字体、不得改编字体、不得单独分发字体文件（打包了该字体的应用可以分发），任何副本都须保留版权声明与本协议。该节同时写明 Frost 主题的 Regular 与 Medium 切片所在位置，以及许可文本随字体文件一同发布。
+`THIRD-PARTY-NOTICES.md` 新增小米 MiSans 字体一节：Frost 主题使用它的 Regular 与 Medium 两个字重，以 `unicode-range` WOFF2 切片的形式随应用分发。该节写明子集化切片改动了什么、保留了什么，逐字引用字体文件自带的版权声明，指明每个构建产物都在字体旁附带许可文本 `fonts-licenses/misans.txt`，并收录《MiSans 字体知识产权许可协议》中英文全文。该文件还为 Web 资源中的六款 SIL Open Font License 1.1 字体（Mona Sans、JetBrains Mono、IBM Plex Sans、IBM Plex Sans Condensed、Commit Mono 与 Noto Sans SC）各新增一节，其引言也改为说明这些字体同样经由 npm 分发，位于 `@prismshadow/penguin-server` 包的 `web-dist/` 中。
