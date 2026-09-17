@@ -62,6 +62,7 @@ const EXACT_SUBPATHS: Readonly<Record<string, string>> = {
   "/boot": "boot.ts",
   "/vite": "vite-plugin.ts",
   "/fixtures": "fixtures/index.ts",
+  "/screens": "screens/index.ts",
   "/testing": "testing/index.ts",
 };
 
