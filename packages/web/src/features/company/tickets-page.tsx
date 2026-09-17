@@ -2,16 +2,16 @@
  * The ticket board: five columns in lifecycle order (shaping in ticket-board.ts), each with
  * its colour bar and count, a card per ticket — title, priority, due date (danger once
  * passed), the blocked badge, a muted line naming its parent, and its owner — a search box
- * and a blocked-only switch, moving a card between columns by long press and drag, which
+ * and a blocked-only switch, moving a card between columns by dragging it, which
  * confirms the move (a move into rejected asks for a one-line reason) before posting it, the
  * create form, and the tickets and files the server could not accept.
  * The whole card is one button — the board's one exception to the company pages' rule against
  * whole-area click targets, and it holds no control of its own. A click anywhere on it (Enter
  * and Space too) opens the detail dialog in place (the shell's one host renders it, so the
- * board stays where it is). Moving it takes a long press: held still for a moment the card
- * lifts and follows the pointer, and released over another column it asks to move there; a
- * quick drag without the hold does nothing, and on a touch screen the page scrolls as usual
- * until the card has lifted (ticket-press.ts, ticket-drag.ts). The dialog's move control is the
+ * board stays where it is). Dragging it moves it: a mouse or pen press that travels a few pixels
+ * lifts the card, which follows the pointer and, released over another column, asks to move
+ * there. A finger has to hold the card still for a moment before it lifts, so a finger that moves
+ * scrolls the page as usual (ticket-press.ts, ticket-drag.ts). The dialog's move control is the
  * way to move a ticket without dragging.
  * The priority rides on the title's line, one size under it. What a card deliberately does
  * not carry is the session count, the cost and any live session status — those are the
@@ -303,8 +303,8 @@ export function TicketsPage() {
 
   /**
    * A card: one button over the whole face. Unselectable and without the platform's long-press
-   * callout, so holding it to drag never selects its words or raises a menu; dimmed in place
-   * while its ghost is being carried.
+   * callout, so dragging it never selects its words and holding it on a touch screen never raises
+   * a menu; dimmed in place while its ghost is being carried.
    */
   const card = (t: OrgTicketItem) => (
     <button

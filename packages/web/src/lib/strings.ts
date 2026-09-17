@@ -3664,7 +3664,7 @@ Benchmark：
     },
     tickets: {
       title: "工单",
-      info: "五列看板即工单的生命周期：提议 → 进行中 → 审核中 → 已完成 / 已拒绝。点卡片在原地弹出详情窗口，长按卡片再拖到另一列即可移列；被阻塞的工单留在原列并带角标。工单是组织的工作单位：点右上角「新建工单」建一张并指定负责人，它的工位会话会为这张工单发起工单会话。",
+      info: "五列看板即工单的生命周期：提议 → 进行中 → 审核中 → 已完成 / 已拒绝。点卡片在原地弹出详情窗口，把卡片拖到另一列即可移列（触屏上先长按卡片再拖）；被阻塞的工单留在原列并带角标。工单是组织的工作单位：点右上角「新建工单」建一张并指定负责人，它的工位会话会为这张工单发起工单会话。",
       columns: {
         proposed: "提议",
         in_progress: "进行中",
@@ -3738,7 +3738,7 @@ Benchmark：
       detail: "工单详情",
       /** Header control of the detail dialog: back to the ticket this one was opened from (a parent, a child). */
       back: "返回",
-      dragHint: "长按后拖到另一列即可移动",
+      dragHint: "拖到另一列即可移动",
       searchPlaceholder: "搜索标题或 id",
       searchNoMatch: "没有匹配的工单",
       dropHere: "拖到这里",

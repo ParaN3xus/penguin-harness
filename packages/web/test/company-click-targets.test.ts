@@ -5,7 +5,7 @@
  * is: the title renders as a text button that opens what it names, and the surface around it
  * stays inert. A row with no title of its own carries a small named icon button instead. The one
  * deliberate exception is the ticket board's card, which is a `<button>` over its whole face: a
- * click anywhere opens the ticket and a long press drags it, and it holds no control of its own
+ * click anywhere opens the ticket and a drag moves it, and it holds no control of its own
  * that the whole-card target could swallow. What the rule rules out is the silently clickable
  * surface, which swallows the controls living inside it and leaves a reader guessing what a
  * click will do. It came out of the company pages, where a whole card, a whole row and a bare

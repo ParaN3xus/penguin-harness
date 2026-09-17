@@ -5,7 +5,7 @@
  * touch screen needs on top — once a card has lifted, the finger's movement drags it instead of
  * scrolling the page.
  *
- * A card is a plain `<button>`: a click (the tap the machine lets through, Enter, Space, or a
+ * A card is a plain `<button>`: a click (a press the machine lets through, Enter, Space, or a
  * screen reader's activation) opens the ticket. Only the press is tracked here; its moves and its
  * release are read off `window` for the length of the press, so the pointer is followed wherever
  * it goes without capturing it. Columns are found by `data-ticket-column` under the pointer.
@@ -186,10 +186,10 @@ export function useTicketBoardDrag({
     [track, ghostTransform, finish],
   );
 
-  // A lifted card owns the finger: its moves drag the card rather than scroll the page. The
-  // listener is registered for the board's lifetime, not per press, because a browser decides
-  // whether a touch may be held back from scrolling when the touch starts — a listener added
-  // once the card has lifted would be too late to stop anything.
+  // A lifted card owns the touch that carries it: its moves drag the card rather than scroll the
+  // page. The listener is registered for the board's lifetime, not per press, because a browser
+  // decides whether a touch may be held back from scrolling when the touch starts — a listener
+  // added once the card has lifted would be too late to stop anything.
   useEffect(() => {
     const board = boardRef.current;
     if (board === null) return;
@@ -227,6 +227,7 @@ export function useTicketBoardDrag({
         y: e.clientY,
         button: e.button,
         isPrimary: e.isPrimary,
+        pointerType: e.pointerType,
       });
       const pointerId = e.pointerId;
       /** Once the machine is idle again the press is over: nothing is held and nothing listens. */
@@ -249,12 +250,11 @@ export function useTicketBoardDrag({
         settle();
       };
       const onKey = (ev: KeyboardEvent) => {
-        if (ev.key !== "Escape" || press.phase() === "idle") return;
-        // A lifted card is put back; the Esc goes no further (it would close a dialog).
-        if (press.phase() === "lifted") {
-          ev.preventDefault();
-          ev.stopPropagation();
-        }
+        // Escape puts a lifted card back and goes no further (it would close a dialog). A card
+        // not yet lifted has nothing to put back, so its press carries on.
+        if (ev.key !== "Escape" || press.phase() !== "lifted") return;
+        ev.preventDefault();
+        ev.stopPropagation();
         press.cancel();
         settle();
       };
@@ -277,14 +277,14 @@ export function useTicketBoardDrag({
       };
     },
     onClick: (e: ReactMouseEvent<HTMLElement>) => {
-      // The click a drag, a hold or a cancelled press produces is not an open.
+      // The click a drag produces is not an open.
       if (press.consumeClick()) {
         e.preventDefault();
         return;
       }
       callbacks.current.onOpen(ticket);
     },
-    // A held card must not raise the platform's long-press menu under the finger.
+    // A pressed card must not raise the platform's long-press menu under the finger.
     onContextMenu: (e: ReactMouseEvent<HTMLElement>) => {
       if (press.phase() !== "idle") e.preventDefault();
     },

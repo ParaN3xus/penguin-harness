@@ -3715,7 +3715,7 @@ Scenarios:
     },
     tickets: {
       title: "Tickets",
-      info: "Five columns are a ticket's life: proposed → in progress → review → done / rejected. Click a card to open its detail in place, and press and hold a card, then drag it to another column, to move it; a blocked ticket stays in its column with a badge. A ticket is the organization's unit of work: use New ticket, top right, to create one and name an owner, and the owner's desk session starts a ticket session for it.",
+      info: "Five columns are a ticket's life: proposed → in progress → review → done / rejected. Click a card to open its detail in place, and drag it to another column to move it (on a touch screen, press and hold the card first); a blocked ticket stays in its column with a badge. A ticket is the organization's unit of work: use New ticket, top right, to create one and name an owner, and the owner's desk session starts a ticket session for it.",
       columns: {
         proposed: "Proposed",
         in_progress: "In progress",
@@ -3789,7 +3789,7 @@ Scenarios:
       created: "Ticket created",
       detail: "Ticket detail",
       back: "Back",
-      dragHint: "Press and hold, then drag to another column to move it",
+      dragHint: "Drag to another column to move it",
       searchPlaceholder: "Search title or id",
       searchNoMatch: "No matching tickets",
       dropHere: "Drop here",
