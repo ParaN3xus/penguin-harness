@@ -8,9 +8,8 @@
  * event_msg is not message rendering and is handled separately: `token_usage` accumulates
  * and is summarized in the `[stats]` line at task end, `approval_decision` prints one line
  * with the approval result, `abort` prints one line noting the interruption, and each of
- * `compaction_begin`/`compaction_end` prints one line of compaction progress (a
- * `model_switch` compaction words it as the model switch it is);
- * `session_meta` is never rendered, only read for the model a switch line names.
+ * `compaction_begin`/`compaction_end` prints one line of compaction progress;
+ * `session_meta` is never rendered.
  *
  * **Screen lock (concurrent tools)**: tools run concurrently and asynchronously, so
  * messages may arrive interleaved. The renderer queues internally to guarantee:
@@ -43,12 +42,7 @@
  * all only when the output stream supports color (see `supportsColor`): piped output, e.g. a
  * nested `penguin run` driven through `exec_command`, must stay plain (#102).
  */
-import {
-  isEventMessage,
-  isModelMessage,
-  isSessionMeta,
-  parseUserSteeringText,
-} from "@prismshadow/penguin-core";
+import { isEventMessage, isModelMessage, parseUserSteeringText } from "@prismshadow/penguin-core";
 import type {
   AbortPayload,
   ApprovalDecision,
@@ -73,7 +67,6 @@ import type {
 } from "@prismshadow/penguin-core";
 import { renderFileToolApprovalPayload, renderPartialToolCall } from "./tool-render.js";
 import { ToolOutputCollapser, collapseLines } from "./output-collapse.js";
-import { formatModelLabel } from "./switch-model-command.js";
 import { defaultMessages } from "./i18n.js";
 import type { Messages } from "./i18n.js";
 
@@ -206,15 +199,6 @@ export function formatAbort(p: AbortPayload, t: Messages, c: Palette = STDOUT_PA
     }),
     c,
   );
-}
-
-/** The formatted target of a `model_switch` compaction event; undefined for any other reason, or when the pair is missing. */
-function switchTarget(p: CompactionBeginPayload | CompactionEndPayload): string | undefined {
-  return p.reason === "model_switch" &&
-    p.next_provider !== undefined &&
-    p.next_model_id !== undefined
-    ? formatModelLabel(p.next_provider, p.next_model_id)
-    : undefined;
 }
 
 /** Options shared by history and streaming rendering. */
@@ -455,12 +439,6 @@ export class StreamRenderer {
   private contextAtTaskStart = 0;
   private sessionElapsedMs = 0;
   /**
-   * The main Session's current model as a formatted label — what a failed model switch
-   * says it is still on. Set by the owner (`setModel`), followed from a main-session
-   * `session_meta` and from a completed switch; undefined until one of those happens.
-   */
-  private model: string | undefined;
-  /**
    * Compaction in progress (between a pair of parent-session compaction events): any
    * parent-session token_usage arriving during this window is compaction-request usage —
    * it does not update the context accounting (the actual usage after compaction is
@@ -516,11 +494,6 @@ export class StreamRenderer {
    */
   setCollapseToolOutput(collapse: boolean): void {
     this.collapseToolOutput = collapse;
-  }
-
-  /** Tells the renderer which model the main Session runs on (the chat REPL, at start and after `/switch-model`). */
-  setModel(provider: string, modelId: string): void {
-    this.model = formatModelLabel(provider, modelId);
   }
 
   handle(msg: OmniMessage): void {
@@ -748,10 +721,6 @@ export class StreamRenderer {
       const ms = Date.parse(msg.timestamp);
       if (Number.isFinite(ms)) this.taskFirstTsMs = ms;
     }
-    if (isSessionMeta(msg)) {
-      this.setModel(msg.payload.provider, msg.payload.model_id);
-      return;
-    }
     if (isModelMessage(msg)) {
       const payload = msg.payload;
       switch (payload.type) {
@@ -912,9 +881,7 @@ export class StreamRenderer {
         this.finishLine();
         this.compactionActive = true;
         this.compactionTokens = 0;
-        this.out.write(
-          `${dim(this.t.compactionStart(p.mode, p.reason, switchTarget(p)), this.c)}\n`,
-        );
+        this.out.write(`${dim(this.t.compactionStart(p.mode, p.reason), this.c)}\n`);
         this.lastLineKey = null;
       } else if (payload.type === "compaction_end") {
         // end signals the result and shows the tokens consumed by the compaction request (if any).
@@ -930,19 +897,8 @@ export class StreamRenderer {
               }
             : undefined;
         this.compactionTokens = 0;
-        const next = switchTarget(p);
-        const modelSwitch =
-          p.reason === "model_switch"
-            ? {
-                ...(this.model !== undefined ? { previous: this.model } : {}),
-                ...(next !== undefined ? { next } : {}),
-              }
-            : undefined;
-        if (modelSwitch !== undefined && p.status === "completed" && next !== undefined) {
-          this.model = next;
-        }
         this.out.write(
-          `${dim(this.t.compactionStop(p.mode, p.status, tokens, p.error_message, modelSwitch), this.c)}\n`,
+          `${dim(this.t.compactionStop(p.mode, p.status, tokens, p.error_message), this.c)}\n`,
         );
         this.lastLineKey = null;
       } else if (payload.type === "mcp_connect_begin") {

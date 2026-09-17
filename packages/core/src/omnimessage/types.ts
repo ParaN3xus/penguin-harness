@@ -12,6 +12,13 @@
  * the Human interface communicates using: complete `model_msg`, streaming `partial_*`, and all
  * `event_msg`.
  *
+ * OmniMessage is a closed vocabulary. A new payload field or enum value is a protocol change
+ * every reader — Trace replay, the server, the Web App, the CLI, third-party consumers — has to
+ * learn, forever. Before adding one, show that no existing record carries the fact (the model
+ * lives in `session_meta`; a context's boundaries in the compaction pair and the file split)
+ * and that readers cannot derive it. The PR description says why the existing records could
+ * not carry it. The rule itself is stated in the architecture spec's message-format section.
+ *
  * Docs: packages/docs/content/omni-message.{zh,en}.md (site path /docs/omni-message) documents
  * this protocol payload-for-payload — keep the page in sync when changing types here.
  */
@@ -400,13 +407,8 @@ export interface RequestEndPayload extends RetryDetail {
   status: StopReason;
 }
 
-/**
- * Compaction trigger reason: context threshold / turn-count threshold / user-initiated
- * request / a user's in-session model switch (the compaction that closes the old model's
- * context, always in summarize mode when there is anything to summarize — see
- * `Session.switchModel`; its events name the target in `next_provider` / `next_model_id`).
- */
-export type CompactionReason = "context" | "turns" | "manual" | "model_switch";
+/** Compaction trigger reason: context threshold / turn-count threshold / user-initiated request. */
+export type CompactionReason = "context" | "turns" | "manual";
 
 /** Context compaction mode: summary relay / direct discard. */
 export type CompactionMode = "summarize" | "discard";
@@ -431,10 +433,6 @@ export interface CompactionBeginPayload {
   context: number;
   /** Session cumulative turn count. */
   turns: number;
-  /** `reason: "model_switch"` only: the provider group of the model the next context opens on (paired with `next_model_id`). */
-  next_provider?: string;
-  /** `reason: "model_switch"` only: the upstream model_id the next context opens on (paired with `next_provider`). */
-  next_model_id?: string;
 }
 
 /**
@@ -448,16 +446,8 @@ export interface CompactionEndPayload extends RetryDetail {
   type: "compaction_end";
   reason: CompactionReason;
   mode: CompactionMode;
-  /** Compaction result; non-`completed` means compaction was abandoned and the original context was kept (a `model_switch` then stays on the model it was on). */
+  /** Compaction result; non-`completed` means compaction was abandoned and the original context was kept. */
   status: StopReason;
-  /**
-   * `reason: "model_switch"` only: the model the next context opens on. On a `completed` end
-   * this pair is what a resume reads when this end is the file's last record — the new
-   * context's own file is only opened at its first message, so until then the closing end is
-   * the durable record of the switch (see trace/resume.ts).
-   */
-  next_provider?: string;
-  next_model_id?: string;
 }
 
 /** A hook's decision: at the stop point `continue` keeps the run going (its injected input follows as the next user message) and `stop` lets the run end; at the pre_tool_use point `allow` approves the call without asking and `deny` refuses it. */

@@ -105,13 +105,7 @@ import { buildOutline } from "./outline-model";
 import { GoalStatusBanner } from "./goal-banner";
 import { handoffMessage, modelSwitchMessage } from "./agent-handoff";
 import { modelLabel } from "./model-select";
-import {
-  createModelSwitchWatch,
-  modelSwitchOutcome,
-  modelSwitchRefetchDue,
-  modelSwitchTally,
-  sessionModelPick,
-} from "./model-switch";
+import { modelSwitchOutcome, sessionModelPick, sessionRowStale } from "./model-switch";
 import { hasConfiguredKey, promotedPricing, sameModelRef } from "../models/model-grouping";
 import { providerInfo } from "@prismshadow/penguin-core/model-catalog";
 import { WorkspaceBrowser } from "./workspace-browser";
@@ -1556,9 +1550,10 @@ export function ChatPage() {
   );
 
   // The dialog's "compact and switch". 202 = the switch is streaming: the compaction row carries
-  // it from here, and the watcher below refetches the Session once it completed. 200 = the
-  // Session never ran and switched inside the request: its row is applied at once. A refusal
-  // (409 busy / same model / not configured / unavailable / compaction not configured) is a toast.
+  // it from here, and the effect below refetches the Session once the new context's session_meta
+  // names the new model. 200 = the Session never ran and switched inside the request: its row is
+  // applied at once. A refusal (409 busy / same model / not configured / unavailable / compaction
+  // not configured) is a toast.
   const confirmModelSwitch = useCallback(async () => {
     const ask = modelSwitchAsk;
     if (!selected || ask === null || modelSwitchPosting) return;
@@ -1594,25 +1589,26 @@ export function ChatPage() {
     syncHealedSessionId,
   ]);
 
-  // The Session DTO (model badge, context window, window notice, header price) follows a switch
-  // that completed on the stream, or that the history shows the held row predates: refetched
-  // once the Session is idle again — the pure watch in model-switch.ts decides when. Runs per
-  // stream version because the items mutate in place.
-  const modelSwitchWatchRef = useRef(createModelSwitchWatch());
+  // The Session DTO (model badge, context window, window notice, header price) is the authority
+  // for the current model, and nothing on the stream updates it. When the running context's
+  // session_meta names another model than the row on hand — a switch completed, on this tab or
+  // another one watching the Session, or the row was held from before a switch — the row is
+  // refetched once the Session is idle again. Once per Session and model pair, so a server row
+  // that still disagrees is not refetched in a loop. Runs per stream version because the model
+  // mutates in place.
+  const staleRowFetchRef = useRef<string | null>(null);
   useEffect(() => {
-    const due = modelSwitchRefetchDue(modelSwitchWatchRef.current, {
-      sessionId: selectedSessionId,
-      loading: stream.loading,
-      idle: stream.taskState === "idle",
-      tally: modelSwitchTally(stream.model.items),
-      current: activeModelRef,
-    });
-    if (!due || selectedSessionId === null) return;
+    const contextModel = stream.model.contextModel;
+    if (selectedSessionId === null || stream.loading || stream.taskState !== "idle") return;
+    if (contextModel === null || !sessionRowStale(contextModel, activeModelRef)) return;
+    const key = `${selectedSessionId}:${contextModel.provider}/${contextModel.modelId}`;
+    if (staleRowFetchRef.current === key) return;
+    staleRowFetchRef.current = key;
     void api
       .getSession(selectedSessionId)
       .then((res) => applySessionRow(res.session))
       .catch(() => undefined);
-    // `version` is the items' change signal; the model ref is rebuilt per render from the row.
+    // `version` is the model's change signal; the model ref is rebuilt per render from the row.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     stream.version,

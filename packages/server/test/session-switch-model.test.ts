@@ -1,15 +1,15 @@
 /**
  * POST /api/sessions/:id/switch-model — the server half of an in-session model switch (core does
  * the compaction and the rotation; a fake Session stands in for it here, shaped like the real
- * one: the compaction pair with `reason: "model_switch"`, the getters moving once the new
- * context is open).
+ * one: an ordinary manual compaction pair, the getters moving once the new context is open, then
+ * that context's main-session `session_meta` as the stream's last record).
  *
  * What this file pins is the HTTP contract on `SessionSwitchModelRequest` — the 400 for half a
  * pair, each 409 code, 202 for a streamed switch and 200 for a Session that never ran — and the
  * bookkeeping the contract implies: the index row and the runtime entry move to the new model
- * (so `GET /` and the compaction threshold follow it, and a client refetching on the completed
- * `compaction_end` already reads it), stay put when the compaction fails or is aborted, and
- * usage is attributed to the model that served each request — the switch's own compaction
+ * (so `GET /` and the compaction threshold follow it, and a client refetching on the new
+ * context's `session_meta` already reads it), stay put when the compaction fails or is aborted,
+ * and usage is attributed to the model that served each request — the switch's own compaction
  * request to the previous model, the next Task to the new one.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -19,6 +19,7 @@ import {
   compactionEnd,
   requestBegin,
   requestEnd,
+  sessionMeta,
   tokenUsage,
 } from "@prismshadow/penguin-core";
 import type {
@@ -72,9 +73,10 @@ interface SwitchFake extends RuntimeSession {
 
 /**
  * A fake Session shaped like core's for a switch: the compaction request's token_usage rides
- * between the pair, the pair names the target, and the getters move only once the new context
- * is open — AFTER the completed `compaction_end`, exactly as core's `startNewContext` runs after
- * `emitCompactionEnd` — so the manager's two update sites are exercised in the real order.
+ * between a plain manual pair, and the getters move only once the new context is open — after
+ * the completed `compaction_end` and before the new context's `session_meta` is yielded, exactly
+ * as core adopts the opened context before `openContextFile` yields its meta — so the manager's
+ * two update sites are exercised in the real order.
  */
 function switchFake(model: ModelRefDto, behaviour: SwitchBehaviour): SwitchFake {
   const fake: SwitchFake = {
@@ -104,13 +106,7 @@ function switchFake(model: ModelRefDto, behaviour: SwitchBehaviour): SwitchFake 
         fake.modelId = opts.modelId;
         return { status: "completed", previous, next };
       }
-      yield compactionBegin({
-        reason: "model_switch",
-        mode: "summarize",
-        context: 4000,
-        turns: 3,
-        next,
-      });
+      yield compactionBegin({ reason: "manual", mode: "summarize", context: 4000, turns: 3 });
       // The compaction request itself, on the model being left.
       yield tokenUsage(counts(4000), counts(4000));
       if (behaviour.gate) {
@@ -123,11 +119,21 @@ function switchFake(model: ModelRefDto, behaviour: SwitchBehaviour): SwitchFake 
         ]);
       }
       const status: StopReason = opts.signal.aborted ? "aborted" : behaviour.status;
-      yield compactionEnd({ reason: "model_switch", mode: "summarize", status, next });
+      yield compactionEnd({ reason: "manual", mode: "summarize", status });
       if (status === "completed") {
-        // The new context opens on the target: the getters follow it from here.
+        // The new context opens on the target: the getters follow it from here, and its
+        // session_meta — main-session, no origin — is the last record on the stream.
         fake.provider = opts.provider;
         fake.modelId = opts.modelId;
+        yield sessionMeta({
+          session_id: SID,
+          provider: opts.provider,
+          model_id: opts.modelId,
+          model_context_window: WINDOW_B,
+          system_prompt: "sp",
+          agent_state: "/tmp/agents/default_agent/agent_state",
+          workspace: "/tmp/w",
+        });
       }
       return { status, previous, next };
     },
@@ -166,6 +172,8 @@ describe("POST /switch-model", () => {
     const events: ServerEvent[] = [];
     /** The row's model as it stood when each compaction_end was published. */
     const rowAtEnd: ModelRefDto[] = [];
+    /** The row's model as it stood when each session_meta was published. */
+    const rowAtMeta: ModelRefDto[] = [];
     t.deps.channels.get(SID).subscribe((evt) => {
       if (evt.event === "server_event") {
         events.push(JSON.parse(evt.data) as ServerEvent);
@@ -173,8 +181,9 @@ describe("POST /switch-model", () => {
       }
       const msg = JSON.parse(evt.data) as OmniMessage;
       messages.push(msg);
+      const r = row();
+      if (msg.type === "session_meta") rowAtMeta.push({ provider: r.provider, modelId: r.modelId });
       if ((msg.payload as { type?: string }).type === "compaction_end") {
-        const r = row();
         rowAtEnd.push({ provider: r.provider, modelId: r.modelId });
       }
     });
@@ -182,6 +191,12 @@ describe("POST /switch-model", () => {
       messages,
       events,
       rowAtEnd,
+      rowAtMeta,
+      /** Each message's kind: its payload type, or `session_meta`. */
+      kinds: () =>
+        messages.map((m) =>
+          m.type === "session_meta" ? "session_meta" : (m.payload as { type?: string }).type,
+        ),
       states: () => events.flatMap((e) => (e.type === "task_state" ? [e.state] : [])),
     };
   };
@@ -341,7 +356,7 @@ describe("POST /switch-model", () => {
     expect(row().modelId).toBe(B.modelId);
   });
 
-  it("202: streams like a compaction; the row and the entry move to the target as the completed end is published, and GET / plus the compaction threshold follow", async () => {
+  it("202: streams a plain manual compaction and then the new context's session_meta; the row and the entry move to the target as that meta is published, and GET / plus the compaction threshold follow", async () => {
     const fake = switchFake(A, { kind: "stream", status: "completed" });
     adopt(fake);
     const agentMax = (await t.deps.agentConfigService.getConfig(PROJECT, "default_agent")).config
@@ -358,23 +373,27 @@ describe("POST /switch-model", () => {
     await waitFor(() => feed.states().includes("idle"));
 
     expect(feed.states()).toEqual(["compacting", "idle"]);
-    const kinds = feed.messages.map((m) => (m.payload as { type?: string }).type);
-    expect(kinds).toEqual(["compaction_begin", "token_usage", "compaction_end"]);
-    const end = feed.messages[2]!.payload as {
-      reason: string;
-      status: string;
-      next_provider?: string;
-      next_model_id?: string;
-    };
-    expect(end).toMatchObject({
-      reason: "model_switch",
+    expect(feed.kinds()).toEqual([
+      "compaction_begin",
+      "token_usage",
+      "compaction_end",
+      "session_meta",
+    ]);
+    // Nothing on the pair names a model.
+    expect(feed.messages[2]!.payload).toEqual({
+      type: "compaction_end",
+      reason: "manual",
+      mode: "summarize",
       status: "completed",
-      next_provider: B.provider,
-      next_model_id: B.modelId,
     });
-    // A client refetching the Session on that very event reads the new model: the row had
-    // already moved when the end was published.
-    expect(feed.rowAtEnd).toEqual([B]);
+    // The new model is on the new context's meta, a main-session record (no origin).
+    const meta = feed.messages[3]!;
+    expect(meta.origin).toBeUndefined();
+    expect(meta.payload).toMatchObject({ provider: B.provider, model_id: B.modelId });
+    // A client refetching the Session on that very record reads the new model: the row had
+    // already moved when the meta was published (and not yet when the end was).
+    expect(feed.rowAtEnd).toEqual([A]);
+    expect(feed.rowAtMeta).toEqual([B]);
     expect(row()).toMatchObject(B);
     const info = ((await (await api.get(`/api/sessions/${SID}`)).json()) as SessionResponse)
       .session;
@@ -406,6 +425,8 @@ describe("POST /switch-model", () => {
     expect((await api.post(url, B)).status).toBe(202);
     await waitFor(() => feed.states().includes("idle"));
     expect((feed.messages[2]!.payload as { status: string }).status).toBe("fatal");
+    // No switch, so no new context and no session_meta.
+    expect(feed.kinds()).toEqual(["compaction_begin", "token_usage", "compaction_end"]);
     expect(feed.rowAtEnd).toEqual([A]);
     expect(row()).toMatchObject(A);
 
@@ -430,8 +451,26 @@ describe("POST /switch-model", () => {
     expect(fake.signals[0]!.aborted).toBe(true);
     const last = feed.messages[feed.messages.length - 1]!;
     expect((last.payload as { status: string }).status).toBe("aborted");
+    expect(feed.rowAtMeta).toEqual([]);
     expect(row()).toMatchObject(A);
     expect(fake.modelId).toBe(A.modelId);
+  });
+
+  it("a main-session session_meta on the stream registers no child and records no error", async () => {
+    adopt(switchFake(A, { kind: "stream", status: "completed" }));
+    const feed = listen();
+    expect((await api.post(url, B)).status).toBe(202);
+    await waitFor(() => feed.states().includes("idle"));
+
+    // The meta reached subscribers as the switch's last record, without an origin…
+    const meta = feed.messages.at(-1)!;
+    expect(meta.type).toBe("session_meta");
+    expect(meta.origin).toBeUndefined();
+    // …and the drive read it as the main session's own record: no child row, no
+    // session_created event, no registration failure on record.
+    expect(t.deps.sessionsRepo.listByProject(PROJECT).map((r) => r.sessionId)).toEqual([SID]);
+    expect(feed.events.filter((e) => e.type === "session_created")).toEqual([]);
+    expect(t.deps.errorsRepo.recent(PROJECT).map((r) => r.code)).toEqual([]);
   });
 
   it("200: a Session that never ran switches inside the request — no events, the fresh DTO carries the new model, the row too", async () => {

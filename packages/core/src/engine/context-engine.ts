@@ -157,7 +157,7 @@ export interface OpenContextOptions {
  * {@link ContextEngine.switchModel}).
  */
 export interface ModelSwitchTarget {
-  /** The (provider, model_id) pair the next context opens on; recorded on the switch's compaction events as `next_provider` / `next_model_id`. */
+  /** The (provider, model_id) pair the next context opens on; recorded by that context's `session_meta`, at the head of the Trace file the switch opens. */
   ref: ModelRef;
   /**
    * How much of the target's context window the summary may take, in approximate tokens: the
@@ -540,7 +540,8 @@ export class ContextEngine {
   /**
    * Set to true once compaction completes: Trace rotation is deferred until the next
    * message that needs writing (see `write`) — so that if no further messages follow the
-   * compaction, we don't create an empty file containing only session_meta.
+   * compaction, we don't create an empty file containing only session_meta. A model switch is
+   * the one exception: it performs the rotation at once (see `openContextFile`).
    */
   private pendingTraceRotation = false;
   /**
@@ -1115,27 +1116,31 @@ export class ContextEngine {
   /**
    * Switches the model the Session runs on (the engine's half of `Session.switchModel`; the
    * policy — target validation, the same-model no-op, the never-ran Session — sits there). A
-   * switch is a compaction whose new context opens on `target.ref`: the paired events carry
-   * `reason: "model_switch"` and the target as `next_provider` / `next_model_id`, and the
-   * completed end is what a resume reads the model from until the new context's own file
-   * exists (see trace/resume.ts). Only callable at a Task boundary, like `compact()`. Three
-   * shapes, by what the running context holds:
+   * switch is a compaction whose new context opens on `target.ref`, and that compaction is an
+   * ordinary `manual` one: nothing on its pair names a model. The model is recorded where it
+   * always is — the opened context's `session_meta` — and the switch opens that context's Trace
+   * file at once rather than at its first message (see `openContextFile`), so the file's head is
+   * the durable record of the switch and a resume of the latest file lands on the target. Only
+   * callable at a Task boundary, like `compact()`. Three shapes, by what the running context
+   * holds:
    *
    * - completed turns: a **summarize** compaction on the old model regardless of the
    *   configured mode — the summary is what travels to the new one (the user's rule) — with the
-   *   interruption carry-over folded in exactly as `compact()` folds it. Failure or abort keeps
-   *   the old context and the old model;
+   *   interruption carry-over folded in exactly as `compact()` folds it; the summary is the new
+   *   file's first input. Failure or abort keeps the old context and the old model;
    * - a context a completed compaction closed and nothing has been written on yet (the
-   *   rotation is still pending): no request, the pair is appended to the **closed** file —
-   *   still the latest one — with the rotation kept pending, so the held summary (or nothing,
-   *   after a discard) travels unchanged and the file's last record names the target; its
-   *   mode says what travels (`summarize` when a summary is held);
+   *   rotation is still pending): no request and no pair — the closing pair is already on the
+   *   closed file — so the pending rotation is performed on the target, the held summary (if
+   *   any) heading the new file;
    * - an open context without a completed turn (its first request never finished): nothing to
-   *   summarize, so a **discard** pair closes it; its text carry-over rides to the new model,
-   *   its tool outputs are dropped like `compact()` drops them (they pair with calls only the
-   *   old context had).
+   *   summarize, so a **discard** pair closes it; its text carry-over rides to the new model in
+   *   memory only — carry-over may hold synthetic messages, which are never persisted — and its
+   *   tool outputs are dropped like `compact()` drops them (they pair with calls only the old
+   *   context had).
    *
-   * Returns the switch's terminal status: `completed` once the new context is open.
+   * A completed switch yields the new context's `session_meta` last, so the stream carries the
+   * record that names the model the Session now runs on. Returns the switch's terminal status:
+   * `completed` once the new context is open.
    */
   async *switchModel(
     target: ModelSwitchTarget,
@@ -1152,31 +1157,23 @@ export class ContextEngine {
       await this.refreshCompaction();
       const folded = this.pendingCarryOver;
       this.pendingCarryOver = [];
-      const result = yield* this.summarizeContext("model_switch", folded, signal, target);
-      if (result.status === "completed") {
-        this.pendingSummary = result.summary!;
-      } else if (!result.committed) {
-        this.pendingCarryOver = folded;
+      const result = yield* this.summarizeContext("manual", folded, signal, target);
+      if (result.status !== "completed") {
+        if (!result.committed) this.pendingCarryOver = folded;
+        return result.status;
       }
-      return result.status;
+      this.pendingSummary = result.summary!;
+      yield* this.openContextFile();
+      return "completed";
     }
     if (this.pendingTraceRotation) {
-      // The pair goes to the closed file: `write` would otherwise perform the pending rotation
-      // first and open a file for the context that is being left — one a resume could not
-      // recover the summary from, since the request that produced it is in the closed file.
-      // Restored on every exit so an opener failure below still leaves the rotation owed.
-      // First-run records still owed (a Session resumed into this closed context and switched
-      // before running) describe the context being left, which never gets a file: dropped.
+      // Closed by a completed compaction, nothing written since: no pair — the closing pair is
+      // on the closed file. The pending rotation is performed now, on the target. First-run
+      // records still owed (a Session resumed into this closed context and switched before
+      // running) describe the context being left, which never gets a file: dropped.
       this.pendingBootstrapRecords = null;
-      const mode: CompactionMode = this.pendingSummary ? "summarize" : "discard";
-      this.pendingTraceRotation = false;
-      try {
-        yield* this.emitCompactionBegin("model_switch", mode, next);
-        yield* this.emitCompactionEnd("model_switch", mode, "completed", { next });
-      } finally {
-        this.pendingTraceRotation = true;
-      }
       yield* this.startNewContext(next);
+      yield* this.openContextFile();
       return "completed";
     }
     // The context's own records go into its file ahead of the pair that closes it.
@@ -1184,8 +1181,30 @@ export class ContextEngine {
     this.pendingCarryOver = this.pendingCarryOver.filter(
       (m) => (m.payload as { type?: string }).type !== "tool_call_output",
     );
-    yield* this.discardContext("model_switch", next);
+    yield* this.discardContext("manual", next);
+    yield* this.openContextFile();
     return "completed";
+  }
+
+  /**
+   * Opens the new context's Trace file now instead of at its first message — a model switch's
+   * one deviation from the lazy rotation: the file's head (this context's session_meta, naming
+   * the model it runs on) is the durable record of the switch. In summarize mode the held
+   * summary is written as the context's first input here and moves to the head of the
+   * carry-over, which the next run sends first and never re-writes — the same state a resume of
+   * this file rebuilds. The meta is yielded so the stream carries the record that names the new
+   * model. On the stream it comes after the opener's records (yielded live while the context
+   * opened), in the file before them; consumers read both as state rather than as a sequence, so
+   * the order between them carries nothing.
+   */
+  private async *openContextFile(): AsyncGenerator<OmniMessage> {
+    await this.rotateIfPending();
+    if (this.pendingSummary) {
+      await this.write(this.pendingSummary);
+      this.pendingCarryOver = [this.pendingSummary, ...this.pendingCarryOver];
+      this.pendingSummary = null;
+    }
+    if (this.contextMeta) yield this.contextMeta;
   }
 
   /**
@@ -1661,10 +1680,11 @@ export class ContextEngine {
    */
   private async *discardContext(
     reason: CompactionReason,
+    /** A model switch's target: the model the next context opens on. */
     next?: ModelRef,
   ): AsyncGenerator<OmniMessage> {
-    yield* this.emitCompactionBegin(reason, "discard", next);
-    yield* this.emitCompactionEnd(reason, "discard", "completed", next ? { next } : undefined);
+    yield* this.emitCompactionBegin(reason, "discard");
+    yield* this.emitCompactionEnd(reason, "discard", "completed");
     yield* this.startNewContext(next);
   }
 
@@ -1701,16 +1721,14 @@ export class ContextEngine {
     reason: CompactionReason,
     pendingToolOutputs: OmniMessage[],
     signal?: AbortSignal,
-    /** A model switch's target: named on both events, and the room its window leaves for the summary. */
+    /** A model switch's target: the model the next context opens on, and the room its window leaves for the summary. */
     target?: ModelSwitchTarget,
   ): AsyncGenerator<OmniMessage, CompactionResult> {
     // Already refreshed: every entry into a compaction — the post-request checkpoint,
     // `compact()` and `switchModel()` — re-reads the live settings before landing here, so the
     // prompt below comes from the same read as that decision rather than a second one.
     const settings = this.compaction!;
-    const next = target?.ref;
-    const nextDetail = next ? { next } : {};
-    yield* this.emitCompactionBegin(reason, "summarize", next);
+    yield* this.emitCompactionBegin(reason, "summarize");
 
     // Compaction request input: this turn's tool results (mid-Task) or leftover interruption
     // carry-over, appended to the old object together with the compaction Prompt as one user
@@ -1750,10 +1768,12 @@ export class ContextEngine {
     for (;;) {
       if (signal?.aborted) {
         this.stashRepairs(pendingRepairs);
-        yield* this.emitCompactionEnd(reason, "summarize", "aborted", {
-          ...(attempts > 0 ? { attempt: attempts } : {}),
-          ...nextDetail,
-        });
+        yield* this.emitCompactionEnd(
+          reason,
+          "summarize",
+          "aborted",
+          attempts > 0 ? { attempt: attempts } : undefined,
+        );
         return { status: "aborted", committed };
       }
       const attempt = yield* this.runCompactionRequest(input, signal, reconnects);
@@ -1802,15 +1822,11 @@ export class ContextEngine {
               attempt: attempts,
               errorCode: "unsupported",
               errorMessage,
-              ...nextDetail,
             });
             return { status: "fatal", committed, errorCode: "unsupported", errorMessage };
           }
-          yield* this.emitCompactionEnd(reason, "summarize", "completed", {
-            attempt: attempts,
-            ...nextDetail,
-          });
-          yield* this.startNewContext(next);
+          yield* this.emitCompactionEnd(reason, "summarize", "completed", { attempt: attempts });
+          yield* this.startNewContext(target?.ref);
           return { status: "completed", summary, committed };
         }
         // Not a summary — one more failed attempt, sharing the reconnect budget below. Tool
@@ -1840,10 +1856,7 @@ export class ContextEngine {
         for (const repair of pendingRepairs) await this.write(repair);
       } else if (attempt.status === "aborted") {
         this.stashRepairs(pendingRepairs);
-        yield* this.emitCompactionEnd(reason, "summarize", "aborted", {
-          attempt: attempts,
-          ...nextDetail,
-        });
+        yield* this.emitCompactionEnd(reason, "summarize", "aborted", { attempt: attempts });
         return { status: "aborted", committed };
       } else if (attempt.status === "fatal") {
         // `fatal` never retries: a definitive rejection or a dead credential doesn't heal
@@ -1855,7 +1868,6 @@ export class ContextEngine {
           attempt: attempts,
           ...(attempt.errorCode !== undefined ? { errorCode: attempt.errorCode } : {}),
           ...(attempt.errorMessage !== undefined ? { errorMessage: attempt.errorMessage } : {}),
-          ...nextDetail,
         });
         return {
           status: "fatal",
@@ -1883,7 +1895,6 @@ export class ContextEngine {
           attempt: attempts,
           ...(lastErrorCode !== undefined ? { errorCode: lastErrorCode } : {}),
           ...(lastError !== undefined ? { errorMessage: lastError } : {}),
-          ...nextDetail,
         });
         return {
           status: "retryable",
@@ -1896,10 +1907,7 @@ export class ContextEngine {
       const ok = await this.backoff(reconnects, signal);
       if (!ok) {
         this.stashRepairs(pendingRepairs);
-        yield* this.emitCompactionEnd(reason, "summarize", "aborted", {
-          attempt: attempts,
-          ...nextDetail,
-        });
+        yield* this.emitCompactionEnd(reason, "summarize", "aborted", { attempt: attempts });
         return { status: "aborted", committed };
       }
       if (unusable) {
@@ -2093,7 +2101,8 @@ export class ContextEngine {
    * tool_list_ready) are yielded live as they come, so a slow connect is never a silent gap.
    * Trace **does not** split files immediately — that's deferred until the next message that
    * needs writing, when it rotates and opens with the context's session_meta and records (see
-   * `write`), avoiding an empty file if no further messages follow the compaction.
+   * `write`), avoiding an empty file if no further messages follow the compaction; a model
+   * switch opens the file right after this returns instead (see `openContextFile`).
    *
    * `next` is a model switch's target: the opener is told which model to open the context on;
    * every other rotation leaves it out and the opener keeps the closing context's model.
@@ -2133,29 +2142,27 @@ export class ContextEngine {
     this.fromCompaction = true;
   }
 
-  /** Yields and records a compaction start event (carrying reason/mode/current context usage/Session cumulative turns, and a model switch's target). */
+  /** Yields and records a compaction start event (carrying reason/mode/current context usage/Session cumulative turns). */
   private async *emitCompactionBegin(
     reason: CompactionReason,
     mode: CompactionMode,
-    next?: ModelRef,
   ): AsyncGenerator<OmniMessage> {
     const msg = compactionBegin({
       reason,
       mode,
       context: this.lastRequestTotal,
       turns: this.sessionTurns,
-      ...(next ? { next } : {}),
     });
     yield msg;
     await this.write(msg);
   }
 
-  /** Yields and records a compaction stop event (carrying the result status — non-completed means compaction was abandoned — plus its share of the RetryDetail block: final attempt ordinal, and the last error detail on failures; a model switch's target rides as `next`). */
+  /** Yields and records a compaction stop event (carrying the result status — non-completed means compaction was abandoned — plus its share of the RetryDetail block: final attempt ordinal, and the last error detail on failures). */
   private async *emitCompactionEnd(
     reason: CompactionReason,
     mode: CompactionMode,
     status: StopReason,
-    detail?: { attempt?: number; errorCode?: ErrorCode; errorMessage?: string; next?: ModelRef },
+    detail?: { attempt?: number; errorCode?: ErrorCode; errorMessage?: string },
   ): AsyncGenerator<OmniMessage> {
     const msg = compactionEnd({ reason, mode, status, ...detail });
     yield msg;
@@ -2294,24 +2301,33 @@ export class ContextEngine {
   }
 
   /**
+   * Performs the deferred Trace rotation when one is pending: splits the file and opens it with
+   * the current context's session_meta and records (its MCP connect pair, if any, and its
+   * toolset). Best-effort like every Trace write. Reached through `write` by the first message
+   * after a compaction, and directly by `openContextFile` when a model switch opens the file at
+   * once.
+   */
+  private async rotateIfPending(): Promise<void> {
+    if (!this.deps.trace || !this.pendingTraceRotation) return;
+    this.pendingTraceRotation = false;
+    try {
+      if (this.deps.trace.rotate) await this.deps.trace.rotate();
+      if (this.contextMeta) await this.deps.trace.write(this.contextMeta);
+      for (const record of this.contextRecords) await this.deps.trace.write(record);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[trace] rotate failed: ${message}\n`);
+    }
+  }
+
+  /**
    * Trace writes are **best-effort**: observability should never interrupt the ReAct
    * loop, so write failures only warn rather than throw. The first write after compaction first
-   * performs the deferred Trace rotation: splitting the file and opening it with the current
-   * context's session_meta and records (its MCP connect pair, if any, and its toolset).
+   * performs the deferred Trace rotation (see `rotateIfPending`).
    */
   private async write(msg: OmniMessage): Promise<void> {
     if (!this.deps.trace) return;
-    if (this.pendingTraceRotation) {
-      this.pendingTraceRotation = false;
-      try {
-        if (this.deps.trace.rotate) await this.deps.trace.rotate();
-        if (this.contextMeta) await this.deps.trace.write(this.contextMeta);
-        for (const record of this.contextRecords) await this.deps.trace.write(record);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`[trace] rotate failed: ${message}\n`);
-      }
-    }
+    await this.rotateIfPending();
     try {
       await this.deps.trace.write(msg);
     } catch (err) {

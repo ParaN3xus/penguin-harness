@@ -50,7 +50,6 @@ import type {
   ToolCallPayload,
 } from "../omnimessage/index.js";
 import { buildContextSummaryText, extractSummary } from "../omnimessage/markers/index.js";
-import type { ModelRef } from "../state/project-config.js";
 
 /** Replay result: all the state needed to resume a Session. */
 export interface ResumeResult {
@@ -64,14 +63,6 @@ export interface ResumeResult {
   carryOver: OmniMessage[];
   /** Compaction closure (file-level): this file's context is fully closed; resume starts a new, empty context. */
   contextClosed: boolean;
-  /**
-   * Compaction closure by a completed `model_switch`: the model the next context opens on,
-   * from the closing `compaction_end`'s `next_provider` / `next_model_id`. The switch's new
-   * context has no file of its own until its first message, so this end is the durable record
-   * of the model the Session runs on (see `Session.switchModel`); a closure by any other
-   * compaction keeps the file's `session_meta` model.
-   */
-  nextModel?: ModelRef;
   /** Compaction closure in summarize mode: the reconstructed `[context_summary]` summary, prepended to the next run's input. */
   pendingSummary?: OmniMessage;
   /** Session-level cumulative Token carry-over (the session value from the last token_usage). */
@@ -94,7 +85,7 @@ export interface ResumeResult {
    * every reader treats messages between the paired events as compaction-internal, so an
    * unclosed span would hide everything appended after it (issue #288).
    */
-  danglingCompaction?: { reason: CompactionReason; mode: CompactionMode; next?: ModelRef };
+  danglingCompaction?: { reason: CompactionReason; mode: CompactionMode };
 }
 
 /** Content of the pairing-backfill placeholder output (the tool hadn't finished and no output was persisted before the process exited). */
@@ -289,7 +280,6 @@ export function resumeTrace(messages: OmniMessage[]): ResumeResult {
   if (last && isCompactionEnd(last)) {
     const p = last.payload;
     if (p.status === "completed") {
-      const nextModel = nextModelOf(p);
       const result: ResumeResult = {
         history: [],
         carryOver: [],
@@ -299,28 +289,11 @@ export function resumeTrace(messages: OmniMessage[]): ResumeResult {
         sessionTurns: 0, // turn count resets after compaction completes
         renderMessages: [],
         meta,
-        ...(nextModel ? { nextModel } : {}),
       };
-      if (p.reason === "model_switch") {
-        // A switch that closed a context without a summarize request of its own — an open
-        // context whose first request never completed, or one a compaction had just closed
-        // and the user had already written on — sent nothing to the model, so the input that
-        // context still owed (the user's message, a summary carried as carry-over) is owed by
-        // the new one: it is reclaimed as carry-over, text only. Tool outputs pair with calls
-        // the closed context committed and the new one has no history, so they are dropped,
-        // exactly as a discard compaction drops them. Any other closure's pending input is
-        // empty by construction: its compaction request committed everything before it.
-        result.carryOver = replayTurns(messages).carryOver.filter(
-          (m) => toolCallOutputId(m) === null,
-        );
-      }
       if (p.mode !== "summarize") return result;
       // Reconstruct the summary from the compaction request's output (the assistant text of
       // the last completed Request). Always rebuilt in the current [context_summary] form —
       // extractSummary itself still accepts the old <summary> tags an old Trace may contain.
-      // A `model_switch` closure appended to a file another compaction had already closed
-      // reads the same way: its own pair sent no request, so the last completed request is
-      // that compaction's, and its summary is what the switch carried.
       const summaryText = extractSummary(lastCompletedRequestText(messages));
       if (summaryText !== "") {
         result.pendingSummary = userText(buildContextSummaryText(summaryText));
@@ -335,38 +308,7 @@ export function resumeTrace(messages: OmniMessage[]): ResumeResult {
     }
   }
 
-  return {
-    ...replayTurns(messages),
-    contextClosed: false,
-    sessionTokens,
-    lastRequestTotal,
-    meta,
-  };
-}
-
-/** The `next_provider` / `next_model_id` pair of a `model_switch` compaction event as a reference; undefined for every other event. */
-function nextModelOf(p: CompactionBeginPayload | CompactionEndPayload): ModelRef | undefined {
-  return p.reason === "model_switch" &&
-    typeof p.next_provider === "string" &&
-    typeof p.next_model_id === "string"
-    ? { provider: p.next_provider, model_id: p.next_model_id }
-    : undefined;
-}
-
-/** What the turn-by-turn pass over one file's records recovers (see `replayTurns`). */
-type ReplayedTurns = Pick<
-  ResumeResult,
-  "history" | "carryOver" | "sessionTurns" | "renderMessages" | "danglingCompaction"
->;
-
-/**
- * The turn-by-turn determination + pending-input convergence over a file's records (see the
- * module comment): completed turns go to history, uncommitted ones are dropped with their
- * original input reclaimed, and what remains pending is the carry-over, pairing backfill
- * applied. Pure over the records, so a closure can read the pending input of the context it
- * closed from the same pass.
- */
-function replayTurns(messages: OmniMessage[]): ReplayedTurns {
+  // —— Turn-by-turn determination + pending-input convergence.
   const history: CompleteModelMessage[] = [];
   /** Pending-input buffer: user-side messages not yet sent with any committed Request. */
   let pending: OmniMessage[] = [];
@@ -524,18 +466,20 @@ function replayTurns(messages: OmniMessage[]): ReplayedTurns {
     pairingBackfill.push(placeholderFor(id));
   }
 
-  const danglingNext = danglingBegin !== null ? nextModelOf(danglingBegin.payload) : undefined;
   return {
     history,
     carryOver: [...pending, ...pairingBackfill],
+    contextClosed: false,
+    sessionTokens,
+    lastRequestTotal,
     sessionTurns,
     renderMessages,
+    meta,
     ...(danglingBegin !== null
       ? {
           danglingCompaction: {
             reason: danglingBegin.payload.reason,
             mode: danglingBegin.payload.mode,
-            ...(danglingNext ? { next: danglingNext } : {}),
           },
         }
       : {}),

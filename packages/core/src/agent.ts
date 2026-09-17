@@ -686,12 +686,12 @@ export class Agent {
    *
    * The resume source is the Session's **latest-index** Trace file: the Session-fixed facts
    * are read from its `session_meta` (the Workspace carries over from the original Session and
-   * cannot be changed), the model is the one that file's context ran on — or, when a completed
-   * `model_switch` compaction closed it, the model that switch was going to (`next_provider` /
-   * `next_model_id` on the closing `compaction_end`; the new context's own file exists only
-   * from its first message) — and the context is assembled from the current Agent State —
-   * keeping the recorded system prompt when the file's context is still open (see below). A
-   * resume never changes the model on its own; switching goes through `Session.switchModel`. The replayed, already-committed history is injected once via AgentHub's
+   * cannot be changed), the model is the one that file's `session_meta` records — a model switch
+   * opens its new context's file at once, so the latest file always names the model the Session
+   * runs on — and the context is assembled from the current Agent State, keeping the recorded
+   * system prompt when the file's context is still open (see below). A resume never changes the
+   * model on its own; switching goes through `Session.switchModel`. The replayed,
+   * already-committed history is injected once via AgentHub's
    * setHistory (used only on resume); any leftover input is rebuilt as carry-over (paired
    * fallback placeholders are synthesized in memory only, never written to the Trace).
    * Messages after resume continue in the original Trace file (the file follows the
@@ -736,16 +736,13 @@ export class Agent {
       );
     }
 
-    // The Model carries over from the Trace (paired reference) and must still be present in the
-    // Project config: the file's own model, unless a completed model switch closed the file —
-    // its target is then the model this Session runs on, recorded nowhere else yet.
-    const recorded: ModelRef = { provider: meta.provider, model_id: meta.model_id };
-    const switched = resumed.contextClosed ? resumed.nextModel : undefined;
-    const ref = switched ?? recorded;
+    // The Model carries over from the Trace (the latest file's paired reference) and must still
+    // be present in the Project config.
+    const ref: ModelRef = { provider: meta.provider, model_id: meta.model_id };
     const modelEntry = getModel(this.projectConfig, ref);
     if (!modelEntry) {
       throw new Error(
-        `${switched ? "The model this Session switched to" : "The original Session's Model"} is not in the Project config: ${formatModelRef(ref)}. Use \`penguin config model add\` to configure it again before resuming.`,
+        `The original Session's Model is not in the Project config: ${formatModelRef(ref)}. Use \`penguin config model add\` to configure it again before resuming.`,
       );
     }
 
@@ -852,8 +849,11 @@ export class Agent {
         pendingTraceRotation: resumed.contextClosed,
         // A closed context is one a completed compaction opened: the same fact drives the
         // deferred Trace rotation above and the "just compacted" compaction reason, but they
-        // are separate meanings and stay separate fields.
-        fromCompaction: resumed.contextClosed,
+        // are separate meanings and stay separate fields. A file past the first was opened by
+        // a compaction too, so one with no completed turn yet — a model switch's eagerly opened
+        // file, or any new context the process died in before its first answer — is just as
+        // freshly compacted (read structurally, from the index, never from its records).
+        fromCompaction: resumed.contextClosed || (located.index > 1 && resumed.sessionTurns === 0),
       },
       resumedHistory: resumed.renderMessages,
     });

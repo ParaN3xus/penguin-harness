@@ -2,16 +2,19 @@
  * chat `/switch-model`: switches the Session's model in place over the server API. Drives
  * the real REPL over a fake stdin against the in-process fake server (same harness as
  * chat-clear.test.ts and chat-thinking.test.ts). The fake answers the contract's three
- * shapes — 202 streaming the paired `model_switch` compaction events, 200 carrying the
- * Session back for one that never ran, and 409 with a code per refusal.
+ * shapes — 202 streaming an ordinary manual compaction pair and then the new context's
+ * `session_meta`, 200 carrying the Session back for one that never ran, and 409 with a code
+ * per refusal. The REPL renders the compaction like any other and learns the new model from
+ * the Session it re-reads.
  */
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Command } from "commander";
-import { compactionBegin, compactionEnd } from "@prismshadow/penguin-core";
+import { compactionBegin, compactionEnd, sessionMeta } from "@prismshadow/penguin-core";
 import { registerChatCommand } from "../src/commands/chat.js";
 import { getMessages } from "../src/i18n.js";
 import { FakeServer } from "./fake-server.js";
+import type { FakeSessionState } from "./fake-server.js";
 
 const t = getMessages("en");
 
@@ -83,27 +86,37 @@ function requestLog(sessionId: string): string[] {
     .map((r) => `${r.method} ${r.path.slice(`/api/sessions/${sessionId}`.length) || "/"}`);
 }
 
-/** A 202 switch whose compaction ends with `status`; the fake moves the model only on completed. */
+/**
+ * A 202 switch whose compaction ends with `status`: a plain manual pair, then — on completed
+ * only — the new context's main-session `session_meta` naming the target, as core streams it.
+ * The fake moves the Session's model only on completed.
+ */
 function streamedSwitch(status: "completed" | "fatal" | "aborted", errorMessage?: string) {
-  return (_session: unknown, target: { provider: string; modelId: string }) => {
-    const next = { provider: target.provider, model_id: target.modelId };
+  return (session: FakeSessionState, target: { provider: string; modelId: string }) => {
+    const completed = status === "completed";
     return {
-      completed: status === "completed",
+      completed,
       messages: [
-        compactionBegin({
-          reason: "model_switch",
-          mode: "summarize",
-          context: 5000,
-          turns: 2,
-          next,
-        }),
+        compactionBegin({ reason: "manual", mode: "summarize", context: 5000, turns: 2 }),
         compactionEnd({
-          reason: "model_switch",
+          reason: "manual",
           mode: "summarize",
           status,
           ...(errorMessage !== undefined ? { errorMessage } : {}),
-          next,
         }),
+        ...(completed
+          ? [
+              sessionMeta({
+                session_id: session.sessionId,
+                provider: target.provider,
+                model_id: target.modelId,
+                model_context_window: "unknown",
+                system_prompt: "",
+                agent_state: "/tmp/agents/default_agent/agent_state",
+                workspace: session.workspace,
+              }),
+            ]
+          : []),
       ],
     };
   };
@@ -133,15 +146,14 @@ describe("chat /switch-model: 202 streams the switch", () => {
     const post = server.requests.find((r) => r.path.endsWith("/switch-model"));
     expect(post?.method).toBe("POST");
     expect(post?.body).toEqual({ provider: "openrouter", modelId: "anthropic/claude-opus-5" });
-    // Streamed wording, then the model line.
-    expect(out).toContain(t.compactionStart("summarize", "model_switch", TARGET));
-    expect(out).toContain(
-      t.compactionStop("summarize", "completed", undefined, undefined, {
-        previous: CURRENT,
-        next: TARGET,
-      }),
-    );
-    expect(out).toContain(t.switchModelDone(CURRENT, TARGET));
+    // The compaction renders as any manual compaction does, then the model line — from the
+    // Session re-read after the stream, not from anything the stream says.
+    const start = out.indexOf(t.compactionStart("summarize", "manual"));
+    const stop = out.indexOf(t.compactionStop("summarize", "completed"));
+    const done = out.indexOf(t.switchModelDone(CURRENT, TARGET));
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(stop).toBeGreaterThan(start);
+    expect(done).toBeGreaterThan(stop);
     // The Session was re-read after the switch, and the local copy follows it: bare
     // /switch-model shows the new model and /clear carries it to the replacement Session.
     const log = requestLog(first!.sessionId);
@@ -151,16 +163,12 @@ describe("chat /switch-model: 202 streams the switch", () => {
     expect(replacement!.modelId).toBe("anthropic/claude-opus-5");
   });
 
-  it("a failed switch says the Session stays on its model and prints no model line", async () => {
+  it("a failed switch prints the plain failed compaction line and no model line; the Session stays on its model", async () => {
     server.switchModel = streamedSwitch("fatal", "the summary does not fit");
     const out = await driveChat(["hello", SWITCH_LINE, "/switch-model", "/exit"]);
     expect(out).toContain(
-      t.compactionStop("summarize", "fatal", undefined, "the summary does not fit", {
-        previous: CURRENT,
-        next: TARGET,
-      }),
+      t.compactionStop("summarize", "fatal", undefined, "the summary does not fit"),
     );
-    expect(out).toContain("still on model-default (prov-default)");
     expect(out).not.toContain(t.switchModelDone(CURRENT, TARGET));
     expect(out).toContain(t.switchModelCurrent(CURRENT));
   });
@@ -171,7 +179,7 @@ describe("chat /switch-model: 200 switches a Session that never ran inline", () 
     server.switchModel = "inline";
     const out = await driveChat([SWITCH_LINE, "/switch-model", "/exit"]);
     expect(out).toContain(t.switchModelDone(CURRENT, TARGET));
-    expect(out).not.toContain("[model switch] compacting");
+    expect(out).not.toContain("[compaction]");
     expect(out).toContain(t.switchModelCurrent(TARGET));
     const session = [...server.sessions.values()][0]!;
     const log = requestLog(session.sessionId);

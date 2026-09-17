@@ -38,12 +38,6 @@
  * half-written drafts (see stream-model's compaction_end handling), so there is nothing left
  * to show.
  *
- * A **model switch** (`reason: "model_switch"`) is the same compaction under its own words: the
- * title names the switch and its state ("Switching model: compacting", then "Switched model" or
- * "Model switch failed") and the detail line names the models — `A → B` while it runs and once
- * it switched, the model the conversation stays on when it did not (see modelSwitchBannerCopy).
- * The body is unchanged.
- *
  * Doesn't show Tokens: the row only needs to state whether compaction happened and whether it
  * succeeded. Compaction's cost lands in different places depending on when it occurs — compaction
  * that happens **mid-turn** counts toward that turn's stats line and cost; compaction **after a
@@ -59,7 +53,6 @@ import { DISCLOSURE_BODY_MD_CLASS, DisclosureRow } from "./disclosure-row";
 import { LiveDuration } from "./live-duration";
 import { Md } from "./md";
 import { StepBanner } from "./step-banner";
-import { modelSwitchBannerCopy } from "./model-switch";
 
 /**
  * One body section: the thinking block's row (status icon + label + wall time + chevron) over
@@ -141,22 +134,6 @@ export function CompactionBanner({ item }: { item: CompactionItem }) {
     </>
   ) : null;
 
-  // A model switch keeps the row's shape and body, and swaps only its words.
-  if (item.reason === "model_switch") {
-    const copy = modelSwitchBannerCopy(item);
-    const state = item.running ? "running" : item.status === "completed" ? "done" : "failed";
-    return (
-      <StepBanner
-        state={state}
-        title={copy.title}
-        {...(copy.detail !== undefined ? { detail: copy.detail } : {})}
-        {...(item.running && item.beginTsMs !== undefined ? { liveSinceMs: item.beginTsMs } : {})}
-        {...(!item.running && item.durationMs !== undefined ? { durationMs: item.durationMs } : {})}
-      >
-        {body}
-      </StepBanner>
-    );
-  }
   // The title says both what runs and that it is running (压缩中 / "Compacting"), as the
   // work-group header's does; no detail line — the body streams behind the chevron, and the
   // raw `summarize`/`discard` wire value never shows.

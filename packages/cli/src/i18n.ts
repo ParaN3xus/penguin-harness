@@ -722,26 +722,19 @@ export interface Messages {
     attempt: number,
     errorCode?: string,
   ): string;
-  /**
-   * compaction start event: indicates compaction in progress (mode is summarize/discard,
-   * reason is context/turns/manual/model_switch). A `model_switch` compaction names the
-   * model it switches to in `next` (a formatted label; absent when the event lacks the pair).
-   */
-  compactionStart(mode: string, reason: string, next?: string): string;
+  /** compaction start event: indicates compaction in progress (mode is summarize/discard, reason is context/turns/manual). */
+  compactionStart(mode: string, reason: string): string;
   /**
    * compaction stop event: the compaction result (status is completed/failed/aborted;
    * completed varies its text by mode). tokens is Token usage (same convention as the stats
    * line: total = Session cumulative, delta = consumed by this compaction, carrying its own
    * sign); when present it is appended at the end of the line, e.g. ` · tokens 14k (+6k)`.
-   * `modelSwitch` marks a `model_switch` compaction: completed = now on `next`, anything else
-   * = still on `previous` (formatted labels; either may be unknown to the renderer).
    */
   compactionStop(
     mode: string,
     status: string,
     tokens?: { total: string; delta: string },
     errorMessage?: string,
-    modelSwitch?: { previous?: string; next?: string },
   ): string;
   /** mcp_connect_begin event: the configured MCP servers are being connected (the first run, or a new context after compaction). */
   mcpConnectStart(servers: string[]): string;
@@ -1549,14 +1542,10 @@ const en: Messages = {
             : kind === "failed"
               ? "the model provider returned an error"
               : "the request failed")(errorCode ?? status)}; sending retry #${attempt}…`,
-  compactionStart: (mode, reason, next) =>
-    reason === "model_switch"
-      ? mode === "discard"
-        ? `[model switch] nothing to summarize; switching to ${next ?? "the new model"}…`
-        : `[model switch] compacting the context, then switching to ${next ?? "the new model"}…`
-      : mode === "discard"
-        ? `[compaction] discarding context (${reason})…`
-        : `[compaction] summarizing context (${reason})…`,
+  compactionStart: (mode, reason) =>
+    mode === "discard"
+      ? `[compaction] discarding context (${reason})…`
+      : `[compaction] summarizing context (${reason})…`,
   mcpConnectStart: (servers) => `[mcp] connecting MCP servers (${servers.join(", ")})…`,
   mcpConnectStop: (durationMs, failures, aborted) =>
     aborted
@@ -1564,30 +1553,22 @@ const en: Messages = {
       : failures.length === 0
         ? `[mcp] connected in ${(durationMs / 1000).toFixed(1)}s`
         : `[mcp] connected in ${(durationMs / 1000).toFixed(1)}s; unavailable: ${failures.map((f) => `${f.server} (${f.error})`).join(", ")}`,
-  compactionStop: (mode, status, tokens, errorMessage, modelSwitch) =>
-    (modelSwitch !== undefined
-      ? status === "completed"
-        ? `[model switch] done; now on ${modelSwitch.next ?? "the new model"}`
-        : `[model switch] ${
-            status === "aborted"
-              ? "aborted"
-              : `failed${errorMessage !== undefined ? ` (${errorMessage})` : ""}`
-          }; still on ${modelSwitch.previous ?? "the current model"}`
-      : status === "completed"
-        ? mode === "discard"
-          ? "[compaction] done; old context discarded"
-          : "[compaction] done; continuing with the summarized context"
-        : status === "aborted"
-          ? "[compaction] aborted; keeping the current context"
-          : `[compaction] failed${errorMessage !== undefined ? ` (${errorMessage})` : ""}; keeping the current context${
-              // retryable = abandoned this time, retried at the next trigger; fatal = a config
-              // or credential change has to come first. Legacy Traces spell both "failed".
-              status === "retryable"
-                ? "; retries at the next trigger"
-                : status === "fatal"
-                  ? "; fix the model configuration to retry"
-                  : ""
-            }`) + (tokens ? ` · tokens ${tokens.total} (${tokens.delta})` : ""),
+  compactionStop: (mode, status, tokens, errorMessage) =>
+    (status === "completed"
+      ? mode === "discard"
+        ? "[compaction] done; old context discarded"
+        : "[compaction] done; continuing with the summarized context"
+      : status === "aborted"
+        ? "[compaction] aborted; keeping the current context"
+        : `[compaction] failed${errorMessage !== undefined ? ` (${errorMessage})` : ""}; keeping the current context${
+            // retryable = abandoned this time, retried at the next trigger; fatal = a config
+            // or credential change has to come first. Legacy Traces spell both "failed".
+            status === "retryable"
+              ? "; retries at the next trigger"
+              : status === "fatal"
+                ? "; fix the model configuration to retry"
+                : ""
+          }`) + (tokens ? ` · tokens ${tokens.total} (${tokens.delta})` : ""),
   compactNothing: () => "[compaction] nothing to compact yet",
   clearDone: () => "[clear] started a fresh session (the previous one is kept and resumable)",
   goalRound: (round) => `[goal] round ${round}`,
@@ -2313,14 +2294,10 @@ const zh: Messages = {
             : kind === "failed"
               ? "模型服务返回错误"
               : "请求失败")(errorCode ?? status)}，正在发起第 ${attempt} 次重试……`,
-  compactionStart: (mode, reason, next) =>
-    reason === "model_switch"
-      ? mode === "discard"
-        ? `[切换模型] 没有需要总结的内容，正在切换到 ${next ?? "新模型"}……`
-        : `[切换模型] 压缩中，完成后切换到 ${next ?? "新模型"}……`
-      : mode === "discard"
-        ? `[压缩] 正在丢弃旧上下文（${reason}）……`
-        : `[压缩] 正在总结压缩上下文（${reason}）……`,
+  compactionStart: (mode, reason) =>
+    mode === "discard"
+      ? `[压缩] 正在丢弃旧上下文（${reason}）……`
+      : `[压缩] 正在总结压缩上下文（${reason}）……`,
   mcpConnectStart: (servers) => `[mcp] 正在连接 MCP Server（${servers.join("、")}）……`,
   mcpConnectStop: (durationMs, failures, aborted) =>
     aborted
@@ -2328,30 +2305,22 @@ const zh: Messages = {
       : failures.length === 0
         ? `[mcp] 连接完成，耗时 ${(durationMs / 1000).toFixed(1)}s`
         : `[mcp] 连接完成，耗时 ${(durationMs / 1000).toFixed(1)}s；不可用：${failures.map((f) => `${f.server}（${f.error}）`).join("、")}`,
-  compactionStop: (mode, status, tokens, errorMessage, modelSwitch) =>
-    (modelSwitch !== undefined
-      ? status === "completed"
-        ? `[切换模型] 已切换到 ${modelSwitch.next ?? "新模型"}`
-        : `[切换模型] ${
-            status === "aborted"
-              ? "已中断"
-              : `切换失败${errorMessage !== undefined ? `（${errorMessage}）` : ""}`
-          }，仍使用 ${modelSwitch.previous ?? "当前模型"}`
-      : status === "completed"
-        ? mode === "discard"
-          ? "[压缩] 完成，旧上下文已丢弃"
-          : "[压缩] 完成，已切换到摘要后的新上下文"
-        : status === "aborted"
-          ? "[压缩] 已中断，保留当前上下文"
-          : `[压缩] 失败${errorMessage !== undefined ? `（${errorMessage}）` : ""}，保留当前上下文${
-              // retryable = abandoned this time, retried at the next trigger; fatal = a config
-              // or credential change has to come first. Legacy Traces spell both "failed".
-              status === "retryable"
-                ? "，下次触发时重试"
-                : status === "fatal"
-                  ? "，需修复模型配置后重试"
-                  : ""
-            }`) + (tokens ? ` · tokens ${tokens.total} (${tokens.delta})` : ""),
+  compactionStop: (mode, status, tokens, errorMessage) =>
+    (status === "completed"
+      ? mode === "discard"
+        ? "[压缩] 完成，旧上下文已丢弃"
+        : "[压缩] 完成，已切换到摘要后的新上下文"
+      : status === "aborted"
+        ? "[压缩] 已中断，保留当前上下文"
+        : `[压缩] 失败${errorMessage !== undefined ? `（${errorMessage}）` : ""}，保留当前上下文${
+            // retryable = abandoned this time, retried at the next trigger; fatal = a config
+            // or credential change has to come first. Legacy Traces spell both "failed".
+            status === "retryable"
+              ? "，下次触发时重试"
+              : status === "fatal"
+                ? "，需修复模型配置后重试"
+                : ""
+          }`) + (tokens ? ` · tokens ${tokens.total} (${tokens.delta})` : ""),
   compactNothing: () => "[压缩] 当前上下文为空，无需压缩",
   clearDone: () => "[清空] 已开启全新 Session（原会话仍保留，可恢复）",
   goalRound: (round) => `[目标] 第 ${round} 轮`,

@@ -503,31 +503,20 @@ describe("session fork", () => {
 
   it("a fork's model is the one of the shard it is cut in, not the model the source runs on now", async () => {
     const { scratch } = await seedSource();
-    // The source switched models: shard 1 closes with a completed model_switch pair naming
-    // the target, shard 2 opens on it, and the source's row already carries the new model.
+    // The source switched models: shard 1 closes with the switch's plain manual pair, shard 2
+    // opens headed by the new model's session_meta, and the source's row already carries it.
     const nextModel = { provider: "custom", model_id: "fork-model-b" };
     const closing = [
       at(
         "2026-08-14T10:01:05.000Z",
-        compactionBegin({
-          reason: "model_switch",
-          mode: "summarize",
-          context: 500,
-          turns: 2,
-          next: nextModel,
-        }),
+        compactionBegin({ reason: "manual", mode: "summarize", context: 500, turns: 2 }),
       ),
       at("2026-08-14T10:01:05.100Z", requestBegin()),
       at("2026-08-14T10:01:05.200Z", assistantText("[summary]summary[/summary]")),
       at("2026-08-14T10:01:05.300Z", requestEnd("completed")),
       at(
         "2026-08-14T10:01:05.400Z",
-        compactionEnd({
-          reason: "model_switch",
-          mode: "summarize",
-          status: "completed",
-          next: nextModel,
-        }),
+        compactionEnd({ reason: "manual", mode: "summarize", status: "completed" }),
       ),
     ];
     await fs.appendFile(

@@ -23,6 +23,7 @@ import {
   sessionMeta,
   tokenUsage,
   toolCall,
+  toolListReady,
   userText,
 } from "../src/omnimessage/index.js";
 import type { OmniMessage, TokenCounts } from "../src/omnimessage/index.js";
@@ -541,178 +542,94 @@ describe("agent.resumeSession system prompt per context", () => {
 
 describe("agent.resumeSession after an in-session model switch", () => {
   const SID = "session-2026-07-06-11-00-00-abcdef02";
-  // The default Project config ships both: the Session starts on the default and switches to MODEL.
+  // The default Project config ships both: the Session starts on ORIGINAL and switches to MODEL.
   const ORIGINAL = { provider: "deepseek", model_id: "deepseek-flash" };
-  const NEXT = { next_provider: MODEL.provider, next_model_id: MODEL.model_id };
+  const SUMMARY = "[context_summary]\nthe story so far\n[/context_summary]";
   const engineStateOf = (session: unknown) =>
     (
       session as {
         engineDeps: {
-          initialState?: { pendingSummary?: OmniMessage; carryOver?: OmniMessage[] };
+          initialState?: {
+            pendingSummary?: OmniMessage;
+            carryOver?: OmniMessage[];
+            sessionTurns?: number;
+            pendingTraceRotation?: boolean;
+          };
         };
       }
     ).engineDeps.initialState;
+  /** File 1: a context on `model` with one completed turn, closed by a completed summarize pair of `reason`. */
+  const closedFile = (
+    model: { provider: string; model_id: string },
+    reason: "manual" | "context",
+  ) => [
+    metaFor(SID, workspace, model),
+    userText("q1"),
+    requestBegin(),
+    assistantText("a1"),
+    requestEnd("completed"),
+    tokenUsage(usage(150), usage(150)),
+    compactionBegin({ reason, mode: "summarize", context: 150, turns: 1 }),
+    userText("COMPACT NOW"),
+    requestBegin(),
+    assistantText("[summary]the story so far[/summary]"),
+    requestEnd("completed"),
+    compactionEnd({ reason, mode: "summarize", status: "completed" }),
+  ];
 
-  it("resumes on the model a completed switch was going to, carrying the summary, before the new context has a file", async () => {
+  it("resumes on the model of the eagerly opened file: history empty, the summary is the carry-over, on the switched-to model", async () => {
     const agent = await createAgent({});
-    await writeTraceFile(tmpRoot, SID, [
-      metaFor(SID, workspace, ORIGINAL),
-      userText("q1"),
-      requestBegin(),
-      assistantText("a1"),
-      requestEnd("completed"),
-      tokenUsage(usage(150), usage(150)),
-      compactionBegin({
-        reason: "model_switch",
-        mode: "summarize",
-        context: 150,
-        turns: 1,
-        next: MODEL,
-      }),
-      userText("COMPACT NOW"),
-      requestBegin(),
-      assistantText("[summary]the story so far[/summary]"),
-      requestEnd("completed"),
-      compactionEnd({
-        reason: "model_switch",
-        mode: "summarize",
-        status: "completed",
-        next: MODEL,
-      }),
-    ]);
+    // The switch closed the original model's context with a plain manual pair, and opened the
+    // target's file at once: its session_meta, its toolset, the summary as its first input.
+    await writeTraceFile(tmpRoot, SID, closedFile(ORIGINAL, "manual"));
+    await writeTraceFile(
+      tmpRoot,
+      SID,
+      [metaFor(SID, workspace, MODEL), toolListReady([]), userText(SUMMARY)],
+      { index: "002" },
+    );
 
     const session = await agent.resumeSession({ sessionId: SID });
     try {
       expect(session.provider).toBe(MODEL.provider);
       expect(session.modelId).toBe(MODEL.model_id);
-      // The context the resume assembles is the switch target's, ready for the deferred
-      // rotation to record it; the closed file's meta still names the original model.
       expect((session.metaMessage.payload as { model_id: string }).model_id).toBe(MODEL.model_id);
-      expect(session.compactability()).toBe("just_compacted");
-      const state = engineStateOf(session);
-      expect((state?.pendingSummary?.payload as { text: string }).text).toBe(
-        "[context_summary]\nthe story so far\n[/context_summary]",
-      );
-      expect(state?.carryOver).toEqual([]);
-    } finally {
-      session.dispose();
-    }
-  });
-
-  it("names the switch target when it is no longer in the Project config", async () => {
-    const agent = await createAgent({});
-    const gone = { provider: "custom", model_id: "vanished-model" };
-    await writeTraceFile(tmpRoot, SID, [
-      metaFor(SID, workspace, ORIGINAL),
-      userText("q1"),
-      requestBegin(),
-      assistantText("a1"),
-      requestEnd("completed"),
-      compactionBegin({
-        reason: "model_switch",
-        mode: "discard",
-        context: 0,
-        turns: 1,
-        next: gone,
-      }),
-      compactionEnd({ reason: "model_switch", mode: "discard", status: "completed", next: gone }),
-    ]);
-    await expect(agent.resumeSession({ sessionId: SID })).rejects.toThrow(
-      /The model this Session switched to is not in the Project config/,
-    );
-  });
-
-  it("a discard switch closure over an unanswered message carries that message to the new model", async () => {
-    const agent = await createAgent({});
-    await writeTraceFile(tmpRoot, SID, [
-      metaFor(SID, workspace, ORIGINAL),
-      userText("q1"),
-      requestBegin(),
-      assistantText("half-writ"),
-      abortEvent(),
-      compactionBegin({
-        reason: "model_switch",
-        mode: "discard",
-        context: 0,
-        turns: 0,
-        next: MODEL,
-      }),
-      compactionEnd({ reason: "model_switch", mode: "discard", status: "completed", next: MODEL }),
-    ]);
-
-    const session = await agent.resumeSession({ sessionId: SID });
-    try {
-      expect(session.modelId).toBe(MODEL.model_id);
-      expect(session.compactability()).toBe("just_compacted");
       const state = engineStateOf(session);
       expect(state?.pendingSummary).toBeUndefined();
+      expect(state?.pendingTraceRotation).toBe(false);
+      expect(state?.sessionTurns).toBe(0);
       expect((state?.carryOver ?? []).map((m) => (m.payload as { text: string }).text)).toEqual([
-        "q1",
+        SUMMARY,
       ]);
+      expect(session.compactability()).toBe("just_compacted");
     } finally {
       session.dispose();
     }
   });
 
-  it("a switch the process died in is closed as retryable, naming its target, and the Session stays on its model", async () => {
+  it("a file a compaction opened, with no completed turn yet, answers just_compacted after a restart", async () => {
     const agent = await createAgent({});
-    const file = await writeTraceFile(tmpRoot, SID, [
-      metaFor(SID, workspace, ORIGINAL),
-      userText("q1"),
-      requestBegin(),
-      assistantText("a1"),
-      requestEnd("completed"),
-      tokenUsage(usage(150), usage(150)),
-      compactionBegin({
-        reason: "model_switch",
-        mode: "summarize",
-        context: 150,
-        turns: 1,
-        next: MODEL,
-      }),
-      userText("COMPACT NOW"),
-      requestBegin(),
-      assistantText("[summary]half a sum"),
-    ]);
+    // An ordinary compaction, then the process died before the new context's first answer: the
+    // file past the first holds the summary and a prompt whose request never completed.
+    await writeTraceFile(tmpRoot, SID, closedFile(MODEL, "context"));
+    await writeTraceFile(
+      tmpRoot,
+      SID,
+      [
+        metaFor(SID, workspace),
+        toolListReady([]),
+        userText(SUMMARY),
+        userText("q2"),
+        requestBegin(),
+        abortEvent(),
+      ],
+      { index: "002" },
+    );
 
     const session = await agent.resumeSession({ sessionId: SID });
     try {
-      expect(session.provider).toBe(ORIGINAL.provider);
-      expect(session.modelId).toBe(ORIGINAL.model_id);
-      expect(session.compactability()).toBe("ok");
-      const last = (await readTrace(file)).at(-1)!;
-      expect(last.payload).toMatchObject({
-        type: "compaction_end",
-        reason: "model_switch",
-        mode: "summarize",
-        status: "retryable",
-        ...NEXT,
-      });
-    } finally {
-      session.dispose();
-    }
-  });
-
-  it("a legacy closure without a target resumes on the file's own model", async () => {
-    const agent = await createAgent({});
-    await writeTraceFile(tmpRoot, SID, [
-      metaFor(SID, workspace, ORIGINAL),
-      userText("q1"),
-      requestBegin(),
-      assistantText("a1"),
-      requestEnd("completed"),
-      compactionBegin({ reason: "manual", mode: "summarize", context: 0, turns: 1 }),
-      userText("COMPACT NOW"),
-      requestBegin(),
-      assistantText("[summary]the story so far[/summary]"),
-      requestEnd("completed"),
-      compactionEnd({ reason: "manual", mode: "summarize", status: "completed" }),
-    ]);
-
-    const session = await agent.resumeSession({ sessionId: SID });
-    try {
-      expect(session.provider).toBe(ORIGINAL.provider);
-      expect(session.modelId).toBe(ORIGINAL.model_id);
+      expect(engineStateOf(session)?.sessionTurns).toBe(0);
+      expect(session.compactability()).toBe("just_compacted");
     } finally {
       session.dispose();
     }

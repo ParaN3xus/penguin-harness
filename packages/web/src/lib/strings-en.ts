@@ -2376,17 +2376,7 @@ Scenarios:
     compactionRunning: (mode: string): string => (mode === "discard" ? "Clearing" : "Compacting"),
     compactionDone: (mode: string): string => (mode === "discard" ? "Cleared" : "Compacted"),
     compactionResult: "Result",
-    modelSwitchRunning: (mode: string): string =>
-      `Switching model: ${mode === "discard" ? "clearing" : "compacting"}`,
-    modelSwitchDone: "Switched model",
-    modelSwitchFailed: "Model switch failed",
-    modelSwitchKept: (status: string, from?: string, errorMessage?: string): string => {
-      const model = from ?? "the previous model";
-      if (status === "aborted") return `aborted, still on ${model}`;
-      return errorMessage !== undefined
-        ? `still on ${model}: ${errorMessage}`
-        : `still on ${model}`;
-    },
+    modelChanged: (from: string, to: string): string => `Model switched · ${from} → ${to}`,
     compactionFailed: (status: string, errorMessage?: string): string => {
       if (status === "aborted") return "aborted, keeping current context";
       const detail = errorMessage !== undefined ? ` (${errorMessage})` : "";

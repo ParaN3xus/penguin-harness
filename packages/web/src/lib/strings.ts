@@ -2382,17 +2382,8 @@ Benchmark：
     compactionDone: (mode: string): string => (mode === "discard" ? "清空完毕" : "压缩完毕"),
     /** The summarize row's second body section (the first reuses `thinking`): the summary the compaction request wrote. */
     compactionResult: "压缩结果",
-    /** A model switch's compaction row (`reason: model_switch`): the title names the switch and its state, the detail line the models — `A → B` while it runs and once it switched, the model it stays on when it did not. */
-    modelSwitchRunning: (mode: string): string =>
-      `切换模型：${mode === "discard" ? "清空中" : "压缩中"}`,
-    modelSwitchDone: "已切换模型",
-    modelSwitchFailed: "切换模型失败",
-    /** Failed-row detail; `from` is absent when the loaded history no longer shows which model the context ran on. */
-    modelSwitchKept: (status: string, from?: string, errorMessage?: string): string => {
-      const model = from ?? "原模型";
-      if (status === "aborted") return `已中断，仍使用 ${model}`;
-      return errorMessage !== undefined ? `仍使用 ${model}：${errorMessage}` : `仍使用 ${model}`;
-    },
+    /** The marker between two contexts on different models (an in-session model switch), naming both by model id. */
+    modelChanged: (from: string, to: string): string => `模型已切换 · ${from} → ${to}`,
     compactionFailed: (status: string, errorMessage?: string): string => {
       if (status === "aborted") return "已中断，保留当前上下文";
       const detail = errorMessage !== undefined ? `（${errorMessage}）` : "";

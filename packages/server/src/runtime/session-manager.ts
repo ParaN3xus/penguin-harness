@@ -21,7 +21,7 @@
  *     on completion (including errors) resets to idle and pushes a `task_state` server
  *     event. A model switch (startSwitch) is a compaction whose next context opens on
  *     another model: the entry's (provider, modelId) — the pair usage is attributed to —
- *     and the index row follow it;
+ *     and the index row follow it, moving as the new context's session_meta passes;
  *   - Approval registration and interrupt convergence: each approval decision re-reads
  *     approval_mode from the DB (takes effect immediately); an interrupt first
  *     converges pending approvals to deny, then aborts.
@@ -47,7 +47,6 @@ import type {
   BackgroundCommandInfo,
   BackgroundSubagentInfo,
   CompactAvailability,
-  CompactionEndPayload,
   ControlEnvContext,
   ModelSwitchResult,
   OmniMessage,
@@ -161,21 +160,6 @@ function switchRefusal(err: unknown, ref: ModelRefDto): HttpError {
   return new HttpError(409, "model_unavailable", message);
 }
 
-/**
- * The target a model switch completed on — read off its `compaction_end` (`reason:
- * "model_switch"`, `status: "completed"`, `next_provider` / `next_model_id`) as it passes
- * through the drive; null for every other message, a subagent's compaction included.
- */
-function completedSwitchTarget(msg: OmniMessage): ModelRefDto | null {
-  if (msg.type !== "event_msg" || (msg.origin !== undefined && msg.origin.length > 0)) return null;
-  const p = msg.payload as Partial<CompactionEndPayload>;
-  if (p.type !== "compaction_end" || p.reason !== "model_switch" || p.status !== "completed") {
-    return null;
-  }
-  if (typeof p.next_provider !== "string" || typeof p.next_model_id !== "string") return null;
-  return { provider: p.next_provider, modelId: p.next_model_id };
-}
-
 /** The model a runtime Session reports itself on, or null for one that reports none (test fakes). */
 function runtimeModelOf(session: RuntimeSession): ModelRefDto | null {
   const { provider, modelId } = session;
@@ -204,10 +188,12 @@ export interface RuntimeSession {
   readonly modelId?: string;
   /**
    * Switches the Session's model in place (core `Session.switchModel`): compacts on the current
-   * model, then opens the next context on the target; the stream is the compaction pair with
-   * `reason: "model_switch"`, and the return value says whether the Session is on the target
-   * now. Throws before its first event for a target that cannot be switched to. Optional: test
-   * fakes may omit it, reading as "switching is not available".
+   * model, then opens the next context on the target. The stream is an ordinary manual
+   * compaction pair (none when the context was just compacted), then the new context's opener
+   * records and its main-session `session_meta`, whose `provider` / `model_id` name the target
+   * — the getters above answer it by then; the return value says whether the Session is on the
+   * target now. Throws before its first event for a target that cannot be switched to.
+   * Optional: test fakes may omit it, reading as "switching is not available".
    */
   switchModel?(opts: {
     provider: string;
@@ -510,7 +496,7 @@ interface RuntimeEntry {
   /**
    * The Session's current model (provider group paired with modelId): what the next drive
    * attributes usage to. Loaded from the runtime's own answer (falling back to the row), moved
-   * by `startSwitch` as its completed `compaction_end` passes, and kept in step with the row.
+   * by `startSwitch` as the new context's `session_meta` passes, and kept in step with the row.
    */
   provider: string;
   modelId: string;
@@ -1365,20 +1351,25 @@ export class SessionManager {
    * `model_unavailable` (its client cannot be constructed — no credential, or a runtime with
    * no switch seam) and `compaction_not_configured` (see `switchRefusal`). Two ways out:
    *
-   * - `switched: false` — a driven run like a compaction: status `compacting`, the paired
-   *   `compaction_begin` / `compaction_end` (`reason: "model_switch"`) on the stream, idle when
-   *   it ends. The row and the entry move to the target the moment the completed end passes
-   *   through the drive — ahead of its publish, so a client that refetches the Session on that
-   *   event reads the new model — and take the runtime's own answer once the run is over (see
-   *   `switchStream`). A compaction that fails or is aborted leaves both where they were;
+   * - `switched: false` — a driven run like a compaction: status `compacting`, idle when it
+   *   ends. The stream is an ordinary manual compaction pair when the context had something to
+   *   close (none for a context a compaction had just closed), then the new context's opener
+   *   records and its `session_meta`. The row and the entry move to the target the moment that
+   *   meta passes through the drive — ahead of its publish, so a client that refetches the
+   *   Session on that record reads the new model — and take the runtime's own answer once the
+   *   run is over (see `switchStream`). A compaction that fails or is aborted yields no meta
+   *   and leaves both where they were;
    * - `switched: true` — a Session that never ran has no context to compact: core re-assembled
    *   its first context on the target inside this call, nothing was streamed, and the row
    *   already carries the new pair (the route answers with the fresh DTO).
    *
    * Core decides between the two before its first event, so the head of its stream tells them
-   * apart: pulled here, under the lock, and handed back to the drive. Usage: the drive's
-   * context is fixed at run start, so the switch's compaction request bills to the model that
-   * served it, and the next run's requests to the new one.
+   * apart: pulled here, under the lock, and handed back to the drive. The head comes promptly
+   * either way: a compaction's begin, or — for a context just compacted, which streams no pair
+   * — the opener's first record (`mcp_connect_begin` or `tool_list_ready`), published as soon
+   * as the toolset is being built. Usage: the drive's context is fixed at run start, so the
+   * switch's compaction request bills to the model that served it, and the next run's requests
+   * to the new one.
    */
   async startSwitch(
     sessionId: string,
@@ -1448,11 +1439,13 @@ export class SessionManager {
 
   /**
    * The drive stream of a model switch: the head `startSwitch` already pulled, then the rest of
-   * core's generator. The switch's completed `compaction_end` moves the row and the entry to its
-   * `next_*` pair before it goes on to be published, and the runtime's own answer is adopted
-   * once the generator is done — still inside the drive, ahead of the idle flip, so a client
-   * that refetches on idle reads what the next run will actually bill to (an opener that failed
-   * after the end was recorded keeps the runtime, and so the row, on the model it was on).
+   * core's generator. A completed switch streams the new context's main-session `session_meta`
+   * last; core has adopted that context by the time it yields it, so as the meta passes — before
+   * it goes on to be published — the row and the entry take the runtime's model. The runtime's
+   * answer is adopted again once the generator is done — still inside the drive, ahead of the
+   * idle flip, so a client that refetches on idle reads what the next run will actually bill to
+   * (and a runtime that streams no meta, a test fake, is still followed). A switch that failed
+   * yields no meta and keeps the runtime, and so the row, on the model it was on.
    */
   private async *switchStream(
     entry: RuntimeEntry,
@@ -1462,8 +1455,9 @@ export class SessionManager {
     try {
       let msg = head;
       for (;;) {
-        const target = completedSwitchTarget(msg);
-        if (target) this.adoptEntryModel(entry, target);
+        if (isSessionMeta(msg) && (msg.origin === undefined || msg.origin.length === 0)) {
+          this.syncEntryModel(entry);
+        }
         yield msg;
         const next = await rest.next();
         if (next.done) break;
@@ -2125,7 +2119,7 @@ export class SessionManager {
             entry.pendingSteering.shift();
             this.publishState(entry, entry.status);
           }
-        } else if (isSessionMeta(msg)) {
+        } else if (isSessionMeta(msg) && msg.origin !== undefined && msg.origin.length > 0) {
           // Subagent registration is only a "side effect" — it must never interrupt the
           // main run flow on error: wrap the whole thing in a defensive try/catch.
           try {
@@ -2272,8 +2266,10 @@ export class SessionManager {
     msg: OmniMessage,
     children: Map<string, ChildSession>,
   ): ChildSession | null {
-    if (!isSessionMeta(msg)) return null;
-    const childSid = msg.origin![msg.origin!.length - 1]!;
+    // A child's meta only: the main session's own session_meta (no origin), which the stream
+    // carries when a model switch opens a new context, names no child to register.
+    if (!isSessionMeta(msg) || msg.origin === undefined || msg.origin.length === 0) return null;
+    const childSid = msg.origin[msg.origin.length - 1]!;
     if (children.has(childSid)) return null;
     const p = msg.payload as SessionMetaPayload;
     const agentId = path.basename(path.dirname(p.agent_state));

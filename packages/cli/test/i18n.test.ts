@@ -86,30 +86,11 @@ describe("getMessages", () => {
       expect(m.switchModelUnavailable("b (q)", "")).not.toMatch(/[:：]$/);
       expect(m.switchModelBusy().length).toBeGreaterThan(0);
       expect(m.switchModelNoCompaction().length).toBeGreaterThan(0);
-      // The compaction lines of a switch name the target, and the model a failure stays on.
-      expect(m.compactionStart("summarize", "model_switch", "b (q)")).toContain("b (q)");
-      expect(m.compactionStart("discard", "model_switch", "b (q)")).toContain("b (q)");
-      const sw = { previous: "a (p)", next: "b (q)" };
-      expect(m.compactionStop("summarize", "completed", undefined, undefined, sw)).toContain(
-        "b (q)",
-      );
-      for (const status of ["failed", "fatal", "retryable", "aborted"]) {
-        const line = m.compactionStop("summarize", status, undefined, "boom", sw);
-        expect(line).toContain("a (p)");
-        expect(line).not.toContain("b (q)");
-      }
-      // A non-switch compaction keeps its own wording.
-      expect(m.compactionStart("summarize", "manual")).not.toBe(
-        m.compactionStart("summarize", "model_switch", "b (q)"),
-      );
     }
     // Two languages, not one copied twice.
     expect(zh.switchModelDone("a", "b")).not.toBe(en.switchModelDone("a", "b"));
     expect(zh.switchModelBusy()).not.toBe(en.switchModelBusy());
     expect(zh.switchModelNoCompaction()).not.toBe(en.switchModelNoCompaction());
-    expect(
-      zh.compactionStop("summarize", "completed", undefined, undefined, { next: "b" }),
-    ).not.toBe(en.compactionStop("summarize", "completed", undefined, undefined, { next: "b" }));
   });
 
   it("server-backed command families exist in both languages (spot checks)", () => {

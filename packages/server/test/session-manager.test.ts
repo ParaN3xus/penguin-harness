@@ -1028,10 +1028,10 @@ describe("session-manager", () => {
   });
 
   it("load reconciles the row's model with the runtime's: a Session that switched and crashed before the row update resumes on the new model, and the row follows", async () => {
-    // The Trace is the durable record of a switch (its completed compaction_end names the
-    // target); the row is a cache of it that a crash in between leaves stale. The loader
-    // resumes on the Trace's model, so what it reports wins — for the entry (usage attribution)
-    // and for the row (what GET /sessions/:id shows).
+    // The Trace is the durable record of a switch (the file it opens is headed by the new
+    // context's session_meta); the row is a cache of it that a crash in between leaves stale.
+    // The loader resumes on the Trace's model, so what it reports wins — for the entry (usage
+    // attribution) and for the row (what GET /sessions/:id shows).
     sessions.updateApprovalMode("session-1", "allow-all");
     const resumed: RuntimeSession = {
       ...approvalFakeSession("session-1"),

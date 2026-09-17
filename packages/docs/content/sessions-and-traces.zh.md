@@ -87,11 +87,11 @@ Trace 是恢复的唯一事实来源，没有独立的会话数据库需要与�
 
 恢复的前提是 Workspace 与模型仍然存在。恢复保证的是结构合法性：只回放已提交的轮次，`tool_call` 与 `tool_call_output` 配对完整；未完成的模型输出（thinking、文本）允许丢失。异常退出留下的截断末行会被容忍并忽略；文件中间的损坏行（如写入器追加串行化之前受损的存量文件）会被跳过并在 stderr 给出诊断，其余可解析的记录全部保留。实现见 `packages/core/src/trace/resume.ts`。
 
-特殊情形：若最新 Trace 文件以一次完成的压缩收尾，则该上下文已整体关闭——恢复从空上下文开始（收尾的若是一次完成的模型切换，新上下文开在其 `next_provider` / `next_model_id` 指定的模型上）；summarize 模式下会重建 `[context_summary]` 摘要，前置到恢复后第一轮输入中（旧 Trace 中早期的尖括号 `<summary>` 形式仍可识别）。这个空上下文与压缩开启的上下文一样开启：按当前 Agent State 整体装配——提示词、工具集、vault 与运行参数——而不是沿用已关闭文件里记录的提示词（见[上下文压缩](/agent-loop)）。未关闭的上下文则相反：提示词沿用该文件记录的原文，工具、Environment 与 vault 只能取自当前 Agent State——Trace 不记录可执行配置。
+特殊情形：若最新 Trace 文件以一次完成的压缩收尾，则该上下文已整体关闭——恢复从空上下文开始；summarize 模式下会重建 `[context_summary]` 摘要，前置到恢复后第一轮输入中（旧 Trace 中早期的尖括号 `<summary>` 形式仍可识别）。这个空上下文与压缩开启的上下文一样开启：按当前 Agent State 整体装配——提示词、工具集、vault 与运行参数——而不是沿用已关闭文件里记录的提示词（见[上下文压缩](/agent-loop)）。未关闭的上下文则相反：提示词沿用该文件记录的原文，工具、Environment 与 vault 只能取自当前 Agent State——Trace 不记录可执行配置。
 
 ## 会话内切换模型
 
-Web 活跃会话工具栏的模型选择器在同一 Session 内换模型。切换是一次上下文轮换：先用当前模型对上下文做 summarize 压缩（无视 Agent 的 `compaction.mode: discard`——摘要要带到新模型），成功后在目标模型上开启新上下文、轮转到新的 Trace 文件，其 `session_meta` 记录该上下文的模型；压缩失败、被中断，或摘要放不进目标模型的上下文窗口（以 `fatal` 结束），都保持原模型。这对 `compaction_begin` / `compaction_end` 事件带 `reason: "model_switch"` 与 `next_provider` / `next_model_id`，恢复据此选模型。目标模型须在 Project 配置中且可构造（凭据齐全），否则切换在发出任何请求前即被拒绝；从未运行过的 Session 没有上下文可压缩，直接切换、不写入任何内容。
+Web 活跃会话工具栏的模型选择器在同一 Session 内换模型。切换是一次上下文轮换：先用当前模型对上下文做 summarize 压缩（无视 Agent 的 `compaction.mode: discard`——摘要要带到新模型），成功后在目标模型上开启新上下文、轮转到新的 Trace 文件，其 `session_meta` 记录该上下文的模型；压缩失败、被中断，或摘要放不进目标模型的上下文窗口（以 `fatal` 结束），都保持原模型。这次压缩是普通的 `manual` 压缩——`compaction_begin` / `compaction_end` 事件对不记录任何模型，刚压缩过的上下文也不再产出第二对事件。切换完成时即开新 Trace 文件，以 `session_meta` 开头（summarize 模式下随后是摘要），这条记录同时推入输出流；恢复从这一最新文件读取模型，因此切换后立即重启的 Session 仍运行在新模型上，并带着待发的摘要。目标模型须在 Project 配置中且可构造（凭据齐全），否则切换在发出任何请求前即被拒绝；从未运行过的 Session 没有上下文可压缩，直接切换、不写入任何内容。
 
 ## 换模型开新会话（/model）
 

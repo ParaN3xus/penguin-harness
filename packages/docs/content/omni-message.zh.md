@@ -43,7 +43,7 @@ interface SessionMetaPayload {
 }
 ```
 
-session_meta 描述**一个模型上下文**：模型与 Workspace 在 Session 生命周期内不可变，系统提示词则按上下文固定——压缩轮转出的新文件以携带新上下文提示词的 `session_meta` 开头——该提示词按当时的 Agent State 装配（见[上下文压缩](/agent-loop)）；恢复 Session 时引擎直接以最新文件中的这条消息为运行时配置，见 [Session 与 Trace](/sessions-and-traces)。思考等级不在此列：它是每请求参数——Session 钉住值（软限制，自下一次请求生效、允许中途更换），未钉住取上下文开启时读到的 Agent 配置缺省——不作任何记录；旧 Trace 中出现的 `thinking_level` 字段仅作展示，不再读取。
+session_meta 描述**一个模型上下文**：Workspace 在 Session 生命周期内不可变，模型与系统提示词则按上下文固定——压缩轮转出的新文件以携带新上下文提示词与所用模型的 `session_meta` 开头——该提示词按当时的 Agent State 装配（见[上下文压缩](/agent-loop)）；会话内切换模型时新上下文开在另一个模型上，所用模型只记在这条记录里；恢复 Session 时引擎直接以最新文件中的这条消息为运行时配置，见 [Session 与 Trace](/sessions-and-traces)。思考等级不在此列：它是每请求参数——Session 钉住值（软限制，自下一次请求生效、允许中途更换），未钉住取上下文开启时读到的 Agent 配置缺省——不作任何记录；旧 Trace 中出现的 `thinking_level` 字段仅作展示，不再读取。
 
 工具 schema **不在 meta 里**：工具集要等 MCP Server 连接完成才可知，而 meta 不应等待——完整工具定义在首次 run 时以独立的 `tool_list_ready` 事件下发，压缩开启的每个上下文则在其 Trace 文件头部、紧随该上下文的 `session_meta` 之后再发一次（见 event_msg）。拆分前的旧版 Trace 在 meta 里内嵌 `tools` 字段，该字段已明确不再读取（旧 Trace 的工具记录不再展示）。
 

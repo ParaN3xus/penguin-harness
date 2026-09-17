@@ -1738,17 +1738,21 @@ export interface GoalResponse {
 
 /**
  * `POST /api/sessions/:sessionId/switch-model`: switch this Session to another model in place.
- * The switch compacts first on the current model (always summarize), then opens the next model
- * context on the target. It answers 202 with a {@link TaskCreateResponse} and streams like a
- * manual compaction — the Session status is `compacting`, and the paired `compaction_begin` /
- * `compaction_end` events carry `reason: "model_switch"` plus `next_provider` / `next_model_id`.
- * Only a `compaction_end` with `status: "completed"` means the switch happened; any other status
- * leaves the Session on its current model. Refusals are 409 with a code per reason:
- * `task_in_progress` / `compacting` (busy), `same_model`, `model_not_configured` (the target is not in the
- * Project config), `model_unavailable` (the target cannot be constructed, e.g. no credential),
- * `compaction_not_configured`. A Session that never ran has no context to compact: its switch
- * completes inside the request, which then answers 200 with a {@link SessionResponse} carrying
- * the updated model instead of 202 — no events are streamed for it.
+ * The switch compacts first on the current model (always summarize when there is a completed
+ * turn), then opens the next model context on the target. It answers 202 with a
+ * {@link TaskCreateResponse} and streams, the Session status `compacting`: an ordinary manual
+ * compaction pair (summarize, or discard for a context with no completed turn) when the context
+ * had something to close, then the new context's opener records and its `session_meta`, whose
+ * `provider` / `model_id` name the model the Session now runs on — the Session reads report the
+ * new pair from that record on, and `task_state` turns idle after it. A compaction that ends
+ * other than `completed` means no switch: no `session_meta` follows and the Session keeps its
+ * model. A Session just compacted and not written on since streams no pair — only the opener
+ * records and the `session_meta`. Refusals are 409 with a code per reason:
+ * `task_in_progress` / `compacting` (busy), `same_model`, `model_not_configured` (the target is
+ * not in the Project config), `model_unavailable` (the target cannot be constructed, e.g. no
+ * credential), `compaction_not_configured`. A Session that never ran has no context to compact:
+ * its switch completes inside the request, which then answers 200 with a
+ * {@link SessionResponse} carrying the updated model instead of 202 — nothing is streamed for it.
  */
 export interface SessionSwitchModelRequest {
   /** Provider group of the target model. */

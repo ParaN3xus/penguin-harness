@@ -310,13 +310,12 @@ export function requestEnd(
   });
 }
 
-/** compaction begin event: carries the trigger reason, mode, current context usage, and cumulative Session turn count — and, for a `model_switch`, the model the next context opens on. */
+/** compaction begin event: carries the trigger reason, mode, current context usage, and cumulative Session turn count. */
 export function compactionBegin(args: {
   reason: CompactionReason;
   mode: CompactionMode;
   context: number;
   turns: number;
-  next?: Pick<SessionMetaPayload, "provider" | "model_id">;
 }): OmniMessage<CompactionBeginPayload> {
   return event({
     type: "compaction_begin",
@@ -324,19 +323,10 @@ export function compactionBegin(args: {
     mode: args.mode,
     context: args.context,
     turns: args.turns,
-    ...nextModelFields(args.next),
   });
 }
 
-/** The `next_provider` / `next_model_id` pair of a `model_switch` compaction event (the target's (provider, model_id) reference, spelled as session_meta spells it); nothing for every other reason. */
-function nextModelFields(next: Pick<SessionMetaPayload, "provider" | "model_id"> | undefined): {
-  next_provider?: string;
-  next_model_id?: string;
-} {
-  return next !== undefined ? { next_provider: next.provider, next_model_id: next.model_id } : {};
-}
-
-/** compaction end event: carries the compaction result (non-`completed` means compaction was abandoned and the original context is kept), plus its share of the RetryDetail block (final attempt ordinal; last error_message detail on failures) — and, for a `model_switch`, the model the next context opens on. */
+/** compaction end event: carries the compaction result (non-`completed` means compaction was abandoned and the original context is kept), plus its share of the RetryDetail block (final attempt ordinal; last error_message detail on failures). */
 export function compactionEnd(args: {
   reason: CompactionReason;
   mode: CompactionMode;
@@ -344,7 +334,6 @@ export function compactionEnd(args: {
   attempt?: number;
   errorCode?: ErrorCode;
   errorMessage?: string;
-  next?: Pick<SessionMetaPayload, "provider" | "model_id">;
 }): OmniMessage<CompactionEndPayload> {
   return event({
     type: "compaction_end",
@@ -354,7 +343,6 @@ export function compactionEnd(args: {
     ...(args.attempt !== undefined ? { attempt: args.attempt } : {}),
     ...(args.errorCode !== undefined ? { error_code: args.errorCode } : {}),
     ...(args.errorMessage !== undefined ? { error_message: args.errorMessage } : {}),
-    ...nextModelFields(args.next),
   });
 }
 

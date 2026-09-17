@@ -529,63 +529,6 @@ describe("StreamRenderer", () => {
     );
   });
 
-  it("words a model_switch compaction as the switch: target on start, new model on success, the model it stays on otherwise", () => {
-    const { stream, text } = collector();
-    const r = new StreamRenderer(stream, t);
-    const b = { provider: "openrouter", model_id: "anthropic/claude-opus-5" };
-    const c = { provider: "deepseek", model_id: "deepseek-v4-pro" };
-    // The model it stays on comes from the context's session_meta, never rendered itself.
-    r.handle(
-      sessionMeta({
-        session_id: "s",
-        provider: "custom",
-        model_id: "m-a",
-        model_context_window: 1,
-        system_prompt: "sp",
-        agent_state: "/a",
-        workspace: "/w",
-      }),
-    );
-    const sw = (next: typeof b) => ({ reason: "model_switch" as const, next });
-    r.handle(compactionBegin({ ...sw(b), mode: "summarize", context: 150, turns: 3 }));
-    r.handle(
-      compactionEnd({ ...sw(b), mode: "summarize", status: "fatal", errorMessage: "too big" }),
-    );
-    r.handle(compactionBegin({ ...sw(b), mode: "summarize", context: 150, turns: 3 }));
-    r.handle(compactionEnd({ ...sw(b), mode: "summarize", status: "completed" }));
-    // A completed switch moves the renderer onto the new model; an owner can also set it.
-    r.handle(compactionBegin({ ...sw(c), mode: "discard", context: 10, turns: 0 }));
-    r.handle(compactionEnd({ ...sw(c), mode: "discard", status: "aborted" }));
-    r.setModel("zhipu", "glm-5");
-    r.handle(compactionEnd({ ...sw(c), mode: "summarize", status: "retryable" }));
-    expect(stripAnsi(text())).toBe(
-      [
-        "[model switch] compacting the context, then switching to anthropic/claude-opus-5 (openrouter)…",
-        "[model switch] failed (too big); still on m-a (custom)",
-        "[model switch] compacting the context, then switching to anthropic/claude-opus-5 (openrouter)…",
-        "[model switch] done; now on anthropic/claude-opus-5 (openrouter)",
-        "[model switch] nothing to summarize; switching to deepseek-v4-pro (deepseek)…",
-        "[model switch] aborted; still on anthropic/claude-opus-5 (openrouter)",
-        "[model switch] failed; still on glm-5 (zhipu)",
-        "",
-      ].join("\n"),
-    );
-  });
-
-  it("a model_switch failure with no known model says the current model", () => {
-    const { stream, text } = collector();
-    const r = new StreamRenderer(stream, t);
-    r.handle(
-      compactionEnd({
-        reason: "model_switch",
-        mode: "summarize",
-        status: "fatal",
-        next: { provider: "deepseek", model_id: "deepseek-v4-pro" },
-      }),
-    );
-    expect(stripAnsi(text())).toBe("[model switch] failed; still on the current model\n");
-  });
-
   it("the thinking and summary streamed inside a compaction span stay off the terminal (issue #290)", () => {
     // Between the paired events the stream carries the compaction request's thinking and the
     // summary being written as ordinary partial_thinking / partial_text; the CLI keeps its

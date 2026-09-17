@@ -190,7 +190,6 @@ export function registerChatCommand(program: Command, t: Messages): void {
         session.thinkingLevel ?? t.chatThinkingConfigured();
 
       let renderer = new StreamRenderer(out, t, { collapseToolOutput: !verbose });
-      renderer.setModel(session.provider, session.modelId);
 
       out.write(
         `${t.header("chat", VERSION, session.agentId, session.workspace, session.modelId)}\n` +
@@ -463,11 +462,11 @@ export function registerChatCommand(program: Command, t: Messages): void {
 
       /**
        * `/switch-model <provider> <model_id>`: POST /switch-model through runTurn. A 202
-       * streams like /compact (the paired compaction events say how the switch went); a 200
-       * carries the Session back — it never ran, so it switched inside the request. Either
-       * way the Session is re-read afterwards: the model line prints only when it actually
-       * changed, since a failed compaction already said why it did not. A 409 prints one
-       * localized line per refusal code.
+       * streams like /compact — an ordinary compaction, rendered as any compaction is (none
+       * for a context just compacted); a 200 carries the Session back — it never ran, so it
+       * switched inside the request. Either way the Session is re-read afterwards: the model
+       * line prints only when it actually changed, since a failed compaction already said why
+       * it did not. A 409 prints one localized line per refusal code.
        */
       const switchModel = async (target: ModelTarget): Promise<void> => {
         const previous = session;
@@ -496,7 +495,6 @@ export function registerChatCommand(program: Command, t: Messages): void {
         }
         if (streamed) resumable = true;
         session = await getSessionInfo(client, previous.sessionId);
-        renderer.setModel(session.provider, session.modelId);
         if (session.provider !== previous.provider || session.modelId !== previous.modelId) {
           out.write(
             `${t.switchModelDone(
@@ -606,7 +604,6 @@ export function registerChatCommand(program: Command, t: Messages): void {
               if (resumable) out.write(`${dim(t.resumeHint(resumeCommand(session.sessionId)))}\n`);
               session = pin ? { ...next, thinkingLevel: pin } : next;
               renderer = new StreamRenderer(out, t, { collapseToolOutput: !verbose });
-              renderer.setModel(session.provider, session.modelId);
               resumable = false;
               out.write(`${t.clearDone()}\n`);
             } else if (text === "/goal" || text.startsWith("/goal:") || text.startsWith("/goal ")) {

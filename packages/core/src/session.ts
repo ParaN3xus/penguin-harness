@@ -810,11 +810,11 @@ export class Session {
    * Switches the model this Session runs on, inside the Session: the running context is
    * compacted on the model it is on — always in **summarize** mode, whatever the Agent's
    * `compaction.mode` says, because the summary is what the new model continues from — and the
-   * next context opens on the target, whose `session_meta` heads the rotated Trace file. The
-   * paired compaction events carry `reason: "model_switch"` and the target as `next_provider` /
-   * `next_model_id`; the completed end is the durable record of the switch until the new
-   * context's first message (a resume reads the model from it — see trace/resume.ts). Only
-   * callable at a Task boundary, like `compact()`.
+   * next context opens on the target. The compaction is an ordinary `manual` one; the model is
+   * recorded only by the new context's `session_meta`. The new context's Trace file opens at
+   * once, headed by that `session_meta` — which a resume reads the model from — and the record
+   * is also yielded, last, so the stream names the model the Session now runs on. Only callable
+   * at a Task boundary, like `compact()`.
    *
    * The target is validated first — a pair the Project config on disk does not have, or a model
    * whose credential is missing, throws before any event is produced — and the same model as the
