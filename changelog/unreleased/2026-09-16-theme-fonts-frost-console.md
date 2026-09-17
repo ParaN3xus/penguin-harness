@@ -2,41 +2,62 @@
 
 - **Date:** 2026-09-16
 - **Type:** feature
-- **Scope:** `ui`
+- **Scope:** `ui`, `web`
 - **PR:** [#761](https://github.com/Prism-Shadow/penguin-harness/pull/761)
 
 [中文版](2026-09-16-theme-fonts-frost-console.zh.md)
 
-`@prismshadow/penguin-ui` gained the fonts of all three themes and the token values of its two new
-themes, Frost (`modern`, rounded and frosted, after sierra.ai) and Console (`geek`, square hairlines
-and mono labels, after e2b.dev). Nothing in the Web App names a new theme or font yet, so the app
-looks exactly as before.
+`@prismshadow/penguin-ui` gained the fonts of all three themes, the token values of its two new
+themes, Frost (`modern`, after sierra.ai) and Console (`geek`, after e2b.dev), and the closed list of
+style hooks the themes give recipes to. Nothing in the Web App names a new theme yet, so the app
+looks as before, apart from a font credit at the foot of the account menu.
 
 ## Fonts
 
-- Eight fontsource packages, all SIL Open Font License 1.1: Mona Sans and JetBrains Mono (Primer,
-  declared for the later Primer polish), Geist and Geist Mono (Frost), IBM Plex Sans, IBM Plex Sans
-  Condensed and Commit Mono (Console), and Noto Sans SC for Chinese in every theme.
-- `fonts/github.css`, `modern.css` and `geek.css` declare each theme's Latin faces by hand, latin and
-  latin-ext only and woff2 only; `fonts/cjk.css` imports fontsource's Noto Sans SC stylesheet, 101
-  `unicode-range` slices. A page downloads only the faces the active theme names and the Noto slices
-  its text touches.
-- A build carries about 0.44 MB of Latin faces and 4.5 MB of Noto Sans SC.
-- `scripts/sync-font-licenses.mjs` mirrors each font package's licence into `fonts/LICENSES/`
-  (`--check` reports drift), and the `penguinUi()` Vite plugin emits those texts into every build as
-  `fonts-licenses/<package>.txt`.
+- Six fontsource packages, all SIL Open Font License 1.1: Mona Sans and JetBrains Mono (declared
+  for the later Primer polish; Frost already sets code in JetBrains Mono), IBM Plex Sans, IBM Plex
+  Sans Condensed (600 only) and Commit Mono for Console, and Noto Sans SC for Chinese under Primer
+  and Console.
+- Frost sets Latin and Chinese alike in MiSans by Xiaomi, at weights 400 and 500. MiSans has no
+  official npm package, so `scripts/build-misans.py` cuts MiSans Regular and Medium from Xiaomi's
+  official package into 99 `unicode-range` WOFF2 slices per weight under `fonts/misans/`, following
+  Noto Sans SC's slice partition, and reads every slice back to confirm that its glyphs, features and
+  name records are the original's. The rare ideographs outside that partition are not shipped.
+  Frost turns weight synthesis off, so a bold request renders in Medium.
+- A page downloads only the faces its theme names and the slices its text touches: on a specimen
+  page, Frost fetched 93 KB of fonts for English and 627 KB for Chinese. A build carries 9.1 MB of
+  fonts: 4.26 MB of MiSans, 4.52 MB of Noto Sans SC and 0.32 MB of Latin faces.
+- `scripts/sync-font-licenses.mjs` mirrors each fontsource licence into `fonts/LICENSES/`. The MiSans
+  Font Intellectual Property License Agreement is transcribed there from Xiaomi's PDF and listed in
+  `fonts/vendored-fonts.json`. The `penguinUi()` Vite plugin emits every licence text into each build
+  as `fonts-licenses/<name>.txt`, and `fonts/README.md` records the families, their licences, the
+  bytes and how to update them.
+- The Web App's account menu ends with a line crediting MiSans, as its licence requires, in both
+  languages.
+
+## Tokens and hooks
+
+- The token contract holds 189 names: `--ui-radius-control` (the pressable control's shape, bridged
+  as `rounded-control`; Primer 0.375rem, Frost a pill, Console 0), `--ui-stack-0` and `--ui-stack-4`
+  were added, and `--ui-glass-highlight` was removed. `themes/github.css` declares the three new names
+  at the app's current values.
+- `hooks.ts` lists the six style hooks, `ui-glass`, `ui-eyebrow`, `ui-display`, `ui-live`, `ui-frame`
+  and `ui-underline-nav`, with the markup each recipe relies on.
+- `theme.css` limits what a button, link or tab transitions to colour, background and border
+  colour, opacity and box-shadow.
 
 ## Themes
 
-- `themes/modern.css` and `themes/geek.css` define all 187 tokens in light and dark, plus the gray and
+- `themes/modern.css` and `themes/geek.css` define every token in light and dark, plus the gray and
   white re-pointing that carries the app's existing palette classes onto each theme's neutrals.
-- Frost: warm off-white canvas and white cards, radii from 4 to 24 px with pill controls, a green
-  accent, regular-weight display type, and translucent blurred overlays. Its dark mode is a warm
-  near-black palette of our own, since sierra.ai has none.
-- Console: black (or white) canvas, 1 px rules, radius 0 everywhere, an orange accent, condensed
-  uppercase headings, mono uppercase button labels, and depth drawn with lines instead of shadows.
-- Both themes carry the `done` and `info` tones. Every tone reads at 4.5:1 as text on its own tint
-  and at 3:1 as a mark on every surface.
-- Each theme implements the declared style hooks (`.ui-glass`, `.ui-wash`, `.ui-grid`, `.ui-ticks`,
-  `.ui-eyebrow`, `.ui-display`, `.ui-live`, `.ui-frame`, `.ui-pill-hover`, `.ui-underline-nav`),
-  leaving the ones it does not use as no-ops.
+- Frost: a warm off-white canvas with white cards, pill-shaped controls with boxes on a 4–20 px
+  radius scale, one green accent, regular-weight headings, untinted tight shadows, and frosted glass
+  (a 16 px blur) only on menus, popovers, the modal card, the floating composer and a sticky header.
+  Its dark mode is a warm near-black palette of our own, since sierra.ai has none.
+- Console: a black (or white) canvas, 1 px rules, radius 0 everywhere, one orange accent, a condensed
+  uppercase h1 above Plex Sans headings in sentence case, uppercase group labels, stepped live
+  signals, mono only for code and data, and depth drawn with lines; the modal card carries a
+  line-emphasis border instead of a shadow.
+- Both themes share one type scale, with heading steps of 1.25 and nothing below .75rem, and state
+  transitions of 120–200 ms. Both carry the `done` and `info` tones, and every tone reads at 4.5:1 as
+  text on its own tint and at 3:1 as a mark on every surface.

@@ -91,7 +91,7 @@ What the licence asks, and where the app does it:
 | --- | --- |
 | 1. The software states that it uses MiSans. | The Web App's account menu ends with a credit line in both dictionaries (`S.settings.fontCredit`). |
 | 2. No adaptation or redevelopment of the font or its components. | The slices are subsets delivered as WOFF2: every glyph they carry keeps its outline, hinting, metrics and name, every feature and every name record is kept, and `build-misans.py` reads each finished file back and fails unless it matches the official TTF. Whether subsetting itself counts as adaptation is for the licensor to say; it has not been confirmed. |
-| 3. No renting, sublicensing or redistributing the font on its own. | The files ship only inside the app's assets. Nothing links to them or offers them for download, and the full TTF is never committed. |
+| 3. No renting, sublicensing or redistributing the font on its own. | The slices are part of the application: committed in its source tree, and shipped inside its builds and its npm package. Nothing links to them or offers them for download on their own, and the full TTF is never committed. |
 | 4. Copies keep the copyright notice and the agreement. | Every slice keeps the font's name table (its copyright record included), and `fonts-licenses/misans.txt` ships beside the files in every build. |
 | 5. No illegal use. | — |
 
