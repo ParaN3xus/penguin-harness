@@ -315,7 +315,7 @@
 .gf-scene-page,
 .gf-scene-modal {
   position: relative;
-  min-height: 18rem;
+  min-height: 24rem;
   padding: 2.25rem 1rem 1rem;
   border: 1px solid var(--ui-line);
   border-radius: var(--ui-radius-lg);
@@ -330,6 +330,7 @@
   white-space: nowrap;
 }
 .gf-card {
+  position: relative;
   display: grid;
   gap: 0.75rem;
   padding: var(--ui-card-p);
@@ -399,11 +400,11 @@
   font-size: var(--ui-text-small-size);
   line-height: var(--ui-text-small-lh);
 }
-/* Dropped from the card head's "···": it covers the right of the nested box, where nothing is. */
+/* Hung from the card's bottom-right corner, so no label is cut in half at any theme's row heights. */
 .gf-menu {
   position: absolute;
-  top: 5.25rem;
-  right: 1.5rem;
+  top: calc(100% - 1.75rem);
+  right: -0.75rem;
   display: grid;
   gap: 0.125rem;
   width: 9.5rem;
@@ -517,6 +518,8 @@
   place-items: center;
   width: 5rem;
   height: 3.5rem;
+  /* The hairline keeps the box visible in a theme that raises nothing by shadow. */
+  border: var(--ui-border-w) solid var(--ui-line-muted);
   border-radius: var(--ui-radius-md);
   background: var(--ui-surface);
 }

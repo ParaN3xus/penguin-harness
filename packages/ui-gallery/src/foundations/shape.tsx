@@ -43,14 +43,14 @@ function Scene() {
             <span className="gf-badge">{t.badge}</span>
           </div>
           <span className="gf-input">{t.input}</span>
-        </div>
-        <div className="gf-menu ui-glass" role="menu">
-          {t.menuItems.map((item, i) => (
-            <span key={item} className="gf-menu-row" data-active={i === 1 || undefined}>
-              {item}
-            </span>
-          ))}
-          <span className="gf-layer-tier gf-caption gf-mono">{t.menuTier}</span>
+          <div className="gf-menu ui-glass" role="menu">
+            {t.menuItems.map((item, i) => (
+              <span key={item} className="gf-menu-row" data-active={i === 1 || undefined}>
+                {item}
+              </span>
+            ))}
+            <span className="gf-layer-tier gf-caption gf-mono">{t.menuTier}</span>
+          </div>
         </div>
       </div>
       <div className="gf-scene-modal">

@@ -14,7 +14,7 @@ import type { ModuleId } from "../../ui/src/module";
 export const zh = {
   brand: {
     title: "Penguin UI",
-    subtitle: "组件画廊",
+    subtitle: "模块",
   },
   rail: {
     theme: "主题",

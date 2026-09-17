@@ -8,7 +8,7 @@ import type { GalleryStrings } from "./strings";
 export const en: GalleryStrings = {
   brand: {
     title: "Penguin UI",
-    subtitle: "Component gallery",
+    subtitle: "Modules",
   },
   rail: {
     theme: "Theme",

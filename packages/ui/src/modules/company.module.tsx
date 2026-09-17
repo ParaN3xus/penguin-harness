@@ -364,10 +364,10 @@ function Calendar({ f }: { f: Fixtures }) {
               })}
             {dayIndex === 2 && (
               <div
-                className="absolute inset-x-0 h-px bg-tone-danger-fg"
+                className="absolute inset-x-0 h-px bg-fg"
                 style={{ top: `${(nowH - FIRST_HOUR) * ROW_REM}rem` }}
               >
-                <span className="absolute bottom-0.5 right-1 text-xs leading-none text-tone-danger-fg">
+                <span className="absolute bottom-0.5 right-1 text-xs leading-none font-(--ui-weight-medium) text-fg">
                   {local.now}
                 </span>
               </div>
@@ -419,11 +419,13 @@ function OrgNode({ f, person }: { f: Fixtures; person: EmployeeFixture }) {
         {local.states[person.state]}
       </StatusWord>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-1">
-        <ProgressBar
-          value={person.budgetUsd ? person.spendUsd / person.budgetUsd : 0}
-          tone={over ? "danger" : "neutral"}
-          label={person.name}
-        />
+        {person.budgetUsd !== undefined && (
+          <ProgressBar
+            value={person.spendUsd / person.budgetUsd}
+            tone={over ? "danger" : "neutral"}
+            label={person.name}
+          />
+        )}
         <span
           className={`flex justify-between text-xs tabular-nums ${over ? "text-tone-danger-fg" : "text-fg-muted"}`}
         >

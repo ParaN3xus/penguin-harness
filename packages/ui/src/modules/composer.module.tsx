@@ -297,7 +297,9 @@ function Composition({ f, state }: { f: Fixtures; state: ComposerState }) {
       </div>
     ) : null;
   return (
-    <div className="mx-auto flex min-h-80 max-w-3xl flex-col justify-end gap-2">
+    <div
+      className={`mx-auto flex ${menu === null ? "" : "min-h-80"} max-w-3xl flex-col justify-end gap-2`}
+    >
       {menu}
       <ComposerCard f={f} state={state} />
       {state === "slash" && (

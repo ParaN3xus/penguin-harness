@@ -41,6 +41,7 @@ const LOCAL: Readonly<
       context: (used: string, window: string) => string;
       sparkline: string;
       turnChips: string;
+      turnsDetail: (n: number) => string;
     }
   >
 > = {
@@ -60,6 +61,7 @@ const LOCAL: Readonly<
     context: (used, window) => `${used} of ${window} context`,
     sparkline: "Output tokens per turn",
     turnChips: "Turn 2",
+    turnsDetail: (n) => `over ${n} turns`,
   },
   zh: {
     usage: {
@@ -77,6 +79,7 @@ const LOCAL: Readonly<
     context: (used, window) => `上下文 ${used} / ${window}`,
     sparkline: "每轮输出 Token",
     turnChips: "第 2 轮",
+    turnsDetail: (n) => `共 ${n} 轮`,
   },
 };
 
@@ -189,7 +192,7 @@ function Overview({ f }: { f: Fixtures }) {
         <StatTile
           label={local.tiles.cost}
           value={usd(o.costUsd)}
-          detail={`${o.turns} × ${t.turns}`}
+          detail={local.turnsDetail(o.turns)}
         />
         <StatTile
           label={local.tiles.tokens}

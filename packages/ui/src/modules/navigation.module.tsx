@@ -420,15 +420,18 @@ function DockFrame({ f }: { f: Fixtures }) {
 
 function DockAndRail({ f }: { f: Fixtures }) {
   return (
-    <Window height="h-[36rem]" column>
-      <ChatHead f={f} dock="bottom" />
-      <ChatBody f={f} />
-      <DockFrame f={f} />
+    <Window height="h-[32rem]">
+      <Rail f={f} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ChatHead f={f} dock="bottom" />
+        <ChatBody f={f} />
+        <DockFrame f={f} />
+      </div>
     </Window>
   );
 }
 
-function Rail({ f }: { f: Fixtures }) {
+function Rail({ f, tooltip = false }: { f: Fixtures; tooltip?: boolean }) {
   const c = f.copy.nav;
   const local = COPY[f.lang];
   return (
@@ -438,8 +441,13 @@ function Rail({ f }: { f: Fixtures }) {
       <span className="my-1 h-px w-6 bg-line" />
       {NAV.map((row, i) => (
         <span key={row.key} className="relative">
-          <IconButton label={c[row.key]} icon={row.icon} pressed={i === 2} hovered={i === 1} />
-          {i === 1 && (
+          <IconButton
+            label={c[row.key]}
+            icon={row.icon}
+            pressed={i === 2}
+            hovered={tooltip && i === 1}
+          />
+          {tooltip && i === 1 && (
             <span className="absolute left-full top-1/2 z-10 ml-2 -translate-y-1/2">
               <Tooltip label={c[row.key]} />
             </span>
@@ -454,8 +462,8 @@ function Rail({ f }: { f: Fixtures }) {
 
 function Collapsed({ f }: { f: Fixtures }) {
   return (
-    <Window>
-      <Rail f={f} />
+    <Window height="h-[28rem]">
+      <Rail f={f} tooltip />
       <div className="flex min-w-0 flex-1 flex-col">
         <ChatHead f={f} />
         <ChatBody f={f} />

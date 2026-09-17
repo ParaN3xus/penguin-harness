@@ -690,14 +690,16 @@ export function GroupHeader({
 export function Breadcrumbs({ items }: { items: readonly string[] }) {
   return (
     <nav aria-label="Breadcrumbs" className="flex min-w-0 items-center gap-1 text-sm">
-      {items.map((item, i) => (
-        <span key={item} className="flex min-w-0 items-center gap-1">
-          {i > 0 && <GlyphIcon name="chevronRight" size={12} className="text-fg-subtle" />}
-          <span className={`truncate ${i === items.length - 1 ? "text-fg" : "text-fg-muted"}`}>
-            {item}
+      {items.map((item, i) => {
+        // The leaf keeps its name; only the folders above it give up room.
+        const leaf = i === items.length - 1;
+        return (
+          <span key={item} className={`flex items-center gap-1 ${leaf ? "shrink-0" : "min-w-0"}`}>
+            {i > 0 && <GlyphIcon name="chevronRight" size={12} className="text-fg-subtle" />}
+            <span className={leaf ? "text-fg" : "truncate text-fg-muted"}>{item}</span>
           </span>
-        </span>
-      ))}
+        );
+      })}
     </nav>
   );
 }
