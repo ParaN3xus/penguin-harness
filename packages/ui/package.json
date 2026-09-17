@@ -26,7 +26,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "sync:font-licenses": "node scripts/sync-font-licenses.mjs",
     "fonts:misans": "uv run scripts/build-misans.py"
   },
