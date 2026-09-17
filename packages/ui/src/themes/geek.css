@@ -1,26 +1,31 @@
 /**
- * Console (`geek`) — square corners, hairline rules, depth by layering rather than shadow, mono
- * labels and condensed uppercase display type. Reference: e2b.dev (dark) and docs.e2b.dev (light).
+ * Console (`geek`) — square corners, hairline rules, depth by layering rather than shadow, one
+ * interface orange, a condensed uppercase page title, stepped live signals, and mono for data only.
+ * Reference: e2b.dev (dark) and docs.e2b.dev (light).
  *
  * Status of each group:
  * - Dark palette, lines, accent, radii, motion curves and the stepped live signal are measured on
- *   e2b.dev; the light palette is measured on docs.e2b.dev's light mode.
+ *   e2b.dev; the light palette is measured on docs.e2b.dev's light mode. What E2B's marketing page
+ *   adds as ornament — bracketed mono eyebrows, the 12-column guide, dot fields, corner ticks, mono
+ *   button labels — is left out: labels, buttons and headings are Plex Sans, and mono is for code,
+ *   ids, paths and numbers.
  * - Semantic tones are a hairline plus a 10–14% tint on E2B's code hues (proposal), tuned so every
  *   tone reads at 4.5:1 as text on its own tint and 3:1 as a mark on every surface. `fg-subtle`
  *   is lifted from E2B's #585858 / #a59f9e to clear 3:1. Chart colours are proposals.
  * - Fonts: IBM Plex Sans and IBM Plex Sans Condensed stand in for E2B's commercial Neue Haas
  *   Grotesk and PP Supply Sans; Commit Mono is the face e2b.dev ships (`fonts/geek.css`).
- * - Radius is 0 everywhere, badges, counters and avatars included (`--ui-radius-pill: 0`). State
- *   dots and the switch knob stay round and the switch track stays a pill: those components use
- *   Tailwind's literal `rounded-full`, which no token re-points.
- * - Type scale, line-heights and control padding-block are the values every theme shares, so
- *   switching themes never reflows a layout vertically; this theme changes radius, colour, font,
- *   shadow, tracking, weight, transform and padding-inline only.
+ * - Radius is 0 everywhere, badges, counters, avatars and controls included (`--ui-radius-pill`
+ *   and `--ui-radius-control` are 0). State dots and the switch knob stay round and the switch
+ *   track stays a pill: those components use Tailwind's literal `rounded-full`, which no token
+ *   re-points.
+ * - The type scale, line-heights and control padding-block are the shared values, so switching
+ *   themes never reflows a layout vertically; this theme changes radius, colour, font, shadow,
+ *   tracking, weight, transform and padding-inline only.
  *
  * Shape of the file (the same in every theme): one `@layer ui-theme` block holding a light
  * section and a dark section — each defines every name in tokens.ts, in its group order, after the
  * gray bridge that re-points Tailwind's `--color-gray-*` / `--color-white` so the app's existing
- * palette classes follow the theme — and then this theme's recipes for the declared style hooks.
+ * palette classes follow the theme — and then this theme's recipes for the style hooks (hooks.ts).
  */
 @layer ui-theme {
   /* Light: docs.e2b.dev light. */
@@ -136,12 +141,13 @@
     --ui-border-w: 1px;
     --ui-border-w-thick: 1px;
 
-    /* Elevation: layering, not shadow. The modal is a double hairline — a canvas gap, then a rule.
-       Zero shadows are `0 0 #0000`, not `none`, which would break Tailwind's shadow list. */
+    /* Elevation: layering, not shadow. The modal casts none: its card carries a 1px line-emphasis
+       border instead. Zero shadows are `0 0 #0000`, not `none`, which would break Tailwind's shadow
+       list. */
     --ui-shadow-flat: 0 0 #0000;
     --ui-shadow-raised: 0 0 #0000;
     --ui-shadow-overlay: 0 1px 2px rgb(0 0 0 / 0.05), 0 0 0 1px rgb(0 0 0 / 0.1);
-    --ui-shadow-modal: 0 0 0 4px var(--ui-canvas), 0 0 0 5px var(--ui-line);
+    --ui-shadow-modal: 0 0 #0000;
     --ui-shadow-drawer: 0 0 0 1px rgb(0 0 0 / 0.1);
     --ui-glass-bg: var(--ui-overlay);
     --ui-glass-blur: 0px;
@@ -165,31 +171,31 @@
     --ui-text-small-size: 0.75rem;
     --ui-text-small-lh: 1.5;
     --ui-text-caption-size: 0.75rem;
-    --ui-text-caption-lh: 1.25;
+    --ui-text-caption-lh: 1.35;
     --ui-text-code-size: 0.8125rem;
-    --ui-text-code-lh: 1.5;
+    --ui-text-code-lh: 1.6;
     --ui-text-prose-size: 1rem;
     --ui-text-prose-lh: 1.6;
-    --ui-h1-size: 2rem;
-    --ui-h1-lh: 1.25;
+    --ui-h1-size: 1.953rem;
+    --ui-h1-lh: 1.15;
     --ui-h1-weight: 600;
     --ui-h1-tracking: -0.02em;
     --ui-h1-transform: uppercase;
     --ui-h1-font: var(--ui-font-display);
-    --ui-h2-size: 1.5rem;
-    --ui-h2-lh: 1.3;
-    --ui-h2-weight: 500;
+    --ui-h2-size: 1.5625rem;
+    --ui-h2-lh: 1.2;
+    --ui-h2-weight: 600;
     --ui-h2-tracking: -0.015em;
-    --ui-h2-transform: uppercase;
-    --ui-h2-font: var(--ui-font-display);
+    --ui-h2-transform: none;
+    --ui-h2-font: var(--ui-font-sans);
     --ui-h3-size: 1.25rem;
-    --ui-h3-lh: 1.4;
+    --ui-h3-lh: 1.3;
     --ui-h3-weight: 500;
     --ui-h3-tracking: -0.01em;
     --ui-h3-transform: none;
     --ui-h3-font: var(--ui-font-sans);
     --ui-h4-size: 1rem;
-    --ui-h4-lh: 1.5;
+    --ui-h4-lh: 1.4;
     --ui-h4-weight: 500;
     --ui-h4-tracking: 0;
     --ui-h4-transform: none;
@@ -197,15 +203,15 @@
     --ui-h5-size: 0.875rem;
     --ui-h5-lh: 1.5;
     --ui-h5-weight: 500;
-    --ui-h5-tracking: 0.04em;
-    --ui-h5-transform: uppercase;
-    --ui-h5-font: var(--ui-font-mono);
+    --ui-h5-tracking: 0;
+    --ui-h5-transform: none;
+    --ui-h5-font: var(--ui-font-sans);
     --ui-h6-size: 0.75rem;
     --ui-h6-lh: 1.5;
     --ui-h6-weight: 500;
-    --ui-h6-tracking: 0.08em;
+    --ui-h6-tracking: 0.06em;
     --ui-h6-transform: uppercase;
-    --ui-h6-font: var(--ui-font-mono);
+    --ui-h6-font: var(--ui-font-sans);
     --ui-md-h1-size: 1.25rem;
     --ui-md-h2-size: 1.125rem;
     --ui-md-h3-size: 1rem;
@@ -237,8 +243,9 @@
     --ui-stack-3: 1.5rem;
     --ui-stack-4: 2.5rem;
 
-    /* Motion: quick colour, no hover transforms, overlays on E2B's ui-out curve, stepped signals */
-    --ui-dur-fast: 100ms;
+    /* Motion: quick colour, no hover transforms, overlays on E2B's ui-out curve, stepped signals.
+       E2B's 100ms colour change is held to the 120ms floor every theme's state changes share. */
+    --ui-dur-fast: 120ms;
     --ui-dur-base: 150ms;
     --ui-dur-slow: 260ms;
     --ui-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -384,7 +391,7 @@
     --ui-shadow-flat: 0 0 #0000;
     --ui-shadow-raised: 0 0 #0000;
     --ui-shadow-overlay: 0 0 0 1px #000000;
-    --ui-shadow-modal: 0 0 0 4px var(--ui-canvas), 0 0 0 5px var(--ui-line);
+    --ui-shadow-modal: 0 0 #0000;
     --ui-shadow-drawer: 0 0 0 1px #000000;
     --ui-glass-bg: var(--ui-overlay);
     --ui-glass-blur: 0px;
@@ -408,31 +415,31 @@
     --ui-text-small-size: 0.75rem;
     --ui-text-small-lh: 1.5;
     --ui-text-caption-size: 0.75rem;
-    --ui-text-caption-lh: 1.25;
+    --ui-text-caption-lh: 1.35;
     --ui-text-code-size: 0.8125rem;
-    --ui-text-code-lh: 1.5;
+    --ui-text-code-lh: 1.6;
     --ui-text-prose-size: 1rem;
     --ui-text-prose-lh: 1.6;
-    --ui-h1-size: 2rem;
-    --ui-h1-lh: 1.25;
+    --ui-h1-size: 1.953rem;
+    --ui-h1-lh: 1.15;
     --ui-h1-weight: 600;
     --ui-h1-tracking: -0.02em;
     --ui-h1-transform: uppercase;
     --ui-h1-font: var(--ui-font-display);
-    --ui-h2-size: 1.5rem;
-    --ui-h2-lh: 1.3;
-    --ui-h2-weight: 500;
+    --ui-h2-size: 1.5625rem;
+    --ui-h2-lh: 1.2;
+    --ui-h2-weight: 600;
     --ui-h2-tracking: -0.015em;
-    --ui-h2-transform: uppercase;
-    --ui-h2-font: var(--ui-font-display);
+    --ui-h2-transform: none;
+    --ui-h2-font: var(--ui-font-sans);
     --ui-h3-size: 1.25rem;
-    --ui-h3-lh: 1.4;
+    --ui-h3-lh: 1.3;
     --ui-h3-weight: 500;
     --ui-h3-tracking: -0.01em;
     --ui-h3-transform: none;
     --ui-h3-font: var(--ui-font-sans);
     --ui-h4-size: 1rem;
-    --ui-h4-lh: 1.5;
+    --ui-h4-lh: 1.4;
     --ui-h4-weight: 500;
     --ui-h4-tracking: 0;
     --ui-h4-transform: none;
@@ -440,15 +447,15 @@
     --ui-h5-size: 0.875rem;
     --ui-h5-lh: 1.5;
     --ui-h5-weight: 500;
-    --ui-h5-tracking: 0.04em;
-    --ui-h5-transform: uppercase;
-    --ui-h5-font: var(--ui-font-mono);
+    --ui-h5-tracking: 0;
+    --ui-h5-transform: none;
+    --ui-h5-font: var(--ui-font-sans);
     --ui-h6-size: 0.75rem;
     --ui-h6-lh: 1.5;
     --ui-h6-weight: 500;
-    --ui-h6-tracking: 0.08em;
+    --ui-h6-tracking: 0.06em;
     --ui-h6-transform: uppercase;
-    --ui-h6-font: var(--ui-font-mono);
+    --ui-h6-font: var(--ui-font-sans);
     --ui-md-h1-size: 1.25rem;
     --ui-md-h2-size: 1.125rem;
     --ui-md-h3-size: 1rem;
@@ -481,7 +488,7 @@
     --ui-stack-4: 2.5rem;
 
     /* Motion */
-    --ui-dur-fast: 100ms;
+    --ui-dur-fast: 120ms;
     --ui-dur-base: 150ms;
     --ui-dur-slow: 260ms;
     --ui-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -509,102 +516,35 @@
   }
 
   /*
-   * Style hooks (the closed list). A component opts into a hook with its class; this theme
-   * decides what the hook does. These rules sit in `ui-theme`, after Tailwind's `utilities`, so a
-   * hook wins over the utilities its component also carries — that is what lets `.ui-live`
-   * re-time an `animate-spin`.
+   * Style hooks (hooks.ts). A component opts into a hook with its class; this theme decides what
+   * the hook does. These rules sit in `ui-theme`, after Tailwind's `utilities`, so a hook wins over
+   * the utilities its component also carries — that is what lets `.ui-live` re-time an
+   * `animate-spin`.
    *
-   * Anatomy the recipes rely on: `.ui-frame` children are marked `data-slot="head" | "body" |
-   * "foot" | "pane"`; `.ui-underline-nav` holds `[role="tab"]` items selected by
-   * `aria-selected="true"`; `.ui-live` carries `data-live="caret" | "dot" | "spinner"`;
-   * `.ui-grid-dots` is the dot-matrix modifier of `.ui-grid`; `.ui-button` is the class `Button`
-   * carries so a theme can restyle its label.
-   *
-   * Console uses: grid, ticks, eyebrow, display, live, frame, underline-nav, and the button label.
-   * No-ops here: `.ui-glass` (opaque overlay from the tokens), `.ui-wash`, `.ui-pill-hover`.
+   * Console gives a recipe to: eyebrow, display, live, frame, underline-nav. `.ui-glass` is a no-op
+   * here: the overlay is opaque through the glass tokens.
    */
 
-  /* 12-column hairline guide on the page shell (dark only). */
-  :root[data-theme="geek"].dark .ui-grid:not(.ui-grid-dots) {
-    background-image: linear-gradient(90deg, var(--ui-line-muted) 1px, transparent 1px);
-    background-size: calc(100% / 12) 100%;
-  }
-  /* Dot-matrix texture for empty states and the login canvas, fading in from the left so the
-     centred copy stays clear. The fade is a canvas-coloured layer over the dots rather than a mask,
-     so the element's content never fades. */
-  :root[data-theme="geek"] .ui-grid.ui-grid-dots {
-    background-image:
-      linear-gradient(90deg, var(--ui-canvas) 40%, transparent),
-      radial-gradient(color-mix(in srgb, var(--ui-accent) 55%, transparent) 1px, transparent 1.25px);
-    background-size:
-      100% 100%,
-      6px 6px;
-    background-repeat: no-repeat, repeat;
-  }
-
-  /* Corner ticks: four 1px accent L-marks on a selected or focused card. */
-  :root[data-theme="geek"] .ui-ticks {
-    background-image:
-      linear-gradient(var(--ui-accent), var(--ui-accent)),
-      linear-gradient(var(--ui-accent), var(--ui-accent)),
-      linear-gradient(var(--ui-accent), var(--ui-accent)),
-      linear-gradient(var(--ui-accent), var(--ui-accent)),
-      linear-gradient(var(--ui-accent), var(--ui-accent)),
-      linear-gradient(var(--ui-accent), var(--ui-accent)),
-      linear-gradient(var(--ui-accent), var(--ui-accent)),
-      linear-gradient(var(--ui-accent), var(--ui-accent));
-    background-position:
-      0 0,
-      0 0,
-      100% 0,
-      100% 0,
-      0 100%,
-      0 100%,
-      100% 100%,
-      100% 100%;
-    background-size:
-      8px 1px,
-      1px 8px,
-      8px 1px,
-      1px 8px,
-      8px 1px,
-      1px 8px,
-      8px 1px,
-      1px 8px;
-    background-repeat: no-repeat;
-  }
-
-  /* Bracketed mono eyebrow: [ PRICING ]. The brackets are decoration, hidden from assistive tech. */
+  /* Group label on the h6 rung: Plex Sans uppercase with label tracking, muted. */
   :root[data-theme="geek"] .ui-eyebrow {
-    font-family: var(--ui-font-mono);
-    font-size: var(--ui-text-caption-size);
-    line-height: var(--ui-text-caption-lh);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: var(--ui-tracking-label);
+    font-size: var(--ui-h6-size);
+    line-height: var(--ui-h6-lh);
+    font-weight: var(--ui-h6-weight);
+    letter-spacing: var(--ui-h6-tracking);
+    text-transform: var(--ui-h6-transform);
     color: var(--ui-fg-muted);
   }
-  :root[data-theme="geek"] .ui-eyebrow::before {
-    content: "[ ";
-    content: "[ " / "";
-  }
-  :root[data-theme="geek"] .ui-eyebrow::after {
-    content: " ]";
-    content: " ]" / "";
-  }
 
-  /* Condensed uppercase display. Han text has no case and its taller glyphs need more leading. */
-  :root[data-theme="geek"] .ui-display {
-    font-family: var(--ui-font-display);
-    text-transform: uppercase;
-    line-height: 1;
-    letter-spacing: -0.02em;
-    font-weight: 500;
-  }
+  /* Condensed uppercase display, on the one h1 of a page or hero only; h2 and below stay Plex Sans
+     in sentence case. Han text has no case, and its taller glyphs need more leading. */
   :root[data-theme="geek"] :is(h1, [aria-level="1"]).ui-display {
+    font-family: var(--ui-font-display);
     font-weight: 600;
+    text-transform: uppercase;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
   }
-  :root[data-theme="geek"] .ui-display:lang(zh) {
+  :root[data-theme="geek"] :is(h1, [aria-level="1"]).ui-display:lang(zh) {
     line-height: 1.2;
     letter-spacing: 0;
   }
@@ -617,7 +557,7 @@
     animation: ui-geek-signal 1.25s var(--ui-live-timing) infinite;
   }
   :root[data-theme="geek"] .ui-live[data-live="spinner"] {
-    animation-timing-function: steps(4, end);
+    animation-timing-function: steps(8, end);
   }
   :root[data-theme="geek"] .ui-live[data-live="caret"] {
     display: inline-block;
@@ -635,8 +575,8 @@
     }
   }
 
-  /* Terminal frame: hairline box, mono header (centred title when it has three parts), ruled
-     uppercase footer, ruled panes. */
+  /* Ruled frame: a hairline box, a 2.25rem head ruled off the body, a ruled foot and ruled panes.
+     Head and foot keep their content's own font — a path is mono because it is a path. */
   :root[data-theme="geek"] .ui-frame {
     border: var(--ui-border-w) solid var(--ui-line);
     border-radius: 0;
@@ -645,24 +585,9 @@
     min-height: 2.25rem;
     border-bottom: var(--ui-border-w) solid var(--ui-line);
     background-color: transparent;
-    font-family: var(--ui-font-mono);
-    font-size: var(--ui-text-caption-size);
-    letter-spacing: var(--ui-tracking-mono);
-  }
-  :root[data-theme="geek"] .ui-frame > [data-slot="head"]:has(> :nth-child(3)) {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-  }
-  :root[data-theme="geek"] .ui-frame > [data-slot="head"]:has(> :nth-child(3)) > :last-child {
-    justify-self: end;
   }
   :root[data-theme="geek"] .ui-frame > [data-slot="foot"] {
     border-top: var(--ui-border-w) solid var(--ui-line);
-    font-family: var(--ui-font-mono);
-    font-size: var(--ui-text-caption-size);
-    text-transform: uppercase;
-    letter-spacing: var(--ui-tracking-label);
   }
   :root[data-theme="geek"] .ui-frame [data-slot="pane"] + [data-slot="pane"] {
     border-left: var(--ui-border-w) solid var(--ui-line);
@@ -683,12 +608,5 @@
   }
   :root[data-theme="geek"] .ui-underline-nav [role="tab"][aria-selected="true"]::after {
     background-color: var(--ui-fg);
-  }
-
-  /* Button labels: mono uppercase. */
-  :root[data-theme="geek"] .ui-button {
-    font-family: var(--ui-font-mono);
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
   }
 }
