@@ -283,6 +283,6 @@ pnpm dev                     # 服务端 + Web 一起启动（带前缀日志，
 
 ## 协议
 
-[Apache-2.0](LICENSE) © 2026 Prism Shadow · 第三方声明：[NOTICE](NOTICE)
+[Apache-2.0](LICENSE) © 2026 Prism Shadow
 
 由 [LlamaFactory](https://github.com/hiyouga/LlamaFactory) 作者 [Yaowei Zheng](https://github.com/hiyouga)、[PrismShadow AI Team](https://github.com/Prism-Shadow) 与 [Fable 5](https://www.anthropic.com/news/claude-fable-5-mythos-5) 共同用 ❤️ 构建。

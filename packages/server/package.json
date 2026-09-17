@@ -99,8 +99,7 @@
   "files": [
     "dist",
     "web-dist",
-    "LICENSE",
-    "NOTICE"
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"
