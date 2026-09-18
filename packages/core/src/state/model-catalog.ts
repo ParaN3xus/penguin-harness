@@ -1802,9 +1802,10 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
   // clients, and the other ids would not route at all. The gateway asks every request to name
   // its conversation, which attributionHeaders does for this host.
   //
-  // Vision: from models.dev, and checked live on 2026-09-17 by sending an image of a number.
-  // The vision rows read it back. The text-only rows either refused the image or answered
-  // without seeing it.
+  // Vision: from models.dev, and checked live on 2026-09-17 and 2026-09-18 by sending an image
+  // of a number. Every vision row that could be reached read it back, and the text-only rows
+  // refused the image or answered without seeing it. The rows below that could not be reached
+  // keep models.dev's flag.
   //
   // Pricing: Go is a monthly subscription whose usage limits are dollar amounts. Each model has
   // a monthly allowance, capped at 20% per 5 hours and 50% per week. A request draws the
@@ -1819,11 +1820,14 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
   // running "4x" offer (ends 2026-09-20) raises its monthly allowance, not its rates, so no
   // row carries a `discount`.
   //
-  // Account opt-in: five models answer 403 until the key's OpenCode workspace opts in. The two
-  // Muse Spark Contributor models require consent to Meta training on prompts and completions.
-  // deepseek-v4.1-flash, deepseek-v4-flash and deepseek-v4-pro require consent to China-hosted
-  // serving. Their rows follow the docs page and the protocol the other rows on their path
-  // proved; a generation against them was not run. --
+  // Account opt-in and region: five models answer 403 until the key's OpenCode workspace opts
+  // in. The two Muse Spark Contributor models require consent to Meta training on prompts and
+  // completions. deepseek-v4.1-flash, deepseek-v4-flash and deepseek-v4-pro require consent to
+  // China-hosted serving. Some upstreams also refuse a caller's region: from a mainland China
+  // address, gpt-5.6-luna answers 403 unsupported_country_region_territory and both Muse Spark
+  // rows 403 "not available in your country", while gpt-5.6-luna passed every check from
+  // outside it. The rows that could not be reached follow the docs page and the protocol the
+  // other rows on their path proved. --
   {
     modelId: "deepseek-v4.1-flash",
     displayName: "DeepSeek V4.1 Flash",

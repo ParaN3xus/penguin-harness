@@ -440,7 +440,7 @@ PenguinHarness 升级可能改变内置的预置模型目录。一旦发生，Pr
 
 - **协议。** OpenCode 把每个模型放在三个端点之一上，因此每个条目各自固定 `client_type` 与 base URL。Chat Completions（`openai-chat`）和 Responses（`openai-responses`）模型使用 `https://opencode.ai/zen/go/v1`，没有自己的 key 时读取 `OPENAI_API_KEY`。Anthropic Messages（`ant-messages`）模型使用 `https://opencode.ai/zen/go`，因为客户端会自行加上 `/v1/messages`，它们读取 `ANTHROPIC_API_KEY`。你自己添加到该分组的模型使用 `openai-chat` 和带 `/v1` 的 base URL。
 - **价格。** Go 按月订阅，用量上限是按模型计的美元额度：每月一份额度，每 5 小时最多用掉其中 20%，每周最多 50%。条目记录的是每次请求从额度中扣除的每 Token 价格，因此对这个分组而言，成本中心显示的是你用掉了多少额度，而不是一张账单。`gpt-5.6-luna`、`grok-4.6`、`qwen3.7-plus` 和 `qwen3.6-plus` 记录基础档，分别覆盖 272K、200K、256K 和 256K 输入 Token 以内。四个 DeepSeek 模型遵循 DeepSeek 的空闲时段，见[价格与促销](#价格与促销)。
-- **需要开通。** 在 key 所属的 OpenCode 工作区开通之前，有五个模型会直接报错。`muse-spark-1.3-contributor` 和 `muse-spark-1.2-contributor` 需要同意 Meta 用提示词和回复训练模型，且只在 Meta 允许的地区可用。`deepseek-v4.1-flash`、`deepseek-v4-flash` 和 `deepseek-v4-pro` 需要同意由中国境内托管的服务提供。
+- **开通与地区。** 在 key 所属的 OpenCode 工作区开通之前，有五个模型会直接报错。`muse-spark-1.3-contributor` 和 `muse-spark-1.2-contributor` 需要同意 Meta 用提示词和回复训练模型。`deepseek-v4.1-flash`、`deepseek-v4-flash` 和 `deepseek-v4-pro` 需要同意由中国境内托管的服务提供。部分模型还会拒绝来自某些地区的请求：从中国大陆访问时，`gpt-5.6-luna` 和两个 Muse Spark 模型都会报错。
 - **会话请求头。** 发往该分组的请求会在 `x-opencode-session` 中标明所属对话，见[应用归因](#应用归因)。
 
 ### 预置模型
