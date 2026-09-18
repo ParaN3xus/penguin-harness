@@ -45,6 +45,11 @@ never ships with the product. Nothing in the Web App changed.
   owns Foundations and Screens, which are made of its own machinery. `packages/ui/src/catalog.ts` files
   every component section under its module, and `packages/ui/src/demo.ts` defines the demo contract
   (`defineDemo`).
+- The compositions carry no data of their own: every word and number comes from
+  `packages/ui/src/fixtures/`, which gains what they need beyond the sets the screens already use —
+  the citation test failing, the Task's to-do list, the slash menu, a docs answer, the plugin
+  library's totals, the group chat, the dock's panel menu, the dialog form's search and choice
+  groups, and the chrome copy of the pages they imitate.
 
 ## Tooling
 

@@ -34,6 +34,9 @@ Console）、浅色与深色、16 / 18 / 20 px 三档根字号、中英文下展
 - `packages/ui/src/module.ts` 定义模块契约（`defineModule`、`MODULE_IDS`），`packages/ui/src/modules/*.module.tsx`
   放置由包自己拥有的十三幅合成——基础与整页两个模块由画廊拥有，它们本就由画廊自身的机制搭成。
   `packages/ui/src/catalog.ts` 把每个组件分区归入所属模块，`packages/ui/src/demo.ts` 定义演示契约（`defineDemo`）。
+- 这些合成本身不含数据：所有文字与数字都来自 `packages/ui/src/fixtures/`。在整页已用的数据集之外，fixtures 补上了它们
+  所需的部分——失败的引用测试、Task 的待办清单、斜杠菜单、一篇文档回答、插件库统计、群聊、停靠面板的添加菜单、对话框
+  表单的搜索框与选项组，以及所模仿页面的界面文案。
 
 ## 工具
 
