@@ -40,6 +40,7 @@ export function detectHost(nav: NavigatorLike | undefined): HostKind {
 }
 
 let platformOverride: Platform | null = null;
+let hostOverride: HostKind | null = null;
 let detectedPlatform: Platform | null = null;
 let detectedHost: HostKind | null = null;
 
@@ -54,6 +55,7 @@ export function currentPlatform(): Platform {
 }
 
 export function currentHost(): HostKind {
+  if (hostOverride !== null) return hostOverride;
   detectedHost ??= detectHost(currentNavigator());
   return detectedHost;
 }
@@ -61,4 +63,9 @@ export function currentHost(): HostKind {
 /** Tests pin the platform; null goes back to detection. */
 export function setPlatformForTests(platform: Platform | null): void {
   platformOverride = platform;
+}
+
+/** Tests pin the host; null goes back to detection. */
+export function setHostForTests(host: HostKind | null): void {
+  hostOverride = host;
 }

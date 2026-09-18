@@ -43,6 +43,10 @@ let layout: ReadonlyMap<string, string> | null = null;
 let cache: { platform: Platform; keymap: Keymap } | null = null;
 let version = 0;
 const listeners = new Set<() => void>();
+/** Whether this tab edited the bindings since it loaded: what decides an absent server copy's fate on hydrate. */
+let writtenThisSession = false;
+/** Where a write goes after the mirror: the account's prefs, installed once the session is signed in. */
+let persister: ((doc: StoredKeybindings) => void) | null = null;
 
 function storage(): KeybindingsStorage | null {
   if (storageOverride !== null) return storageOverride;
@@ -86,18 +90,68 @@ export function readStored(store: KeybindingsStorage | null = storage()): Stored
   }
 }
 
-function writeStored(doc: StoredKeybindings): void {
+/** The document without empty sections, which is the form both the mirror and the server hold. */
+function compactDoc(doc: StoredKeybindings): StoredKeybindings {
   const compact: StoredKeybindings = { v: 1 };
   for (const section of SECTIONS) {
     const entries = doc[section];
     if (entries !== undefined && Object.keys(entries).length > 0) compact[section] = entries;
   }
+  return compact;
+}
+
+function storeMirror(compact: StoredKeybindings): void {
   try {
     storage()?.setItem(KEYBINDINGS_KEY, JSON.stringify(compact));
   } catch {
     /* best-effort persistence (quota limits / private browsing) */
   }
+}
+
+/** A user edit: mirror first, so it applies at once here and in every other tab, then the account. */
+function writeStored(doc: StoredKeybindings): void {
+  const compact = compactDoc(doc);
+  storeMirror(compact);
+  writtenThisSession = true;
+  persister?.(compact);
   invalidate();
+}
+
+/**
+ * Installs (or, with null, removes) the writer that carries an edit to the account's prefs. The
+ * store stays free of the API client: the runtime that knows the session is signed in installs
+ * it, and nothing is sent before then.
+ */
+export function setKeybindingsPersister(fn: ((doc: StoredKeybindings) => void) | null): void {
+  persister = fn;
+}
+
+export type HydrateOutcome = "applied" | "pushed" | "cleared";
+
+/**
+ * Reconciles the mirror with the account's copy once it arrives. The server wins: its document
+ * replaces the mirror. An absent server copy means one of two things — this tab edited the
+ * bindings before the prefs answered, in which case the mirror is the pending edit and is pushed;
+ * or nothing was ever stored for this account, in which case the mirror is cleared, so a browser
+ * that signs into another account cannot resurrect the previous account's bindings.
+ */
+export function hydrateFromServer(stored: unknown): HydrateOutcome {
+  if (stored !== undefined && stored !== null) {
+    storeMirror(compactDoc(sanitizeStored(stored)));
+    invalidate();
+    return "applied";
+  }
+  if (writtenThisSession) {
+    persister?.(compactDoc(readStored()));
+    return "pushed";
+  }
+  try {
+    storage()?.removeItem(KEYBINDINGS_KEY);
+  } catch {
+    /* best-effort */
+  }
+  invalidate();
+  return "cleared";
 }
 
 function invalidate(): void {
@@ -214,6 +268,8 @@ export function configureKeybindingsStoreForTests(options: {
 }): void {
   if (options.storage !== undefined) storageOverride = options.storage;
   if (options.layout !== undefined) layout = options.layout;
+  writtenThisSession = false;
+  persister = null;
   invalidate();
 }
 

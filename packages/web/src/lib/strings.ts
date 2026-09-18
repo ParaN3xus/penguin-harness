@@ -94,6 +94,27 @@ export const zh = {
       terminal: "终端",
       editor: "编辑器",
     },
+    /** Where a focus-scoped command wins, for the shadowed-conflict hint. */
+    scopes: {
+      terminal: "终端",
+      editor: "编辑器",
+    },
+    unbound: "未设置",
+    /** The recorder button's tooltip. */
+    rebind: "更改快捷键",
+    record: "按下新的快捷键…",
+    recordHint: "Esc 取消 · Backspace 清除",
+    needsModifier: "需要配合 Ctrl / Alt / Shift（macOS 为 ⌘ ⌃ ⌥ ⇧），或使用 F 键",
+    resetRow: "恢复默认",
+    resetAll: "全部恢复默认",
+    resetAllBody: (n: number): string => `将 ${n} 条快捷键恢复为默认值？`,
+    conflictSame: (other: string): string => `与「${other}」使用同一个快捷键，只有排在前面的生效`,
+    conflictShadowed: (other: string, surface: string): string =>
+      `在${surface}里会被「${other}」抢先`,
+    browserReserved: "浏览器保留了这个组合，只在桌面应用里生效",
+    desktopShellReserved: "桌面应用自身使用这个组合",
+    desktopMenuReserved: "会覆盖桌面应用菜单里的同名快捷键",
+    saveFailed: "快捷键未能保存到账号",
   },
 
   terminal: {
@@ -177,6 +198,10 @@ export const zh = {
     profile: "个人资料",
     generalTitle: "通用",
     appearanceTitle: "外观",
+    shortcutsTitle: "快捷键",
+    /** The Shortcuts page's "?": what follows the platform, where bindings live, and the browser's own claims. */
+    shortcutsInfo:
+      "快捷键随平台：macOS 用 ⌘，其余平台用 Ctrl。改动即刻生效，并同步到本账号已打开的全部标签页；按账号并按平台分别保存，Mac 与 Windows 各有一套。浏览器自身保留的组合（如 Ctrl+W / ⌘W）在浏览器标签页里收不到，只在桌面应用里生效，列表中已标出。",
     accountTitle: "账户",
     /** Trace import: the two pickers' accessible names, the pick-a-file action, and its outcomes. */
     importTrace: "导入 Trace",

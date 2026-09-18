@@ -10,6 +10,7 @@ import {
   KEYBINDINGS_KEY,
   bindingOf,
   configureKeybindingsStoreForTests,
+  hydrateFromServer,
   isOverridden,
   keymap,
   keymapVersion,
@@ -19,9 +20,11 @@ import {
   resetBinding,
   sanitizeStored,
   setBinding,
+  setKeybindingsPersister,
   subscribeKeymap,
   type KeybindingsStorage,
 } from "../src/lib/shortcuts/store";
+import type { StoredKeybindings } from "../src/lib/shortcuts/types";
 
 function memStorage(
   initial: Record<string, string> = {},
@@ -215,5 +218,53 @@ describe("external changes and the keyboard layout", () => {
     setBinding("terminal.close", parseChord("Mod+KeyW"));
     expect(bindingOf("terminal.close")?.code).toBe("KeyW");
     expect(stored()).toEqual({ v: 1, linux: { "terminal.close": "Mod+KeyW" } });
+  });
+});
+
+describe("the account's copy", () => {
+  it("carries every edit to the persister as the compact document, and nothing before one is installed", () => {
+    const sent: StoredKeybindings[] = [];
+    setBinding("editor.save", null);
+    setKeybindingsPersister((doc) => sent.push(doc));
+    setBinding("terminal.close", parseChord("Mod+Alt+KeyW"));
+    resetBinding("editor.save");
+    expect(sent).toEqual([
+      { v: 1, linux: { "editor.save": null, "terminal.close": "Mod+Alt+KeyW" } },
+      { v: 1, linux: { "terminal.close": "Mod+Alt+KeyW" } },
+    ]);
+    setKeybindingsPersister(null);
+    resetAll();
+    expect(sent).toHaveLength(2);
+  });
+
+  it("applies the server document over the mirror, even over an edit made this session", () => {
+    setBinding("editor.save", null);
+    expect(hydrateFromServer({ v: 1, linux: { "terminal.close": "Mod+Alt+KeyW" }, mac: {} })).toBe(
+      "applied",
+    );
+    expect(bindingOf("editor.save")).toEqual(parseChord("Mod+KeyS"));
+    expect(bindingOf("terminal.close")).toEqual(parseChord("Mod+Alt+KeyW"));
+    expect(stored()).toEqual({ v: 1, linux: { "terminal.close": "Mod+Alt+KeyW" } });
+  });
+
+  it("pushes the mirror when the server has no copy but this session edited it", () => {
+    const sent: StoredKeybindings[] = [];
+    setKeybindingsPersister((doc) => sent.push(doc));
+    setBinding("editor.save", null);
+    expect(hydrateFromServer(undefined)).toBe("pushed");
+    expect(sent).toEqual([
+      { v: 1, linux: { "editor.save": null } },
+      { v: 1, linux: { "editor.save": null } },
+    ]);
+    expect(bindingOf("editor.save")).toBeNull();
+  });
+
+  it("clears a mirror the server knows nothing about when this session did not write it", () => {
+    storage.map.set(KEYBINDINGS_KEY, JSON.stringify({ v: 1, linux: { "editor.save": null } }));
+    configureKeybindingsStoreForTests({});
+    expect(bindingOf("editor.save")).toBeNull();
+    expect(hydrateFromServer(undefined)).toBe("cleared");
+    expect(storage.map.has(KEYBINDINGS_KEY)).toBe(false);
+    expect(bindingOf("editor.save")).toEqual(parseChord("Mod+KeyS"));
   });
 });

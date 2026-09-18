@@ -89,6 +89,28 @@ export const en: Strings = {
       terminal: "Terminal",
       editor: "Editor",
     },
+    /** Where a focus-scoped command wins, for the shadowed-conflict hint. */
+    scopes: {
+      terminal: "the terminal",
+      editor: "the editor",
+    },
+    unbound: "Not set",
+    /** The recorder button's tooltip. */
+    rebind: "Change shortcut",
+    record: "Press the new shortcut…",
+    recordHint: "Esc cancels · Backspace clears",
+    needsModifier: "Hold Ctrl, Alt or Shift (⌘ ⌃ ⌥ ⇧ on macOS), or use an F key",
+    resetRow: "Restore default",
+    resetAll: "Reset all",
+    resetAllBody: (n: number): string => `Restore ${n} shortcuts to their defaults?`,
+    conflictSame: (other: string): string =>
+      `Shares its shortcut with "${other}"; only the first in the list fires`,
+    conflictShadowed: (other: string, surface: string): string =>
+      `In ${surface}, "${other}" takes this shortcut first`,
+    browserReserved: "The browser reserves this combination; it works in the desktop app only",
+    desktopShellReserved: "The desktop app uses this combination itself",
+    desktopMenuReserved: "Overrides the desktop app's menu shortcut of the same keys",
+    saveFailed: "Shortcuts could not be saved to the account",
   },
 
   terminal: {
@@ -156,6 +178,10 @@ export const en: Strings = {
     profile: "Profile",
     generalTitle: "General",
     appearanceTitle: "Appearance",
+    shortcutsTitle: "Keyboard shortcuts",
+    /** The Shortcuts page's "?": what follows the platform, where bindings live, and the browser's own claims. */
+    shortcutsInfo:
+      "Shortcuts follow the platform: ⌘ on macOS, Ctrl elsewhere. A change applies at once and in every open tab of this account; bindings are stored per account and per platform, so a Mac and a Windows machine each keep their own. A browser tab cannot receive the chords the browser itself reserves (Ctrl+W / ⌘W, for example); those work in the desktop app and are marked in the list.",
     accountTitle: "Account",
     /** Trace import: the two pickers' accessible names, the pick-a-file action, and its outcomes. */
     importTrace: "Import Trace",
