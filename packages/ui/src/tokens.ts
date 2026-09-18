@@ -165,6 +165,7 @@ export const TOKEN_GROUPS = [
       "--ui-radius-lg",
       "--ui-radius-xl",
       "--ui-radius-pill",
+      "--ui-radius-control",
       "--ui-border-w",
       "--ui-border-w-thick",
     ],
@@ -182,7 +183,6 @@ export const TOKEN_GROUPS = [
       "--ui-glass-blur",
       "--ui-glass-saturate",
       "--ui-glass-line",
-      "--ui-glass-highlight",
     ],
   },
   {
@@ -269,9 +269,11 @@ export const TOKEN_GROUPS = [
       "--ui-menu-row-px",
       "--ui-card-p",
       "--ui-panel-p",
+      "--ui-stack-0",
       "--ui-stack-1",
       "--ui-stack-2",
       "--ui-stack-3",
+      "--ui-stack-4",
     ],
   },
   {
