@@ -36,6 +36,7 @@ describe("validateKeybindings", () => {
     const doc = {
       v: 1,
       mac: { "terminal.close": "Mod+Alt+KeyW", "editor.save": null },
+      windows: { "dock.toggleRight": "Mod+Alt+KeyB" },
       linux: { "future.command.here": "F5" },
     };
     expect(validateKeybindings(doc)).toEqual(doc);

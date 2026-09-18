@@ -20,7 +20,8 @@ export const KEYBINDINGS_CHORD_MAX = 48;
 export const KEYBINDINGS_BYTES_MAX = 8 * 1024;
 
 const SECTIONS = ["mac", "windows", "linux"] as const;
-const ID_RE = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/;
+/** Dotted segments, each starting lower-case; camelCase inside a segment is allowed (`dock.toggleRight`). */
+const ID_RE = /^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
 /** The Web App's chord grammar: modifier tokens in a fixed order, then a KeyboardEvent.code. */
 const CHORD_RE = /^(Mod\+)?(Ctrl\+)?(Alt\+)?(Shift\+)?[A-Za-z][A-Za-z0-9]*$/;
 
