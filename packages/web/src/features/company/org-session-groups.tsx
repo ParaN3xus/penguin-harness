@@ -292,8 +292,7 @@ function useTempRows(
     activeSessionId,
   ).map((row) => {
     const named = titles.get(row.sessionId);
-    const title =
-      named ?? (row.title !== "" ? row.title : S.company.sessionList.untitledSession);
+    const title = named ?? (row.title !== "" ? row.title : S.company.sessionList.untitledSession);
     const name =
       company.orgChart?.employees.find((e) => e.agentId === row.agentId)?.name ?? row.agentId;
     const status = live.get(row.sessionId);
