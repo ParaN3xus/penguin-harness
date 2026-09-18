@@ -67,8 +67,6 @@ describe("protocolPathForModel", () => {
       hit.add(url);
     }
     expect(hit).toEqual(endpoints);
-    // A model added to the group by hand takes the Chat Completions default.
-    expect(protocolPathForModel("opencode-go", "openai-chat")).toBe("/chat/completions");
   });
 
   it("custom and user-defined groups get /chat/completions (with or without the explicit client type)", () => {

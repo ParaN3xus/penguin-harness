@@ -1787,11 +1787,12 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
   // -- OpenCode Go (subscription gateway). The lineup, model ids, endpoints and per-token rates
   // are from opencode.ai/docs/go (read 2026-09-18), which lists these 27 models. Context
   // windows and input modalities are from the opencode-go provider on models.dev, the model
-  // registry OpenCode maintains. The gateway's /models listing also answers ten older ids the
-  // docs page does not list and models.dev marks deprecated (minimax-m2.5, kimi-k2.5, glm-5,
-  // deepseek-flash, qwen3.5-plus, mimo-v2-pro, mimo-v2-omni, hy3-preview, grok-4.5,
-  // omen-alpha); they are left out. So is union-alpha, a limited-time free model the page
-  // listed on 2026-09-17 and dropped by 2026-09-18.
+  // registry OpenCode maintains (hy3 records its input cap instead; see its row). The gateway's
+  // /models listing also answers ten older ids the docs page does not list and models.dev
+  // marks deprecated (minimax-m2.5, kimi-k2.5, glm-5, deepseek-flash, qwen3.5-plus,
+  // mimo-v2-pro, mimo-v2-omni, hy3-preview, grok-4.5, omen-alpha); they are left out. So is
+  // union-alpha, a limited-time free model the page listed on 2026-09-17 and dropped by
+  // 2026-09-18.
   //
   // Protocol: the docs page's endpoint table puts each model on one path, and each row pins
   // the generic client for it: `openai-chat` for /chat/completions and `openai-responses` for
@@ -1943,10 +1944,13 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     baseUrl: OPENCODE_GO_BASE_URL,
   },
   {
+    // models.dev lists a 256,000-token context for Hy3 but caps its input at 192,000. Compaction
+    // derives from this field, so it records the input cap: at 256,000 a Session would keep
+    // sending prompts the upstream refuses until it compacted at ~254K.
     modelId: "hy3",
     displayName: "Hy3",
     provider: "opencode-go",
-    contextWindow: 256000,
+    contextWindow: 192000,
     pricing: usd(0.035, 0.14, 0.58),
     supportsVision: false,
     clientType: "openai-chat",

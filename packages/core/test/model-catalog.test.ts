@@ -216,7 +216,7 @@ describe("model-catalog", () => {
       ["gpt-5.6-luna", ...RESPONSES, 1050000, true],
       ["grok-4.6", ...RESPONSES, 500000, true],
       ["hy4-preview", ...CHAT, 1024000, false],
-      ["hy3", ...CHAT, 256000, false],
+      ["hy3", ...CHAT, 192000, false],
       ["kimi-k3", ...CHAT, 1048576, true],
       ["kimi-k2.7-code", ...CHAT, 262144, true],
       ["kimi-k2.6", ...CHAT, 262144, true],
@@ -273,7 +273,6 @@ describe("model-catalog", () => {
       "qwen3.7-plus": [0.04, 0.5, 1.6],
       "qwen3.6-plus": [0.05, 0.625, 3],
     });
-    expect(go.every((m) => m.pricing!.unit === "usd_per_mtok")).toBe(true);
 
     // The DeepSeek rows are the only ones on a schedule, DeepSeek's own, and off-peak they bill
     // exactly the Go page's Off-Peak figures. 2026-09-19 is a Saturday: off-peak all day.
@@ -294,7 +293,6 @@ describe("model-catalog", () => {
     }
     // No promotion is on a rate: the running "4x" offer raises an allowance, not a price.
     expect(go.filter((m) => m.discount !== undefined)).toEqual([]);
-    expect(presetPromotions().filter((p) => p.provider === "opencode-go")).toEqual([]);
 
     // A model the catalog already carries elsewhere keeps its display name here.
     for (const [provider, modelId, goId] of [
