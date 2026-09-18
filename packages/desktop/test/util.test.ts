@@ -5,7 +5,6 @@ import {
   desktopLoginUrl,
   hidesOnClose,
   isAppUrl,
-  isAuthorizationBridgeUrl,
   isExternalScheme,
   isLocalSurfaceUrl,
   parsePortFile,
@@ -145,20 +144,20 @@ describe("classifyWindowOpen", () => {
     expect(classifyWindowOpen("file:///etc/passwd", null)).toBe("deny");
   });
 
-  it("refuses the Penguin Go authorization bridge, which only the main window may open", () => {
-    // The main window's handler allows the bridge before it classifies anything. Every window
-    // shares this classification, so a preview page asking for about:blank gets no window.
-    expect(isAuthorizationBridgeUrl("about:blank")).toBe(true);
-    expect(classifyWindowOpen("about:blank", origin)).toBe("deny");
-  });
-});
-
-describe("isAuthorizationBridgeUrl", () => {
-  it("accepts only the inert blank window used while authorization starts", () => {
-    expect(isAuthorizationBridgeUrl("about:blank")).toBe(true);
-    expect(isAuthorizationBridgeUrl("about:blank#other")).toBe(false);
-    expect(isAuthorizationBridgeUrl("about:srcdoc")).toBe(false);
-    expect(isAuthorizationBridgeUrl("https://example.com")).toBe(false);
+  it("refuses a blank window from every window, the main window included", () => {
+    // `window.open()` with no URL, from HTML previewed in the main window's Files panel: its
+    // iframe allows popups, and the handler cannot tell that frame from the App. A blank window
+    // inherits the opener's origin, so an allowed one would be a hidden window the preview could
+    // script for as long as it liked. This classification is the whole rule for the main window
+    // too — it has no exception of its own any more (the Penguin Go authorization bridge, which
+    // the Web App no longer opens inside the shell; the authorization URL comes here as a
+    // regular external request instead).
+    for (const url of ["about:blank", "about:blank#other", "about:srcdoc"]) {
+      expect(classifyWindowOpen(url, origin), url).toBe("deny");
+    }
+    expect(classifyWindowOpen("https://platform.example/authorize?flow=f-1", origin)).toBe(
+      "external",
+    );
   });
 });
 

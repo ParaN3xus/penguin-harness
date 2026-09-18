@@ -112,6 +112,14 @@ export type WindowOpenAction = "window" | "external" | "deny";
  * exist — one more window per click. Other schemes (`file:`, custom protocol handlers) are
  * refused outright rather than handed to the OS (isExternalScheme). With no origin, which no
  * window ever sees, everything is refused.
+ *
+ * `about:blank` — `window.open()` with no URL — is refused with the other schemes, and that is
+ * load-bearing: a blank window inherits its opener's origin, so the opener can script it, and a
+ * handler is not told which frame asked. The Files panel previews Agent-written HTML in an
+ * iframe that allows popups, so a blank window allowed for any purpose would be a hidden window
+ * that HTML could own. Nothing of this app opens one: the Web App opens Penguin Go's
+ * authorization URL directly when it runs in this shell (see the platform-key dialog), which
+ * this rule routes to the system browser.
  */
 export function classifyWindowOpen(url: string, origin: string | null): WindowOpenAction {
   if (origin === null || !isExternalScheme(url)) return "deny";
@@ -143,16 +151,6 @@ export function urlForLog(url: string): string {
   return target.protocol === "http:" || target.protocol === "https:"
     ? `${target.origin}${target.pathname}`
     : `a ${target.protocol} URL`;
-}
-
-/**
- * The one inert window the Web App opens synchronously while Penguin Go creates an
- * authorization flow. It must stay inside Electron until the real HTTPS URL arrives:
- * handing `about:blank` to Windows asks the OS to find an application for the `about:`
- * scheme and raises a system dialog instead of opening the user's browser.
- */
-export function isAuthorizationBridgeUrl(url: string): boolean {
-  return url === "about:blank";
 }
 
 /** Max automatic server restarts before giving up with an error dialog. */
