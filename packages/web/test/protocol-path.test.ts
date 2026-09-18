@@ -59,7 +59,7 @@ describe("protocolPathForModel", () => {
       "https://opencode.ai/zen/go/v1/messages",
     ]);
     const rows = MODEL_CATALOG.filter((m) => m.provider === "opencode-go");
-    expect(rows).toHaveLength(28);
+    expect(rows).toHaveLength(27);
     const hit = new Set<string>();
     for (const m of rows) {
       const url = `${m.baseUrl}${protocolPathForModel(m.provider, m.clientType ?? "")}`;
