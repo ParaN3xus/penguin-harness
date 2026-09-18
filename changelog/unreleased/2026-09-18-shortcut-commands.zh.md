@@ -3,6 +3,7 @@
 - **Date:** 2026-09-18
 - **Type:** feature
 - **Scope:** `web`
+- **PR:** [#790](https://github.com/Prism-Shadow/penguin-harness/pull/790)
 
 [English](2026-09-18-shortcut-commands.md)
 
