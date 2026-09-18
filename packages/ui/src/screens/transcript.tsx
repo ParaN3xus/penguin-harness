@@ -1,10 +1,14 @@
 /**
  * The transcript and composer pieces of the screen mock-ups, after the web app's chat feature:
  * user bubbles, settled and streaming assistant text, the "Running / Done" work group with its
- * thinking and tool rows, a diff, the subagent shortcut chip, the pending-approval block, the
- * per-turn stats line and the composer. All W6 components in the architecture; until then these
- * static stand-ins are what the gallery shows.
+ * thinking and tool rows, a diff, the subagent row, the pending-approval block, the per-turn stats
+ * line and the composer. All W6 components in the architecture; until then these static stand-ins
+ * are what the gallery shows.
+ *
+ * Pieces that carry a style hook take the name of the component they imitate — `DiffViewer`,
+ * `ComposerCard`, `WorkGroup` — because a hook belongs to its host (hooks.ts, Appendix B).
  */
+import type { ReactNode } from "react";
 import type {
   ChatItem,
   ChatTurn,
@@ -16,8 +20,17 @@ import type {
 } from "../fixtures";
 import { duration, liveDuration, percent, tokens, usd } from "./format";
 import { Glyph } from "./glyph";
-import { Markdown } from "./markdown";
-import { AgentTile, Dot, IconSquare, NEUTRAL_FILL, Spinner, StatChip, StatusMark } from "./parts";
+import { Markdown, StreamingCaret } from "./markdown";
+import {
+  AgentTile,
+  Dot,
+  IconButton,
+  NEUTRAL_FILL,
+  Spinner,
+  StatChip,
+  StatusMark,
+  stateWord,
+} from "./parts";
 
 /** What a screen asks to see expanded: item ids of rows, and the first item id of work groups. */
 export interface Expansion {
@@ -84,8 +97,8 @@ export function StatsLine({ stats, f }: { stats: TurnStats; f: Fixtures }) {
       <StatChip glyph="clock" value={duration(stats.elapsedMs)} title={t.elapsed} />
       <StatChip glyph="gauge" value={`${stats.outputTps} tok/s`} title={t.outputTps} />
       <span className="flex items-center gap-1">
-        <IconSquare glyph="copy" size="sm" label={f.copy.chat.copy} />
-        <IconSquare glyph="fork" size="sm" label={f.copy.chat.fork} />
+        <IconButton icon="copy" size="sm" label={f.copy.chat.copy} />
+        <IconButton icon="fork" size="sm" label={f.copy.chat.fork} />
       </span>
     </div>
   );
@@ -104,7 +117,7 @@ function ThinkingRow({ item, open, f }: { item: ThinkingItem; open: boolean; f: 
   return (
     <div>
       <div className={ROW}>
-        <StatusMark state={item.state} />
+        <StatusMark state={item.state} f={f} />
         <span className="shrink-0 text-xs text-fg-muted">{f.copy.chat.thinking}</span>
         <span className="shrink-0 font-mono text-xs text-fg-muted">
           {item.durationMs !== undefined
@@ -124,7 +137,7 @@ function ThinkingRow({ item, open, f }: { item: ThinkingItem; open: boolean; f: 
 }
 
 /** A unified diff: hunk header, then old/new gutters and the changed lines on tinted rows. */
-export function DiffBlock({ diff }: { diff: FileDiff }) {
+export function DiffViewer({ diff }: { diff: FileDiff }) {
   return (
     <div className="ui-frame font-mono text-xs leading-5">
       <div
@@ -182,25 +195,32 @@ export function DiffBlock({ diff }: { diff: FileDiff }) {
   );
 }
 
-function SubagentChip({ item, f }: { item: ToolCallItem; f: Fixtures }) {
+/**
+ * The child Session a `run_subagent` call started: a row under the call, not a card. A hairline
+ * separates it from the output above; a second bordered box inside the work group would be one
+ * surface too many (§1.3 row 16).
+ */
+function SubagentRow({ item, f }: { item: ToolCallItem; f: Fixtures }) {
   const sub = item.subagent!;
   return (
-    <div className="bg-surface px-3 pb-2 pt-2">
-      <div className="flex w-full items-center gap-2 rounded-md border border-line bg-surface-muted px-3 py-2">
-        <AgentTile id={sub.agentId} name={sub.agentName} size={16} />
-        <span className="min-w-0 truncate text-xs font-(--ui-weight-medium) text-fg">
-          {sub.agentName}
-        </span>
-        <span className="shrink-0 font-mono text-[0.625rem] text-fg-subtle">{sub.shortId}</span>
-        {sub.running && <Spinner size={10} className="text-fg-subtle" />}
-        {sub.pendingApproval && <Dot className="bg-tone-attention-emphasis" />}
-        <span className="min-w-0 flex-1" />
-      </div>
+    <div className="flex w-full items-center gap-2 border-t border-line-muted bg-surface px-3 py-2">
+      <AgentTile id={sub.agentId} name={sub.agentName} size={16} />
+      <span className="min-w-0 truncate text-xs font-(--ui-weight-medium) text-fg">
+        {sub.agentName}
+      </span>
+      <span className="shrink-0 font-mono text-xs text-fg-subtle">{sub.shortId}</span>
+      {sub.running && <Spinner size="xs" label={f.copy.chat.runStates.running} />}
+      {sub.pendingApproval && <Dot className="bg-tone-attention-emphasis" />}
+      <span className="min-w-0 flex-1" />
     </div>
   );
 }
 
-/** The amber pending-approval block (Console draws its corner ticks through `.ui-ticks`). */
+/**
+ * The pending-approval block: the one genuine ask in a view, so it keeps its amber fill — but the
+ * rule above it is the neutral line, because a tint and a line of the same hue is the one-hue box
+ * (§1.3 row 19). The alias is mono text; it needs no chip of its own.
+ */
 function ApprovalBlock({ item, f }: { item: ToolCallItem; f: Fixtures }) {
   let preview = item.argumentsJson;
   try {
@@ -210,18 +230,18 @@ function ApprovalBlock({ item, f }: { item: ToolCallItem; f: Fixtures }) {
     // Arguments stay as written.
   }
   return (
-    <div className="ui-ticks border-t border-tone-attention-line bg-tone-attention-bg px-3 py-2">
+    <div className="border-t border-line bg-tone-attention-bg px-3 py-2">
       <div className="mb-2 flex items-center gap-2">
-        <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 font-mono text-xs font-(--ui-weight-strong) text-fg">
+        <span className="shrink-0 font-mono text-xs font-(--ui-weight-strong) text-fg">
           {item.alias}
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-muted">{preview}</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="ui-button ui-pill-hover rounded-md border border-accent bg-accent px-2.5 py-1 text-xs font-(--ui-weight-medium) text-accent-fg">
+        <span className="rounded-control border border-accent bg-accent px-2.5 py-1 text-xs font-(--ui-weight-medium) text-accent-fg">
           {f.copy.chat.approve}
         </span>
-        <span className="ui-button ui-pill-hover rounded-md border border-line-emphasis bg-surface px-2.5 py-1 text-xs font-(--ui-weight-medium) text-fg">
+        <span className="rounded-control border border-line-emphasis bg-surface px-2.5 py-1 text-xs font-(--ui-weight-medium) text-fg">
           {f.copy.chat.deny}
         </span>
       </div>
@@ -235,7 +255,7 @@ function ToolRow({ item, open, f }: { item: ToolCallItem; open: boolean; f: Fixt
   return (
     <div>
       <div className={ROW}>
-        <StatusMark state={item.state} />
+        <StatusMark state={item.state} f={f} />
         <span className="shrink-0 font-mono text-xs font-(--ui-weight-strong) text-fg">
           {item.alias}
         </span>
@@ -256,7 +276,7 @@ function ToolRow({ item, open, f }: { item: ToolCallItem; open: boolean; f: Fixt
         <div>
           {item.diff ? (
             <div className="border-t border-line-muted">
-              <DiffBlock diff={item.diff} />
+              <DiffViewer diff={item.diff} />
             </div>
           ) : (
             <>
@@ -266,18 +286,14 @@ function ToolRow({ item, open, f }: { item: ToolCallItem; open: boolean; f: Fixt
               {item.output !== undefined && (
                 <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-line-muted bg-surface px-3 py-2 font-mono text-xs leading-5 text-fg-muted">
                   {item.output}
-                  {item.outputStreaming && (
-                    <span data-live="caret" className="ui-live animate-pulse text-fg-subtle">
-                      ▌
-                    </span>
-                  )}
+                  {item.outputStreaming && <StreamingCaret />}
                 </pre>
               )}
             </>
           )}
         </div>
       )}
-      {item.subagent && <SubagentChip item={item} f={f} />}
+      {item.subagent && <SubagentRow item={item} f={f} />}
     </div>
   );
 }
@@ -305,13 +321,13 @@ function WorkGroup({
         className="flex w-full items-center justify-between gap-2 bg-surface-muted px-3 py-2"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <StatusMark state={running ? "running" : "done"} />
+          <StatusMark state={running ? "running" : "done"} f={f} />
           <span
-            className={`shrink-0 text-[0.6875rem] font-(--ui-weight-strong) uppercase tracking-wide ${
+            className={`shrink-0 text-xs font-(--ui-weight-strong) ${
               running ? "text-tone-success-fg" : "text-fg-muted"
             }`}
           >
-            {running ? f.copy.chat.running : f.copy.chat.done}
+            {stateWord(running ? "running" : "done", f)}
           </span>
           {steps > 0 && (
             <span className="shrink-0 font-mono text-xs text-fg-subtle">
@@ -456,6 +472,18 @@ function ContextRing({ used, window }: { used: number; window: number }) {
   );
 }
 
+/**
+ * The floating card the composer sits in: the one place in the transcript that glass belongs,
+ * because the conversation scrolls underneath it (`.ui-glass`, Appendix B).
+ */
+function ComposerCard({ children }: { children: ReactNode }) {
+  return (
+    <div className="ui-glass @container rounded-lg border border-line-emphasis bg-surface px-2.5 pb-2 pt-2">
+      {children}
+    </div>
+  );
+}
+
 export function Composer({ f, compact = false }: { f: Fixtures; compact?: boolean }) {
   const s = f.session;
   const c = f.copy.chat;
@@ -463,7 +491,7 @@ export function Composer({ f, compact = false }: { f: Fixtures; compact?: boolea
   return (
     <div className="shrink-0 border-t border-line px-3 py-3">
       <div className="mx-auto max-w-3xl">
-        <div className="ui-glass @container rounded-lg border border-line-emphasis bg-surface px-2.5 pb-2 pt-2">
+        <ComposerCard>
           {!compact && s.composer.chips.length > 0 && (
             <div className="mb-1.5 flex flex-wrap items-center gap-1.5 px-1">
               {s.composer.chips.map((chip) => (
@@ -495,13 +523,13 @@ export function Composer({ f, compact = false }: { f: Fixtures; compact?: boolea
           </p>
           <div className="mt-1 flex items-center gap-2 text-xs">
             <div className="flex shrink-0 items-center gap-1">
-              <IconSquare glyph="plus" />
-              <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-fg-muted">
+              <IconButton icon="plus" label={c.attach} />
+              <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-control px-2 text-fg-muted">
                 <Glyph name="shield" size={14} />
                 {c.approvalModes[s.composer.approvalMode]}
                 <Glyph name="chevronDown" size={12} className="text-fg-subtle" />
               </span>
-              <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-fg-muted">
+              <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-control px-2 text-fg-muted">
                 <Glyph name="book" size={14} />
                 {c.skills}
                 <Glyph name="chevronDown" size={12} className="text-fg-subtle" />
@@ -515,24 +543,27 @@ export function Composer({ f, compact = false }: { f: Fixtures; compact?: boolea
             <div className="min-w-0 flex-1" />
             <div className="flex min-w-0 items-center gap-2">
               <ContextRing used={s.context.tokens} window={s.context.window} />
-              <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-fg-muted">
+              <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-control px-2 text-fg-muted">
                 <Glyph name="sparkle" size={13} />
                 {c.thinkingLevels[s.composer.thinkingLevel]}
                 <Glyph name="chevronDown" size={12} className="text-fg-subtle" />
               </span>
-              <span className="flex h-8 min-w-0 items-center gap-1.5 rounded-md px-1 text-fg-muted">
+              <span className="flex h-8 min-w-0 items-center gap-1.5 rounded-control px-1 text-fg-muted">
                 <AgentTile id={s.model.provider} name={model?.providerLabel ?? "?"} size={16} />
                 <span className="min-w-0 truncate">{model?.displayName}</span>
               </span>
+              {/* Stop is a control, not a status: a solid fill, never danger ink on a danger tint. */}
               <span
+                role="button"
+                aria-label={c.stop}
                 title={c.stop}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-tone-danger-bg text-tone-danger-fg"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-tone-danger-emphasis text-tone-danger-emphasis-fg"
               >
                 <span className="h-2.5 w-2.5 rounded-xs bg-current" />
               </span>
             </div>
           </div>
-        </div>
+        </ComposerCard>
       </div>
     </div>
   );

@@ -9,6 +9,10 @@
  * props (a tool's short alias, a run state, a settled duration), never a server response to be
  * interpreted. Timestamps are ISO 8601 so tests stay deterministic; durations are milliseconds.
  */
+import type { ToneName } from "../tokens";
+// A glyph name is an icon name: the mock registry is the only one the package has until W1 moves
+// the app's `ICONS` here, and this import re-points to it then.
+import type { GlyphName } from "../screens/glyph";
 
 /** The two locales every fixture exists in. */
 export const FIXTURE_LANGS = ["en", "zh"] as const;
@@ -407,6 +411,131 @@ export interface CompanyFixture {
 }
 
 // ---------------------------------------------------------------------------
+// Notices, forms, menus, secrets, plugins, the palette and usage
+// ---------------------------------------------------------------------------
+
+/**
+ * A notice as `Notice` and `Toast` receive it. The tone is carried by the leading mark and the
+ * title's weight, never by a coloured box, so the same record serves a strip, an inline line and
+ * a toast; a notice offers at most one action, because two make it a dialog.
+ */
+export interface NoticeFixture {
+  tone: ToneName;
+  title: string;
+  body: string;
+  action?: string;
+}
+
+export interface NoticeFixtures {
+  /** One per tone, so a module can lay the six out side by side and compare their marks. */
+  byTone: Readonly<Record<ToneName, NoticeFixture>>;
+  /** The stack a run raises while it works: two at a time, newest last. */
+  toasts: readonly NoticeFixture[];
+}
+
+/**
+ * One field of the dialog form. Exactly one field in `FormFixture.fields` carries an `error` and
+ * exactly one is `disabled`, so the invalid and the held states are always renderable.
+ */
+export interface FormFieldFixture {
+  name: string;
+  label: string;
+  kind: "text" | "password" | "select" | "textarea";
+  value: string;
+  /** The line under the field when it is valid. */
+  hint?: string;
+  /** What the field says when it is wrong; its presence is what makes it the invalid one. */
+  error?: string;
+  /** Held by a server policy: shown, explained, not editable. */
+  disabled?: boolean;
+  /** The options a `select` offers, the first being `value`. */
+  options?: readonly string[];
+}
+
+/** An accent preset as the swatch picker draws it: the swatch IS the colour, so it is data. */
+export interface AccentSwatchFixture {
+  /** The `data-accent` value, or `theme` for the theme's own accent. */
+  id: string;
+  label: string;
+  /** A preset's hex, or `var(--ui-accent)` for the theme's own. */
+  color: string;
+}
+
+export interface FormFixture {
+  title: string;
+  description: string;
+  fields: readonly FormFieldFixture[];
+  /** The one line a form shows above its footer while a field is wrong. */
+  errorSummary: string;
+  submit: string;
+  cancel: string;
+  swatches: readonly AccentSwatchFixture[];
+}
+
+/** A context-menu entry, or the rule between two groups of them. */
+export type MenuEntryFixture =
+  | "separator"
+  | {
+      icon: GlyphName;
+      label: string;
+      /** The keys a `Kbd` prints, in press order. */
+      shortcut?: readonly string[];
+      /** The one destructive item; a menu has at most one. */
+      danger?: boolean;
+    };
+
+export interface MenuFixtures {
+  /** What a message row's "…" opens. */
+  message: readonly MenuEntryFixture[];
+}
+
+/** A row of the Vault table: a secret, what kind it is, and which Agents may read it. */
+export interface VaultEntryFixture {
+  name: string;
+  kind: string;
+  /** Agent ids allowed to read it; empty means nobody has been granted it yet. */
+  agents: readonly string[];
+  /** The date the row prints, already formatted for its locale. */
+  updated: string;
+}
+
+/** An installed plugin as the library lists it. */
+export interface PluginFixture {
+  name: string;
+  version: string;
+  description: string;
+  icon: GlyphName;
+  enabled: boolean;
+}
+
+/** One entry of the command palette: a command, or a Session to jump to. */
+export interface CommandFixture {
+  label: string;
+  icon?: GlyphName;
+  /** Set instead of `icon` when the row stands for an Agent. */
+  agentId?: string;
+  /** The muted half of the row: what the command does, or when the Session last ran. */
+  hint?: string;
+  /** The shortcut a `Kbd` prints at the row's end. */
+  keys?: readonly string[];
+}
+
+export interface CommandGroupFixture {
+  label: string;
+  items: readonly CommandFixture[];
+}
+
+/** A week of token usage: a label per day and one series per bucket, in thousands. */
+export interface UsageFixture {
+  days: readonly string[];
+  cacheRead: readonly number[];
+  cacheWrite: readonly number[];
+  output: readonly number[];
+  /** What the legend calls each series, in the series' own order. */
+  buckets: Readonly<Record<"cacheRead" | "cacheWrite" | "output", string>>;
+}
+
+// ---------------------------------------------------------------------------
 // App copy and type specimens
 // ---------------------------------------------------------------------------
 
@@ -429,10 +558,15 @@ export interface AppCopy {
     sessions: string;
     collapseSidebar: string;
     search: string;
+    filterSessions: string;
+    newFolder: string;
   };
   chat: {
+    /** The five run states in sentence case: a status mark always carries its word. */
+    runStates: Record<RunState, string>;
     running: string;
     done: string;
+    attach: string;
     steps: (n: number) => string;
     thinking: string;
     approvalWaiting: string;
@@ -461,6 +595,9 @@ export interface AppCopy {
     nodeDone: string;
     openAsSession: string;
     newPanel: string;
+    movePanel: string;
+    bottomDock: string;
+    rightDock: string;
     close: string;
   };
   traces: {
@@ -482,6 +619,7 @@ export interface AppCopy {
     legend: Record<TraceSegmentKind, string>;
     zoom: string;
     messages: string;
+    fromSubagent: string;
   };
   settings: {
     title: string;
@@ -558,5 +696,12 @@ export interface Fixtures {
   fileTree: FileNode;
   filePreview: FilePreview;
   company: CompanyFixture;
+  notices: NoticeFixtures;
+  forms: FormFixture;
+  menus: MenuFixtures;
+  vault: readonly VaultEntryFixture[];
+  plugins: readonly PluginFixture[];
+  commandPalette: readonly CommandGroupFixture[];
+  usage: UsageFixture;
   specimens: TypeSpecimens;
 }

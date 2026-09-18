@@ -23,6 +23,11 @@ Web App imports neither, so it looks exactly as before.
   events.
 - Chrome copy taken from the Web App's two dictionaries, and specimen text for the fonts page and
   the Typography foundation that mixes Chinese, Latin, code and numbers.
+- The sets the gallery's modules compose: a notice per tone and a toast pair, a provider form with
+  one invalid and one policy-held field, a message context menu with a shortcut and one destructive
+  item, six Vault rows, four installed plugins, the command palette's two groups, and a week of
+  token usage in three buckets. Their colours, versions, icons, shortcuts and series are
+  locale-independent and live in `fixtures/shared.ts`; only words are per locale.
 - `en` and `zh` are built from one structure (`fixtures/dataset.ts`) and differ only in prose;
   `fixturesFor(lang)` returns either.
 
@@ -37,3 +42,36 @@ Web App imports neither, so it looks exactly as before.
 - The screens use token utilities and the declared style hooks only, so each theme restyles them
   through its token values; package components replace their stand-in pieces wave by wave.
 - The package exports them as `@prismshadow/penguin-ui/screens` (`SCREENS`, `screenById`).
+
+## De-slop
+
+The screens are held to the theme work's component rules, so what the gallery shows is what the
+rules ask for rather than the drafts they were written from.
+
+- The deleted style hooks are gone from the markup: no ambient wash or column grid behind a
+  transcript, a settings page or a Trace panel, no dot matrix behind the login (the circuit traces
+  stay — the login's one decoration, in every theme), no corner ticks on the approval block, no
+  hover-pill radius on buttons and cards, no mono uppercase button labels. Controls read their
+  shape from `--ui-radius-control` instead.
+- Each remaining hook sits on the component that hosts it: the glass of the settings dialog is a
+  `Modal`, the glass of its popover a `FloatingPanel`, the glass of the composer a `ComposerCard`,
+  the rail's group titles the `PagedDialog`'s eyebrows, the sidebar's and the call graph's a
+  `GroupHeader`, the diff a `DiffViewer` and the fenced block a `CodeBlock`. The dialog's page
+  title is an ordinary `h2` — the display face is for a page's one display title — and it lost the
+  sun glyph the rail already shows.
+- Status is a word again: a run state prints in sentence case at the caption rung in its tone's
+  ink (`Running`, `Needs approval`, `Failed`), with the five words in both dictionaries, instead of
+  10–11 px uppercase with wide tracking. Nothing on the screens is set below `.75rem` any more.
+- The pending-approval block keeps its amber fill but takes the neutral rule above it, and its
+  alias is mono text rather than a chip; the subagent shortcut is a row under its call instead of a
+  bordered card inside the work group; the Trace's Overall is a ruled section and its timeline sits
+  in the turn's body, both without a box of their own; the composer's stop is a solid control, not
+  a danger glyph on a danger tint.
+- `Pill`, `IconSquare` and the hand-rolled ring spinner were replaced by stand-ins in the shapes
+  W1's components take, so the swap is a rename: `Badge` (`tone`, `variant`, `soft` taking the
+  neutral line), `IconButton` (flat at rest, filled only when `pressed`, label required) and
+  `Spinner` (`xs` / `sm` / `md` at 10 / 12 / 14, `tone`, `label`). The spinner is the real
+  component: it lives at `src/components/icons/spinner/spinner.tsx`, the one file allowed to spin,
+  and draws an arc a theme re-times through `.ui-live[data-live="spinner"]`.
+- The accent swatches' hex values moved into the fixtures, where identity data belongs, and each
+  swatch now carries its name in both dictionaries.

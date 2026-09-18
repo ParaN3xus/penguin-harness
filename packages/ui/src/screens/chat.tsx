@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { FixtureLang, Fixtures, ToolCallItem } from "../fixtures";
 import { Glyph } from "./glyph";
-import { AgentTile, ChatHeader, DockFrame, Sidebar, Spinner } from "./parts";
+import { AgentTile, ChatHeader, DockFrame, GroupHeader, Sidebar, Spinner } from "./parts";
 import { Composer, Turn } from "./transcript";
 
 /**
@@ -45,25 +45,23 @@ function SubagentsPanel({ f }: { f: Fixtures }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b border-line px-3 pb-2 pt-1.5">
-        <p className="ui-eyebrow mb-1.5 text-[0.6875rem] font-(--ui-weight-strong) uppercase tracking-wide text-fg-muted">
-          {f.copy.dock.topology}
-        </p>
-        <div className="space-y-0.5 text-xs">
+        <div className="mb-1.5">
+          <GroupHeader label={f.copy.dock.topology} />
+        </div>
+        <div className="space-y-1 text-xs">
           <div className="flex items-center gap-2 rounded-md px-1.5 py-1 text-fg-muted">
             <AgentTile id={mainAgent.id} name={mainAgent.name} size={14} />
             <span className="truncate">{mainAgent.name}</span>
-            <span className="font-mono text-[0.625rem] text-fg-subtle">
-              {f.session.id.slice(-6)}
-            </span>
+            <span className="font-mono text-xs text-fg-subtle">{f.session.id.slice(-6)}</span>
           </div>
           <div className="flex items-center gap-2 rounded-md bg-accent-muted py-1 pl-6 pr-1.5 text-fg">
             <span aria-hidden className="h-px w-2 bg-line-emphasis" />
             <AgentTile id={sub.agentId} name={sub.agentName} size={14} />
             <span className="truncate font-(--ui-weight-medium)">{sub.agentName}</span>
-            <span className="font-mono text-[0.625rem] text-fg-subtle">{sub.shortId}</span>
+            <span className="font-mono text-xs text-fg-subtle">{sub.shortId}</span>
             <span className="min-w-0 flex-1" />
             <span className="flex items-center gap-1 text-tone-success-fg">
-              <Spinner size={10} />
+              <Spinner size="xs" label={f.copy.chat.runStates.running} />
               {f.copy.dock.nodeRunning}
             </span>
           </div>
@@ -74,11 +72,13 @@ function SubagentsPanel({ f }: { f: Fixtures }) {
         <span className="min-w-0 truncate text-xs font-(--ui-weight-strong) text-fg">
           {sub.agentName}
         </span>
-        <span className="shrink-0 font-mono text-[0.625rem] text-fg-subtle">{sub.sessionId}</span>
+        <span className="shrink-0 font-mono text-xs text-fg-subtle">{sub.sessionId}</span>
         <span className="min-w-0 flex-1" />
         <span
+          role="button"
+          aria-label={f.copy.dock.openAsSession}
           title={f.copy.dock.openAsSession}
-          className="flex h-6 w-6 items-center justify-center rounded-sm text-fg-subtle"
+          className="flex h-6 w-6 items-center justify-center rounded-control text-fg-subtle hover:text-fg"
         >
           <Glyph name="message" size={13} />
         </span>
@@ -102,7 +102,7 @@ export function ChatScreen({ lang }: { lang: FixtureLang }) {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-canvas text-fg">
       <Sidebar f={f} activeSessionId={f.session.id} />
-      <div className="ui-wash ui-grid flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <ChatHeader f={f} dock="right" />
         <div className="flex min-h-0 flex-1">
           <main className="flex min-w-0 flex-1 flex-col">

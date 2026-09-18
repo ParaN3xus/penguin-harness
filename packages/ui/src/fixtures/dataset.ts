@@ -5,6 +5,7 @@
  * supplies words, never structure.
  */
 import {
+  ACCENT_SWATCHES,
   AGENT_ID,
   APP_URL,
   CMD_APP,
@@ -22,6 +23,10 @@ import {
   OUTPUT_WRITE,
   RAG_PATH,
   RAG_TS_AFTER,
+  MESSAGE_MENU,
+  PALETTE_COMMANDS,
+  PLUGIN_KEYS,
+  PLUGIN_ROWS,
   READ_LIMIT,
   READ_OFFSET,
   REVIEWER_AGENT_ID,
@@ -36,21 +41,32 @@ import {
   TURN2_LANES,
   TURN2_SPAN_MS,
   TURN2_START_MS,
+  USAGE_SERIES,
+  VAULT_KEYS,
+  VAULT_ROWS,
   WORKSPACE,
   WRITE_DIFF,
   clock,
   iso,
   workspaceTree,
 } from "./shared";
+import type { PluginKey, VaultKey } from "./shared";
+import type { ToneName } from "../tokens";
 import type {
   AppCopy,
   CalendarEventFixture,
+  CommandGroupFixture,
   EmployeeFixture,
   FixtureAgent,
   FixtureLang,
   Fixtures,
+  FormFieldFixture,
+  MenuEntryFixture,
+  NoticeFixture,
+  PluginFixture,
   TicketFixture,
   TypeSpecimens,
+  VaultEntryFixture,
 } from "./types";
 
 /** Everything a locale writes. Keys name the slot a string fills; see `buildFixtures`. */
@@ -112,6 +128,40 @@ export interface FixtureProse {
       "standup" | "triage" | "review" | "evalRun" | "retro" | "report",
       { title: string; prompt: string }
     >;
+  };
+  /**
+   * The sets K-redesign §4.6 adds. Only their words live here: the colours, versions, icons,
+   * shortcuts and series are locale-independent and come from `shared.ts`.
+   */
+  notices: {
+    /** One per tone, in the contract's order: success, attention, danger, done, neutral, info. */
+    byTone: Readonly<Record<ToneName, { title: string; body: string; action?: string }>>;
+    toasts: readonly { tone: ToneName; title: string; body: string; action?: string }[];
+  };
+  forms: {
+    title: string;
+    description: string;
+    /** In render order; exactly one carries `error` and exactly one is `disabled`. */
+    fields: readonly FormFieldFixture[];
+    errorSummary: string;
+    submit: string;
+    cancel: string;
+    /** One label per preset in `ACCENT_SWATCHES`, in its order. */
+    swatchLabels: readonly string[];
+  };
+  menus: Record<"copy" | "fork" | "export" | "delete", string>;
+  vault: Record<VaultKey, { kind: string; updated: string }>;
+  plugins: Record<PluginKey, { description: string }>;
+  palette: {
+    groups: Record<"commands" | "sessions", string>;
+    commands: Record<"newChat" | "switchModel" | "settings" | "search", string>;
+    hints: Record<"newChat" | "switchModel" | "settings" | "search", string>;
+    /** The two Sessions the palette offers, with when they last ran. */
+    sessions: readonly { title: string; hint: string }[];
+  };
+  usage: {
+    days: readonly string[];
+    buckets: Record<"cacheRead" | "cacheWrite" | "output", string>;
   };
   specimens: TypeSpecimens;
 }
@@ -776,6 +826,70 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
     }),
     fileTree: workspaceTree(prose.notesFileName),
     filePreview: { path: RAG_PATH, language: "typescript", content: RAG_TS_AFTER },
+    notices: {
+      byTone: Object.fromEntries(
+        Object.entries(prose.notices.byTone).map(([tone, n]) => [tone, { tone, ...n }]),
+      ) as Fixtures["notices"]["byTone"],
+      toasts: prose.notices.toasts.map((t): NoticeFixture => ({ ...t })),
+    },
+    forms: {
+      title: prose.forms.title,
+      description: prose.forms.description,
+      fields: prose.forms.fields,
+      errorSummary: prose.forms.errorSummary,
+      submit: prose.forms.submit,
+      cancel: prose.forms.cancel,
+      swatches: ACCENT_SWATCHES.map((swatch, i) => ({
+        ...swatch,
+        label: prose.forms.swatchLabels[i]!,
+      })),
+    },
+    menus: {
+      message: MESSAGE_MENU.map((entry): MenuEntryFixture =>
+        entry === "separator"
+          ? "separator"
+          : {
+              icon: entry.icon,
+              label: prose.menus[entry.key],
+              ...(entry.shortcut === undefined ? {} : { shortcut: entry.shortcut }),
+              ...(entry.danger === undefined ? {} : { danger: entry.danger }),
+            },
+      ),
+    },
+    vault: VAULT_KEYS.map((key): VaultEntryFixture => ({
+      ...VAULT_ROWS[key],
+      ...prose.vault[key],
+    })),
+    plugins: PLUGIN_KEYS.map((key): PluginFixture => ({
+      ...PLUGIN_ROWS[key],
+      ...prose.plugins[key],
+    })),
+    commandPalette: [
+      {
+        label: prose.palette.groups.commands,
+        items: PALETTE_COMMANDS.map((command) => ({
+          icon: command.icon,
+          label: prose.palette.commands[command.key],
+          hint: prose.palette.hints[command.key],
+          ...(command.keys === undefined ? {} : { keys: command.keys }),
+        })),
+      },
+      {
+        label: prose.palette.groups.sessions,
+        items: prose.palette.sessions.map((session, i) => ({
+          agentId: i === 0 ? AGENT_ID : REVIEWER_AGENT_ID,
+          label: session.title,
+          hint: session.hint,
+        })),
+      },
+    ] satisfies CommandGroupFixture[],
+    usage: {
+      days: prose.usage.days,
+      cacheRead: USAGE_SERIES.cacheRead,
+      cacheWrite: USAGE_SERIES.cacheWrite,
+      output: USAGE_SERIES.output,
+      buckets: prose.usage.buckets,
+    },
     company: {
       org: {
         id: "docs-expert-co",
