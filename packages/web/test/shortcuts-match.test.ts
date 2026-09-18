@@ -143,3 +143,54 @@ describe("layout relocation", () => {
     expect(withUnbound.get("editor.save")).toBeNull();
   });
 });
+
+describe("the six panel and navigation commands", () => {
+  const cases: Array<[CommandId, Partial<KeyLike> & { code: string }]> = [
+    ["sessions.search", { code: "KeyK" }],
+    ["chat.new", { code: "KeyO", shiftKey: true }],
+    ["sidebar.toggle", { code: "KeyB" }],
+    ["dock.toggleRight", { code: "KeyB", altKey: true }],
+    ["dock.toggleBottom", { code: "KeyJ" }],
+  ];
+
+  it("bind with Mod: ⌘ on a Mac, Ctrl elsewhere", () => {
+    for (const [id, init] of cases) {
+      expect(matchShortcut(key({ ...init, metaKey: true }), defaults("mac"), ALL, "mac"), id).toBe(
+        id,
+      );
+      expect(
+        matchShortcut(key({ ...init, ctrlKey: true }), defaults("mac"), ALL, "mac"),
+        id,
+      ).toBeNull();
+      expect(
+        matchShortcut(key({ ...init, ctrlKey: true }), defaults("windows"), ALL, "windows"),
+        id,
+      ).toBe(id);
+      expect(
+        matchShortcut(key({ ...init, ctrlKey: true }), defaults("linux"), ALL, "linux"),
+        id,
+      ).toBe(id);
+    }
+  });
+
+  it("opens a new terminal on Ctrl+Shift+` on every platform, like the toggle", () => {
+    for (const platform of ["mac", "windows", "linux"] as const) {
+      expect(
+        matchShortcut(
+          key({ code: "Backquote", ctrlKey: true, shiftKey: true }),
+          defaults(platform),
+          ALL,
+          platform,
+        ),
+      ).toBe("terminal.new");
+    }
+    expect(
+      matchShortcut(
+        key({ code: "Backquote", metaKey: true, shiftKey: true }),
+        defaults("mac"),
+        ALL,
+        "mac",
+      ),
+    ).toBeNull();
+  });
+});

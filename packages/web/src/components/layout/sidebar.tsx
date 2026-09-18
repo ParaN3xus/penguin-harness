@@ -47,6 +47,8 @@ import type {
 import * as api from "../../api/endpoints";
 import { S } from "../../lib/strings";
 import { formatRelativeShort } from "../../lib/format";
+import { onCommand } from "../../lib/shortcuts/dispatcher";
+import { useShortcutLabel } from "../../lib/shortcuts/use-keymap";
 import { sessionBackgroundTasks, sessionRowActivity } from "../../lib/session-activity";
 import type { SessionActivity } from "../../lib/session-activity";
 import { forgetSession, noteSessionSeen, useSessionSeen } from "../../lib/session-seen";
@@ -522,6 +524,20 @@ export function Sidebar({
   } | null>(null);
   /** Live title search: the input's visibility and its query (transient — never persisted). */
   const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchShortcut = useShortcutLabel("sessions.search");
+  const newChatShortcut = useShortcutLabel("chat.new");
+  const sidebarShortcut = useShortcutLabel("sidebar.toggle");
+  // The sessions.search command: open the field, or put the caret back into an open one.
+  // Re-registered when the field opens or closes so the handler reads the current state.
+  useEffect(
+    () =>
+      onCommand("sessions.search", () => {
+        if (searchOpen) searchInputRef.current?.focus();
+        else setSearchOpen(true);
+      }),
+    [searchOpen],
+  );
   const [searchQuery, setSearchQuery] = useState("");
   /** Header list-settings dropdown (grouping + sort radios). */
   const [listSettingsOpen, setListSettingsOpen] = useState(false);
@@ -1762,7 +1778,11 @@ export function Sidebar({
         {onCollapse && (
           <button
             type="button"
-            title={S.nav.collapseSidebar}
+            title={
+              sidebarShortcut !== null
+                ? `${S.nav.collapseSidebar} (${sidebarShortcut})`
+                : S.nav.collapseSidebar
+            }
             aria-label={S.nav.collapseSidebar}
             onClick={onCollapse}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors duration-150 hover:bg-gray-200/70 hover:text-gray-800 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-200"
@@ -1855,6 +1875,9 @@ export function Sidebar({
         <div className="shrink-0 px-2 pb-2 pt-2">
           <button
             type="button"
+            title={
+              newChatShortcut !== null ? `${S.chat.newSessionMenu} (${newChatShortcut})` : undefined
+            }
             onClick={() => newChat()}
             className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${
               activeSessionId === DRAFT_SESSION_ID
@@ -2043,6 +2066,7 @@ export function Sidebar({
                       <Icon d={SEARCH_ICON} size={12} />
                     </span>
                     <input
+                      ref={searchInputRef}
                       autoFocus
                       value={searchQuery}
                       placeholder={S.chat.searchSessionsPlaceholder}
@@ -2070,7 +2094,11 @@ export function Sidebar({
                 ) : (
                   <button
                     type="button"
-                    title={S.chat.searchSessions}
+                    title={
+                      searchShortcut !== null
+                        ? `${S.chat.searchSessions} (${searchShortcut})`
+                        : S.chat.searchSessions
+                    }
                     aria-label={S.chat.searchSessions}
                     onClick={() => setSearchOpen(true)}
                     className={headerControlClass(false)}

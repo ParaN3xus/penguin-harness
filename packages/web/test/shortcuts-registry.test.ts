@@ -20,8 +20,8 @@ import { en } from "../src/lib/strings-en";
 import type { Chord, CommandId, Platform } from "../src/lib/shortcuts/types";
 
 const PLATFORMS: readonly Platform[] = ["mac", "windows", "linux"];
-/** The id grammar the server enforces on `ui_prefs.keybindings`. */
-const ID_RE = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/;
+/** The id grammar the server enforces on `ui_prefs.keybindings` (services/keybindings.ts). */
+const ID_RE = /^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
 
 function defaultsFor(platform: Platform): Map<CommandId, Chord | null> {
   return new Map(SHORTCUT_COMMANDS.map((cmd) => [cmd.id, defaultChord(cmd, platform)]));
@@ -61,7 +61,7 @@ describe("registry defaults", () => {
         (text) => typeof text === "string" && text.includes("Ctrl+"),
       ),
     ).map((cmd) => cmd.id);
-    expect(literalCtrl).toEqual(["terminal.toggle"]);
+    expect(literalCtrl).toEqual(["terminal.toggle", "terminal.new"]);
   });
 
   it("puts only the terminal close on a browser-reserved chord", () => {

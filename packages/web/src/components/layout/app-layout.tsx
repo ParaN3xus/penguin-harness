@@ -8,6 +8,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from "react-router";
 import * as api from "../../api/endpoints";
 import { S } from "../../lib/strings";
+import { onCommand } from "../../lib/shortcuts/dispatcher";
+import { useShortcutLabel } from "../../lib/shortcuts/use-keymap";
 import { latestConversation, withoutOrgSessions } from "../../lib/session-grouping";
 import { navNoteFor, useUpdateBadges } from "../../lib/use-update-badges";
 import { useAuth } from "../../state/auth";
@@ -181,10 +183,18 @@ function CollapsedRail({ onExpand }: { onExpand: () => void }) {
     badges.softwareNote !== null
       ? `${S.nav.userSettings} · ${badges.softwareNote}`
       : S.nav.userSettings;
+  const sidebarShortcut = useShortcutLabel("sidebar.toggle");
 
   return (
     <div className="flex h-full flex-col items-center gap-1 py-2.5">
-      <Tooltip label={S.nav.expandSidebar} className="shrink-0">
+      <Tooltip
+        label={
+          sidebarShortcut !== null
+            ? `${S.nav.expandSidebar} (${sidebarShortcut})`
+            : S.nav.expandSidebar
+        }
+        className="shrink-0"
+      >
         <button
           type="button"
           aria-label={S.nav.expandSidebar}
@@ -417,6 +427,26 @@ export function AppLayout() {
       localStorage.setItem("penguin.sidebarCollapsed", next ? "1" : "0");
       return next;
     });
+  // The commands whose surface is this layout. New chat navigates from here rather than
+  // from the sidebar so it works with the sidebar collapsed to its rail; the search field
+  // only exists in the expanded sidebar, so with the rail showing the command expands it
+  // first and otherwise declines, letting the sidebar's own handler take it.
+  const navigate = useNavigate();
+  useEffect(() => {
+    const offs = [
+      onCommand("sidebar.toggle", toggleCollapsed),
+      onCommand("chat.new", () => {
+        navigate(`/chat/${DRAFT_SESSION_ID}`);
+      }),
+      onCommand("sessions.search", () => {
+        if (!collapsed) return false;
+        toggleCollapsed();
+      }),
+    ];
+    return () => {
+      for (const off of offs) off();
+    };
+  }, [collapsed, navigate]);
 
   return (
     <div className="flex h-full">

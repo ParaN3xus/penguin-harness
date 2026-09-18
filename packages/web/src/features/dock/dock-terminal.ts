@@ -19,6 +19,7 @@ import {
   removeTab,
   restoreTerminalTab,
   showTerminal,
+  toggleDock,
   toggleTerminalDocks,
   unownedTerminals,
   type DockPosition,
@@ -153,4 +154,15 @@ export { showTerminal };
 // window dispatcher matches it and calls this handler.
 onCommand("terminal.toggle", () => {
   toggleTerminal();
+});
+// The other dock commands live here for the same reason: the store (dock-state.ts) stays
+// free of the dispatcher, and this module is evaluated wherever the docks can appear.
+onCommand("terminal.new", () => {
+  void createShellInDock();
+});
+onCommand("dock.toggleRight", () => {
+  toggleDock("right");
+});
+onCommand("dock.toggleBottom", () => {
+  toggleDock("bottom");
 });
