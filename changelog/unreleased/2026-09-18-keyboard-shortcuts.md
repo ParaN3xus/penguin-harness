@@ -3,6 +3,7 @@
 - **Date:** 2026-09-18
 - **Type:** feature
 - **Scope:** `web`
+- **PR:** [#787](https://github.com/Prism-Shadow/penguin-harness/pull/787)
 
 [中文版](2026-09-18-keyboard-shortcuts.zh.md)
 
