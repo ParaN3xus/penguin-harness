@@ -28,6 +28,11 @@ still name another program, and a host where it does not work is caught by the l
 (allow file-write* (subpath "<workspaceRoot>") …)
 ;; network: none
 (deny network*)
+;; network: local (only the host's localhost)
+(deny network*)
+(allow network-outbound (remote ip "localhost:*"))
+(allow network-bind (local ip "localhost:*"))
+(allow network-inbound (local ip "localhost:*"))
 ;; mask-paths
 (deny file-read* file-write* (subpath "<p>"))
 ```
