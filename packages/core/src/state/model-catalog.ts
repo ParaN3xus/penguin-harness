@@ -19,8 +19,8 @@
  * that id), the OpenRouter and TokenDance V4.1 Flash rows, and TokenDance's running promotions
  * plus its Doubao Seed display names: 2026-09-10; the Penguin Go resale lineup, matched to the
  * relay's current generic-client model export: 2026-09-11, its DeepSeek rows to DeepSeek's own
- * lineup: 2026-09-16; the OpenRouter z-ai/glm-5.3-flash row: 2026-09-16 — per each provider's
- * docs).
+ * lineup: 2026-09-16; the OpenRouter z-ai/glm-5.3-flash row: 2026-09-16; the OpenCode Go group:
+ * 2026-09-17 — per each provider's docs).
  * Docs: packages/docs/content/models.{zh,en}.md (site path /docs/models) documents the
  * provider groups and credential resolution described here.
  *
@@ -41,10 +41,10 @@
  * (delisted 2026-08-06; the Z.AI direct glm-5.1 remains), the OpenRouter
  * inclusionai/ling-3.0-flash:free listing (delisted from OpenRouter, removed 2026-08-18),
  * non-chat models (embedding / image generation / TTS), and Bedrock. Direct-vendor ids are
- * auto-routed by AgentHub and leave client_type unset; the six gateway groups (OpenRouter,
- * Fireworks AI, SiliconFlow, TokenDance, Qwen Pay-As-You-Go, Qwen Token Plan) can't be
- * auto-routed, so every gateway row **always pins an explicit client_type** and inlines its
- * preset base URL. Two groups pin at GROUP level as well (ModelProviderInfo.clientType, read
+ * auto-routed by AgentHub and leave client_type unset; the seven gateway groups (OpenRouter,
+ * Fireworks AI, SiliconFlow, TokenDance, OpenCode Go, Qwen Pay-As-You-Go, Qwen Token Plan)
+ * can't be auto-routed, so every gateway row **always pins an explicit client_type** and
+ * inlines its preset base URL. Two groups pin at GROUP level as well (ModelProviderInfo.clientType, read
  * through providerClientType), so that a model the user adds there speaks the same protocol
  * as the presets: vLLM, whose added models have no preset base URL to inherit either, and
  * OpenRouter, whose do — see each group's own block comment.
@@ -52,7 +52,7 @@
  * against `client_type || model_id` and never looks at base_url, so an unpinned gateway id
  * would be routed by its own spelling — `openai/gpt-5.6-sol` would reach the first-party
  * GPT-5.6 client aimed at a gateway, and `anthropic/claude-opus-4.8` would throw outright
- * (dotted "4.8" matches neither "4-8" nor "-5"). Three protocols are pinned:
+ * (dotted "4.8" matches neither "4-8" nor "-5"). Four protocols are pinned:
  * - `openai-responses` for every OpenRouter row: OpenRouter serves the Responses API for
  *   every upstream at the same base URL the rows already carry, and the group pins the same
  *   protocol so a user-added entry inherits it;
@@ -61,7 +61,10 @@
  *   alias, see canonicalClientType);
  * - `openai-chat-vllm-adapter` for the vLLM group, which is Chat Completions on the wire
  *   but maps the thinking level onto the served model's own chat template
- *   (VLLM_CLIENT_TYPE).
+ *   (VLLM_CLIENT_TYPE);
+ * - `ant-messages` for the OpenCode Go rows its endpoint table serves on the Anthropic
+ *   Messages API. That group pins row by row, since its models sit on three protocols: the
+ *   rest of it is `openai-chat` and `openai-responses` — see its block comment.
  * Two direct-vendor rows pin anyway, because their own id does not route: the MiniMax M3
  * preset pins AgentHub's first-party `minimax-m3` protocol and direct API endpoint, and
  * `deepseek-flash` pins `deepseek-v4` because AgentHub 0.4.11 routes DeepSeek on that
@@ -196,6 +199,10 @@ const TOKENDANCE_BASE_URL = "https://tokendance.space/gateway/v1";
 const MINIMAX_BASE_URL = "https://api.minimax.io/v1";
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 export const PENGUIN_GO_BASE_URL = "https://token.penguin.ooo/api";
+/** OpenCode Go's OpenAI-protocol base: the clients append /chat/completions or /responses. */
+const OPENCODE_GO_BASE_URL = "https://opencode.ai/zen/go/v1";
+/** OpenCode Go's Anthropic Messages base: the Anthropic SDK appends /v1/messages itself, so no /v1 here. */
+const OPENCODE_GO_MESSAGES_BASE_URL = "https://opencode.ai/zen/go";
 
 /** Provider id for the preconfigured Penguin Go relay group. */
 export const PENGUIN_GO_PROVIDER_ID = "penguin-go";
@@ -204,19 +211,21 @@ export const PENGUIN_GO_PROVIDER_ID = "penguin-go";
  * Provider list (web model page groups in this order BY DEFAULT — a user's dragged
  * arrangement is stored per Project and wins over this sequence; see the web's
  * model-group-order.ts). The sequence is a hand-curated display order: TokenDance leads as
- * the recommended group, Penguin Go follows, then DeepSeek as the default model's
- * provider, and custom
+ * the recommended group, Penguin Go follows, then OpenCode Go, then DeepSeek as the default
+ * model's provider, and custom
  * (custom OpenAI-protocol models) is always last; in between, gateways and first-party
  * vendors are interleaved by expected use rather than sorted by kind. Only this default
  * moves when the curation changes: a Project that has ever reordered its groups has every
  * key stored already, so it keeps the arrangement its user built.
  *
- * The six gateway groups — OpenRouter, Fireworks AI, SiliconFlow, TokenDance, Qwen
- * Pay-As-You-Go and Qwen Token Plan — reach their models through one of AgentHub's generic
- * OpenAI-protocol clients (`openai-responses` for OpenRouter, `openai-chat` for the rest).
- * Those clients read **OPENAI_API_KEY / OPENAI_BASE_URL** when the credential is blank, not
- * the gateway's own variable names, so every gateway group records the OPENAI_* pair and the
- * env fallback hint the frontend shows is accurate either way.
+ * The seven gateway groups — OpenRouter, Fireworks AI, SiliconFlow, TokenDance, OpenCode Go,
+ * Qwen Pay-As-You-Go and Qwen Token Plan — reach their models through AgentHub's generic
+ * protocol clients (`openai-responses` for OpenRouter, `openai-chat` for the rest, and all
+ * three generic clients within OpenCode Go). The OpenAI-protocol clients read
+ * **OPENAI_API_KEY / OPENAI_BASE_URL** when the credential is blank, not the gateway's own
+ * variable names, so every gateway group records the OPENAI_* pair and the env fallback hint
+ * the frontend shows is accurate either way. OpenCode Go's `ant-messages` rows are the one
+ * exception: that client reads ANTHROPIC_* instead, and the hint resolves per row.
  */
 export const MODEL_PROVIDERS: ModelProviderInfo[] = [
   {
@@ -244,6 +253,19 @@ export const MODEL_PROVIDERS: ModelProviderInfo[] = [
     envBaseUrlKey: "PENGUIN_GO_BASE_URL",
     apiKeyUrl: "https://token.penguin.ooo/",
     modelsUrl: "https://token.penguin.ooo/",
+  },
+  {
+    // One key serves the whole group, but its models sit on three protocols (see the group's
+    // block comment in MODEL_CATALOG), so no group-level pin. The env pair is the one its
+    // Chat Completions majority reads and a model added here by hand gets: the preset base
+    // URL below with openai-chat. Its Messages rows fall back to ANTHROPIC_* instead.
+    id: "opencode-go",
+    label: "OpenCode Go",
+    envKey: "OPENAI_API_KEY",
+    envBaseUrlKey: "OPENAI_BASE_URL",
+    apiKeyUrl: "https://opencode.ai/auth",
+    modelsUrl: "https://opencode.ai/docs/go/",
+    gatewayBaseUrl: OPENCODE_GO_BASE_URL,
   },
   {
     id: "deepseek",
@@ -1624,6 +1646,331 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     clientType: "deepseek-v4",
     baseUrl: PENGUIN_GO_BASE_URL,
   },
+  // -- OpenCode Go (subscription gateway). The lineup, model ids, endpoints and per-token rates
+  // are from opencode.ai/docs/go (read 2026-09-17), which lists these 28 models. Context
+  // windows and input modalities are from the opencode-go provider on models.dev, the model
+  // registry OpenCode maintains. The gateway's /models listing also answers ten older ids the
+  // docs page does not list and models.dev marks deprecated (minimax-m2.5, kimi-k2.5, glm-5,
+  // deepseek-flash, qwen3.5-plus, mimo-v2-pro, mimo-v2-omni, hy3-preview, grok-4.5,
+  // omen-alpha); they are left out.
+  //
+  // Protocol: the docs page's endpoint table puts each model on one path, and each row pins
+  // the generic client for it: `openai-chat` for /chat/completions and `openai-responses` for
+  // /responses, both on OPENCODE_GO_BASE_URL, and `ant-messages` for /v1/messages on
+  // OPENCODE_GO_MESSAGES_BASE_URL. The paths are not interchangeable: /chat/completions refuses
+  // grok-4.6 and fails for gpt-5.6-luna and union-alpha. The pins are load-bearing too: unpinned,
+  // gpt-5.6-luna, glm-*, kimi-k3, kimi-k2.6, deepseek-v4* and minimax-m3 would reach their
+  // first-party clients, and the other ids would not route at all. The gateway asks every
+  // request to name its conversation, which attributionHeaders does for this host.
+  //
+  // Vision: from models.dev, and checked live on 2026-09-17 by sending an image of a number.
+  // The vision rows read it back. The text-only rows either refused the image or answered
+  // without seeing it.
+  //
+  // Pricing: Go is a monthly subscription whose usage limits are dollar amounts. Each model has
+  // a monthly allowance, capped at 20% per 5 hours and 50% per week. A request draws the
+  // per-token rates the docs page publishes, and those are what the rows store. So the cost
+  // center shows allowance spent, not an invoice, as with the Qwen Token Plan rows, which store
+  // per-token list prices rather than the plan's fee. Where the page lists no cached-write rate,
+  // cache_write carries the input rate. Four rows are tiered and store their base tier: GPT-5.6
+  // Luna above 272K input tokens, Grok 4.6 above 200K, Qwen 3.7 Plus and Qwen 3.6 Plus above
+  // 256K. The four DeepSeek rows publish a peak and an off-peak rate on DeepSeek's own windows
+  // (peak 01:00-04:00 and 06:00-10:00 UTC on weekdays, i.e. DEEPSEEK_OFF_PEAK), off-peak
+  // exactly half, so they store the peak rate and declare that schedule. DeepSeek V4.1 Flash's
+  // running "4x" offer (ends 2026-09-20) raises its monthly allowance, not its rates, so no
+  // row carries a `discount`.
+  //
+  // Account opt-in: five models answer 403 until the key's OpenCode workspace opts in. The two
+  // Muse Spark Contributor models require consent to Meta training on prompts and completions.
+  // deepseek-v4.1-flash, deepseek-v4-flash and deepseek-v4-pro require consent to China-hosted
+  // serving. Their rows follow the docs page and the protocol the other rows on their path
+  // proved; a generation against them was not run. --
+  {
+    modelId: "deepseek-v4.1-flash",
+    displayName: "DeepSeek V4.1 Flash",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.006, 0.3, 1.2),
+    offPeakDiscount: DEEPSEEK_OFF_PEAK,
+    supportsVision: true,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "deepseek-v4-flash",
+    displayName: "DeepSeek V4 Flash",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.006, 0.3, 1.2),
+    offPeakDiscount: DEEPSEEK_OFF_PEAK,
+    supportsVision: false,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "deepseek-v4-flash-vision-exp",
+    displayName: "DeepSeek V4 Flash Vision Exp",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.006, 0.3, 1.2),
+    offPeakDiscount: DEEPSEEK_OFF_PEAK,
+    supportsVision: true,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "deepseek-v4-pro",
+    displayName: "DeepSeek V4 Pro",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.044, 1.32, 3.96),
+    offPeakDiscount: DEEPSEEK_OFF_PEAK,
+    supportsVision: false,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "glm-5.3",
+    displayName: "GLM-5.3",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.26, 1.4, 4.4),
+    supportsVision: false,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "glm-5.3-flash",
+    displayName: "GLM-5.3 Flash",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.03, 0.15, 0.5),
+    supportsVision: true,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "glm-5.2",
+    displayName: "GLM-5.2",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.26, 1.4, 4.4),
+    supportsVision: false,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "glm-5.1",
+    displayName: "GLM-5.1",
+    provider: "opencode-go",
+    contextWindow: 202752,
+    pricing: usd(0.26, 1.4, 4.4),
+    supportsVision: false,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "gpt-5.6-luna",
+    displayName: "GPT-5.6 Luna",
+    provider: "opencode-go",
+    contextWindow: 1050000,
+    pricing: usd(0.02, 0.25, 1.2),
+    supportsVision: true,
+    clientType: "openai-responses",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "grok-4.6",
+    displayName: "Grok 4.6",
+    provider: "opencode-go",
+    contextWindow: 500000,
+    pricing: usd(0.5, 2, 6),
+    supportsVision: true,
+    clientType: "openai-responses",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "hy4-preview",
+    displayName: "Hy4 preview",
+    provider: "opencode-go",
+    contextWindow: 1024000,
+    pricing: usd(0.042, 0.834, 2.501),
+    supportsVision: false,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "hy3",
+    displayName: "Hy3",
+    provider: "opencode-go",
+    contextWindow: 256000,
+    pricing: usd(0.035, 0.14, 0.58),
+    supportsVision: false,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "kimi-k3",
+    displayName: "Kimi K3",
+    provider: "opencode-go",
+    contextWindow: 1048576,
+    pricing: usd(0.3, 3, 15),
+    supportsVision: true,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "kimi-k2.7-code",
+    displayName: "Kimi K2.7 Code",
+    provider: "opencode-go",
+    contextWindow: 262144,
+    pricing: usd(0.19, 0.95, 4),
+    supportsVision: true,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "kimi-k2.6",
+    displayName: "Kimi K2.6",
+    provider: "opencode-go",
+    contextWindow: 262144,
+    pricing: usd(0.16, 0.95, 4),
+    supportsVision: true,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "longcat-2.0",
+    displayName: "LongCat 2.0",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.006, 0.3, 1.2),
+    supportsVision: false,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "mimo-v2.5",
+    displayName: "MiMo-V2.5",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.0028, 0.14, 0.28),
+    supportsVision: true,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "mimo-v2.5-pro",
+    displayName: "MiMo-V2.5-Pro",
+    provider: "opencode-go",
+    contextWindow: 1048576,
+    pricing: usd(0.003625, 0.435, 0.87),
+    supportsVision: false,
+    clientType: "openai-chat",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "minimax-m3",
+    displayName: "MiniMax M3",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.06, 0.3, 1.2),
+    supportsVision: true,
+    clientType: "ant-messages",
+    baseUrl: OPENCODE_GO_MESSAGES_BASE_URL,
+  },
+  {
+    modelId: "minimax-m2.7",
+    displayName: "MiniMax M2.7",
+    provider: "opencode-go",
+    contextWindow: 204800,
+    pricing: usd(0.06, 0.375, 1.2),
+    supportsVision: false,
+    clientType: "ant-messages",
+    baseUrl: OPENCODE_GO_MESSAGES_BASE_URL,
+  },
+  {
+    modelId: "muse-spark-1.3-contributor",
+    displayName: "Muse Spark 1.3 Contributor",
+    provider: "opencode-go",
+    contextWindow: 1048576,
+    pricing: usd(0.002, 0.1, 0.2),
+    supportsVision: true,
+    clientType: "openai-responses",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "muse-spark-1.2-contributor",
+    displayName: "Muse Spark 1.2 Contributor",
+    provider: "opencode-go",
+    contextWindow: 1048576,
+    pricing: usd(0.002, 0.1, 0.2),
+    supportsVision: true,
+    clientType: "openai-responses",
+    baseUrl: OPENCODE_GO_BASE_URL,
+  },
+  {
+    modelId: "qwen3.8-flash",
+    displayName: "Qwen 3.8 Flash",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.016, 0.2, 0.47),
+    supportsVision: true,
+    clientType: "ant-messages",
+    baseUrl: OPENCODE_GO_MESSAGES_BASE_URL,
+  },
+  {
+    modelId: "qwen3.8-max",
+    displayName: "Qwen 3.8 Max",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.25, 2.5, 6),
+    supportsVision: true,
+    clientType: "ant-messages",
+    baseUrl: OPENCODE_GO_MESSAGES_BASE_URL,
+  },
+  {
+    modelId: "qwen3.7-max",
+    displayName: "Qwen 3.7 Max",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.5, 3.125, 7.5),
+    supportsVision: false,
+    clientType: "ant-messages",
+    baseUrl: OPENCODE_GO_MESSAGES_BASE_URL,
+  },
+  {
+    modelId: "qwen3.7-plus",
+    displayName: "Qwen 3.7 Plus",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.04, 0.5, 1.6),
+    supportsVision: true,
+    clientType: "ant-messages",
+    baseUrl: OPENCODE_GO_MESSAGES_BASE_URL,
+  },
+  {
+    modelId: "qwen3.6-plus",
+    displayName: "Qwen 3.6 Plus",
+    provider: "opencode-go",
+    contextWindow: 1000000,
+    pricing: usd(0.05, 0.625, 3),
+    supportsVision: true,
+    clientType: "ant-messages",
+    baseUrl: OPENCODE_GO_MESSAGES_BASE_URL,
+  },
+  {
+    // A stealth model, free for a limited time: a genuine $0 on every bucket, like the
+    // OpenRouter `:free` rows, until the gateway prices it.
+    modelId: "union-alpha",
+    displayName: "Union Alpha Free",
+    provider: "opencode-go",
+    contextWindow: 262144,
+    pricing: usd(0, 0, 0),
+    supportsVision: true,
+    clientType: "ant-messages",
+    baseUrl: OPENCODE_GO_MESSAGES_BASE_URL,
+  },
   // -- Qwen Token Plan (subscription gateway; vision flags per the plan's supported-model
   // table). Pricing and context windows from each model's page at
   // www.qianwenai.com/models/<id> (official CNY list prices; limited-time promotions such as
@@ -2416,8 +2763,8 @@ export function fastModeProtocol(
  * config, avoiding duplicate hand-written copies). `provider` and `model_id` are persisted as
  * separate fields (`model_id` is the plain upstream id); models whose upstream id can be
  * auto-routed by AgentHub leave client_type unset; gateway models (OpenRouter / SiliconFlow)
- * always pin a client_type — openai-responses for the OpenRouter rows, openai-chat for the
- * rest — and inline a preset base_url. The direct MiniMax M3 entry also pins its protocol and
+ * always pin a client_type — openai-responses for the OpenRouter rows, each OpenCode Go row's
+ * own endpoint protocol, openai-chat for the rest — and inline a preset base_url. The direct MiniMax M3 entry also pins its protocol and
  * endpoint. No secrets are included, so only an API key is needed.
  *
  * Pricing is written as the LIST price the catalog records (a scheduled row's PEAK price),

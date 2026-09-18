@@ -63,6 +63,7 @@ api_key = "sk-..."
 | --- | --- | --- |
 | tokendance | `OPENAI_API_KEY` | 官方推荐的厂商分组。OpenAI 兼容网关，预置 base URL `https://tokendance.space/gateway/v1`；模型 id 为不带厂商前缀的裸 id(如 `glm-5.3`、`kimi-k3`)；价格取该网关自己的 CNY 牌价，其中若干条目当前处于折扣中 |
 | penguin-go | `PENGUIN_GO_API_KEY` | 预置中转站分组，固定 base URL `https://token.penguin.ooo/api`；未授权时可自动获取密钥，授权后可同步平台新增模型，也可以手动统一设置 |
+| opencode-go | `OPENAI_API_KEY` | OpenCode Go 订阅网关。每个模型按 OpenCode 端点表给出的协议固定：Chat Completions 或 Responses 走 `https://opencode.ai/zen/go/v1`，Anthropic Messages 走 `https://opencode.ai/zen/go`(这些条目读取 `ANTHROPIC_API_KEY`)；详见下文 |
 | deepseek | `DEEPSEEK_API_KEY` | 默认模型所在分组 |
 | openrouter | `OPENAI_API_KEY` | OpenAI 兼容网关，预置 base URL `https://openrouter.ai/api/v1` |
 | fireworks | `OPENAI_API_KEY` | Fireworks AI(OpenAI 兼容)，预置 base URL `https://api.fireworks.ai/inference/v1`；API 模型 id 形如 `accounts/fireworks/models/<slug>` |
@@ -81,7 +82,9 @@ api_key = "sk-..."
 
 预置目录还收录了 OpenRouter 的免费档：`:free` 模型变体 `nvidia/nemotron-3-ultra-550b-a55b:free` 与统一路由 `openrouter/free`(Free Models Router)，零成本可用，但受 OpenRouter 免费档速率限制与数据政策约束。
 
-预置目录中的部分模型：deepseek-flash / deepseek-v4-pro / deepseek-v4-flash / deepseek-v4-flash-vision-exp(其中 `deepseek-flash`、`deepseek-v4-flash-vision-exp` 支持图像输入，`deepseek-v4-flash` 与 `deepseek-v4-pro` 为纯文本。自 2026-09-10 起，两个 V4 Flash id 已是退役名称，DeepSeek 改由 V4.1 Flash 承接、按 Flash 价计费——变的是价格，不是 V4 Flash 能读什么：要发图请用 `deepseek-flash`)、MiniMax-M3、gemini-3.8-flash、claude-opus-5 / claude-opus-4-8 / claude-sonnet-5、gpt-6-astra / gpt-5.6 / gpt-5.5、glm-5.3 / glm-5.3-flash、kimi-k3、qwen3.8-max / qwen3.8-flash、seed-2.1-pro / seed-2.1-turbo / seed-evolving、dots-3-note-preview（TokenDance 上免费，512K 上下文）等(非完整清单)。Penguin Go 分组的 DeepSeek 条目跟随 DeepSeek 当前的模型阵容，只收录 `deepseek-flash` 与 `deepseek-v4-pro`。OpenAI 全系列都收录了两份——直连(用自己的 OpenAI Key，记牌价)与 OpenRouter 上的 `openai/<id>`(记网关实际计费价，会随其促销浮动)。DeepSeek 直连分组的条目记录官方高峰档，并声明其空闲时段规则：在北京时间周一至周五 9:00–12:00、14:00–18:00 之外，各档价格减半——模型页以「省 50%」徽标标记，成本中心按此计价。另有三条转售条目沿用同一套时段，因为卖家原样传递了 DeepSeek 自己的窗口：TokenDance 的 `deepseek-v4.1-flash` 与 `deepseek-v4-flash-vision-exp`，以及 OpenRouter 的 `deepseek/deepseek-v4.1-flash`。存盘的始终是高峰价，因此磁盘上的数字不会随 Project 创建或同步预置的时刻而变。`glm-5.3-flash` 收录了三份，三条都支持图像输入：AgentHub 的 GLM 客户端只为这一个 GLM id 转发图像部件(其余 GLM id 一律拒绝)，而 OpenRouter 上的 `z-ai/glm-5.3-flash` 与 TokenDance 分组的同名条目走通用 OpenAI 兼容客户端，对任何 id 都能携带图片。三条不一致的是价格：每一条都记录各自卖家的收费，因此促销期间三者不同。
+opencode-go 分组收录 OpenCode 为 Go 订阅列出的 28 个模型。它们的协议各不相同，因此每个条目各自固定 `client_type`(`openai-chat`、`openai-responses` 或 `ant-messages`)与 base URL；手动添加进该分组的模型使用 Chat Completions。整个分组共用一个 API Key，用分组头的「手动设置密钥」一次设好即可。Go 按月订阅，用量上限是按模型计的美元额度：每月一份额度，每 5 小时最多用掉其中 20%，每周最多 50%。条目记录的是每次请求从额度中扣除的每 Token 价格，因此对这个分组而言，成本中心显示的是已用掉的额度，而不是按 Token 计的账单。有四个条目记录基准档：`gpt-5.6-luna` 在输入超过 272K Token 后、`grok-4.6` 在超过 200K 后、`qwen3.7-plus` 与 `qwen3.6-plus` 在超过 256K 后另有高价档。四个 DeepSeek 条目沿用 DeepSeek 的空闲时段规则，见下文。`union-alpha` 限时免费。有五个模型在 Key 所属的 OpenCode 工作区开启授权之前一律返回 403：两个 Muse Spark Contributor 模型需同意 Meta 用提示词和回复训练模型，且只在 Meta 允许的地区可用；`deepseek-v4.1-flash`、`deepseek-v4-flash` 与 `deepseek-v4-pro` 需同意由中国境内托管的服务提供。
+
+预置目录中的部分模型：deepseek-flash / deepseek-v4-pro / deepseek-v4-flash / deepseek-v4-flash-vision-exp(其中 `deepseek-flash`、`deepseek-v4-flash-vision-exp` 支持图像输入，`deepseek-v4-flash` 与 `deepseek-v4-pro` 为纯文本。自 2026-09-10 起，两个 V4 Flash id 已是退役名称，DeepSeek 改由 V4.1 Flash 承接、按 Flash 价计费——变的是价格，不是 V4 Flash 能读什么：要发图请用 `deepseek-flash`)、MiniMax-M3、gemini-3.8-flash、claude-opus-5 / claude-opus-4-8 / claude-sonnet-5、gpt-6-astra / gpt-5.6 / gpt-5.5、glm-5.3 / glm-5.3-flash、kimi-k3、qwen3.8-max / qwen3.8-flash、seed-2.1-pro / seed-2.1-turbo / seed-evolving、dots-3-note-preview（TokenDance 上免费，512K 上下文）等(非完整清单)。Penguin Go 分组的 DeepSeek 条目跟随 DeepSeek 当前的模型阵容，只收录 `deepseek-flash` 与 `deepseek-v4-pro`。OpenAI 全系列都收录了两份——直连(用自己的 OpenAI Key，记牌价)与 OpenRouter 上的 `openai/<id>`(记网关实际计费价，会随其促销浮动)。DeepSeek 直连分组的条目记录官方高峰档，并声明其空闲时段规则：在北京时间周一至周五 9:00–12:00、14:00–18:00 之外，各档价格减半——模型页以「省 50%」徽标标记，成本中心按此计价。另有三条转售条目沿用同一套时段，因为卖家原样传递了 DeepSeek 自己的窗口：TokenDance 的 `deepseek-v4.1-flash` 与 `deepseek-v4-flash-vision-exp`，以及 OpenRouter 的 `deepseek/deepseek-v4.1-flash`。存盘的始终是高峰价，因此磁盘上的数字不会随 Project 创建或同步预置的时刻而变。`glm-5.3-flash` 收录了四份，四条都支持图像输入：AgentHub 的 GLM 客户端只为这一个 GLM id 转发图像部件(其余 GLM id 一律拒绝)，而 OpenRouter 上的 `z-ai/glm-5.3-flash`、TokenDance 与 OpenCode Go 分组的同名条目走通用 OpenAI 兼容客户端，对任何 id 都能携带图片。四条不一致的是价格：每一条都记录各自卖家的收费，因此促销期间各条不同。
 
 TokenDance 分组的条目记录该网关的牌价，并在有促销时记录折扣率。当前有九个模型处于折扣中——`deepseek-v4-flash-0731`、`deepseek-v4-pro-0813` 与 `kimi-k3` 八折，`glm-5.3`、`glm-5.3-flash` 与 `qwen3.8-max` 九折，三条 Doubao Seed 条目（`seed-2.1-pro`、`seed-2.1-turbo`、`seed-evolving`）五折。另有两条条目不走固定折扣，而是沿用上文所述 DeepSeek 自己的空闲时段规则。它们的模型卡片显示当前实际计费的那个价格，并以徽标标出折扣率。新建 Project 预置的是**牌价**：折扣率由服务端另行保存（存于 `web.db`，不写入 `.project_config.toml`），计算成本时再从牌价中扣除，因此成本中心按网关实际收费计价。自行修改条目的价格会取消其促销，也不再显示空闲时段折扣标记：此时那个数字属于你，而不是网关。
 
@@ -95,8 +98,9 @@ TokenDance 分组的条目记录该网关的牌价，并在有促销时记录折
 | `openrouter.ai` | `X-OpenRouter-Title` | `PenguinHarness` |
 | `openrouter.ai` | `X-OpenRouter-Categories` | `cli-agent,personal-agent` |
 | `tokendance.space` | `X-App-URL` | `https://penguin.ooo/` |
+| `opencode.ai` | `x-opencode-session` | 当前 Session 的 id |
 
-其余端点(所有直连厂商，以及不读归因头的网关)不会收到任何额外请求头。归因头只声明应用身份，不携带用户、Agent 或会话信息。
+其余端点(所有直连厂商，以及不读归因头的网关)不会收到任何额外请求头。这些请求头都不携带用户或 Agent 信息。OpenRouter 与 TokenDance 的只声明应用身份；OpenCode 的则标识对话，因为其网关据此为每场对话选择路由、命中提示词缓存：同一 Session 的请求取值不变，不同 Session 取值不同，不属于任何 Session 的请求不带该请求头。
 
 ## Penguin Go 预置分组
 

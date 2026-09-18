@@ -41,13 +41,13 @@ When a model entry has no inline `api_key`, AgentHub falls back to the provider'
 | --- | --- | --- |
 | deepseek | `DEEPSEEK_API_KEY` | `DEEPSEEK_BASE_URL` |
 | anthropic | `ANTHROPIC_API_KEY` | `ANTHROPIC_BASE_URL` |
-| openai, openrouter, fireworks, siliconflow, tokendance, qwen-pay-as-you-go, qwen-token-plan, custom | `OPENAI_API_KEY` | `OPENAI_BASE_URL` |
+| openai, openrouter, fireworks, siliconflow, tokendance, opencode-go, qwen-pay-as-you-go, qwen-token-plan, custom | `OPENAI_API_KEY` | `OPENAI_BASE_URL` |
 | minimax | `MINIMAX_API_KEY` | `MINIMAX_BASE_URL` |
 | google | `GEMINI_API_KEY` | `GEMINI_BASE_URL` |
 | zhipu | `ZAI_API_KEY` | `ZAI_BASE_URL` |
 | moonshot | `MOONSHOT_API_KEY` | `MOONSHOT_BASE_URL` |
 
-The openrouter, fireworks, siliconflow, tokendance, qwen-pay-as-you-go, qwen-token-plan, and custom groups speak the OpenAI-compatible protocol, hence the shared `OPENAI_*` variables. The direct MiniMax M3 Responses client uses `MINIMAX_*`; the built-in MiniMax preset already pins the official endpoint. Provider groups and the built-in model catalog are covered in [Models & Providers](/models).
+The openrouter, fireworks, siliconflow, tokendance, qwen-pay-as-you-go, qwen-token-plan, and custom groups speak the OpenAI-compatible protocol, hence the shared `OPENAI_*` variables. So do the opencode-go models on Chat Completions and Responses; that group's Anthropic Messages models read `ANTHROPIC_*` instead. The direct MiniMax M3 Responses client uses `MINIMAX_*`; the built-in MiniMax preset already pins the official endpoint. Provider groups and the built-in model catalog are covered in [Models & Providers](/models).
 
 ## Project config
 
