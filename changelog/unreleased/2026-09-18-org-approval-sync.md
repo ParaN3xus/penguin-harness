@@ -3,6 +3,7 @@
 - **Date:** 2026-09-18
 - **Type:** fix
 - **Scope:** `server`, `web`
+- **PR:** [#791](https://github.com/Prism-Shadow/penguin-harness/pull/791)
 
 [中文版](2026-09-18-org-approval-sync.zh.md)
 
