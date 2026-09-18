@@ -1,8 +1,8 @@
 /**
  * `/screens/login` — the sign-in page: the language and light/dark switches in the corner, the
  * brand mark and the card with its two roomy (`base`) fields, the primary submit and the two
- * footnotes, over the decorative trace lines. The canvas opts into `.ui-wash` (Frost's ambient
- * gradient) and `.ui-grid.ui-grid-dots` (Console's dot matrix); Primer draws neither.
+ * footnotes, over the circuit traces. Those traces are the page's one decoration in every theme —
+ * the product's own brand element, drawn once and static (K-redesign §1.3 row 14).
  */
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
@@ -89,7 +89,7 @@ export function LoginScreen({
   const f = fixturesFor(lang);
   const a = f.copy.auth;
   return (
-    <div className="ui-wash ui-grid ui-grid-dots relative flex h-screen w-full items-center justify-center overflow-hidden bg-canvas p-4 text-fg">
+    <div className="relative flex h-screen w-full items-center justify-center overflow-hidden bg-canvas p-4 text-fg">
       <Circuit />
       <Corner f={f} />
       <div className="relative w-full max-w-sm">
@@ -97,10 +97,7 @@ export function LoginScreen({
         <h1 className="ui-display mb-6 text-center text-3xl font-(--ui-weight-strong) tracking-tight text-fg">
           {f.copy.appName}
         </h1>
-        <div
-          data-shape="card"
-          className="ui-pill-hover rounded-xl border border-line bg-surface p-6 shadow-sm"
-        >
+        <div className="rounded-xl border border-line bg-surface p-6 shadow-sm">
           <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
             <Field label={a.username}>
               <span className="block w-full rounded-md border border-line-emphasis bg-surface px-3 py-2 text-base text-fg ring-2 ring-[var(--ui-accent-muted)]">
@@ -116,7 +113,10 @@ export function LoginScreen({
                 </span>
               </span>
             </Field>
-            <span className="ui-button ui-pill-hover flex w-full items-center justify-center rounded-md border border-accent bg-accent px-3 py-2.5 text-sm font-(--ui-weight-strong) text-accent-fg">
+            <span
+              role="button"
+              className="flex w-full items-center justify-center rounded-control border border-accent bg-accent px-3 py-2.5 text-sm font-(--ui-weight-medium) text-accent-fg"
+            >
               {a.signIn}
             </span>
           </form>

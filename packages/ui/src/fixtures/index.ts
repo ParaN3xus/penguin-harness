@@ -1,8 +1,9 @@
 /**
  * Mock data (en + zh) shared by the gallery's demos, the `/screens` compositions and the package
  * tests: one coherent dataset — the "Build Claude Code docs expert" session, its tool calls, its
- * Trace, a model list, the Workspace tree, company tickets and calendar events, plus the type
- * specimens — in two locales of identical shape.
+ * Trace, a model list, the Workspace tree, company tickets and calendar events, the notices,
+ * form, menu, Vault rows, installed plugins, command palette and week of usage the modules
+ * compose, plus the type specimens — in two locales of identical shape.
  */
 import { en } from "./en";
 import type { FixtureLang, Fixtures } from "./types";

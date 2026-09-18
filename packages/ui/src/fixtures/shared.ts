@@ -7,6 +7,7 @@
  * an Agent collects the Claude Code docs and builds a BM25 RAG app that answers with [n]
  * citations. Turn 1 built it; turn 2 — the one running — adds a citation check and runs it.
  */
+import type { GlyphName } from "../screens/glyph";
 import type { DiffHunk, FileDiff, FileNode, ModelFixture, TraceLane } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -492,3 +493,83 @@ export const TURN2_LANES: readonly TraceLane[] = [
     segments: [{ kind: "approvalWait", startMs: 12_400, endMs: TURN2_SPAN_MS }],
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Notices, forms, menus, secrets, plugins, the palette and usage (K-redesign §4.6)
+// ---------------------------------------------------------------------------
+
+/** The accent presets `theme.css` declares, in the order the swatch picker draws them. */
+export const ACCENT_SWATCHES: readonly { id: string; color: string }[] = [
+  { id: "theme", color: "var(--ui-accent)" },
+  { id: "blue", color: "#2563eb" },
+  { id: "green", color: "#15803d" },
+  { id: "violet", color: "#7c3aed" },
+  { id: "rose", color: "#be123c" },
+  { id: "amber", color: "#b45309" },
+];
+
+export const VAULT_KEYS = ["deepseek", "openrouter", "github", "slack", "proxy", "s3"] as const;
+export type VaultKey = (typeof VAULT_KEYS)[number];
+
+/** A secret's name and who may read it. Its kind and its date are words, so they are prose. */
+export const VAULT_ROWS: Readonly<Record<VaultKey, { name: string; agents: readonly string[] }>> = {
+  deepseek: { name: "DEEPSEEK_API_KEY", agents: [AGENT_ID, REVIEWER_AGENT_ID] },
+  openrouter: { name: "OPENROUTER_API_KEY", agents: [AGENT_ID] },
+  github: { name: "GITHUB_TOKEN", agents: [REVIEWER_AGENT_ID] },
+  slack: { name: "SLACK_WEBHOOK_URL", agents: [] },
+  proxy: { name: "PROXY_PASSWORD", agents: [] },
+  s3: { name: "S3_UPLOAD_SECRET", agents: [AGENT_ID] },
+};
+
+export const PLUGIN_KEYS = ["sdk", "docsReview", "github", "slackNotify"] as const;
+export type PluginKey = (typeof PLUGIN_KEYS)[number];
+
+/** An installed plugin's identity and switch state; its one-line description is prose. */
+export const PLUGIN_ROWS: Readonly<
+  Record<PluginKey, { name: string; version: string; icon: GlyphName; enabled: boolean }>
+> = {
+  sdk: { name: "penguin-sdk", version: "0.2.13", icon: "book", enabled: true },
+  docsReview: { name: "docs-review", version: "1.4.0", icon: "search", enabled: true },
+  github: { name: "github", version: "2.1.3", icon: "fork", enabled: false },
+  slackNotify: { name: "slack-notify", version: "0.9.1", icon: "message", enabled: true },
+};
+
+/**
+ * The message menu without its words: four items, one shortcut on the first, one destructive item
+ * last, and the two rules that group them.
+ */
+export const MESSAGE_MENU: readonly (
+  | "separator"
+  | {
+      key: "copy" | "fork" | "export" | "delete";
+      icon: GlyphName;
+      shortcut?: readonly string[];
+      danger?: boolean;
+    }
+)[] = [
+  { key: "copy", icon: "copy", shortcut: ["⌘", "C"] },
+  { key: "fork", icon: "fork" },
+  "separator",
+  { key: "export", icon: "download" },
+  "separator",
+  { key: "delete", icon: "cross", shortcut: ["⌫"], danger: true },
+];
+
+/** The palette's commands, minus their words: two groups, the second standing for Sessions. */
+export const PALETTE_COMMANDS: readonly {
+  key: "newChat" | "switchModel" | "settings" | "search";
+  icon: GlyphName;
+  keys?: readonly string[];
+}[] = [
+  { key: "newChat", icon: "newChat", keys: ["⌘", "N"] },
+  { key: "switchModel", icon: "models" },
+  { key: "settings", icon: "settings", keys: ["⌘", ","] },
+  { key: "search", icon: "search", keys: ["⌘", "K"] },
+];
+
+/** A week of token usage in thousands, one series per bucket. Day names are prose. */
+export const USAGE_SERIES: Readonly<Record<"cacheRead" | "cacheWrite" | "output", number[]>> = {
+  cacheRead: [182, 240, 96, 310, 268, 40, 12],
+  cacheWrite: [34, 52, 18, 61, 44, 9, 3],
+  output: [21, 30, 11, 38, 33, 6, 2],
+};

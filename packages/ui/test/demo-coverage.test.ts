@@ -22,7 +22,14 @@ const COMPONENTS_DIR = join(SRC_DIR, "components");
  * Component directories (relative to src/components) excused from having a demo, each with its
  * reason. Starts empty; an entry that stops being needed fails the suite until it is removed.
  */
-const DEMO_EXEMPT: ReadonlyMap<string, string> = new Map<string, string>([]);
+const DEMO_EXEMPT: ReadonlyMap<string, string> = new Map<string, string>([
+  [
+    "icons/spinner",
+    "W1: the one Spinner landed early because rule 11 gives `animate-spin` this file and the " +
+      "screens needed it (#763); its demo lands with the rest of the component set, which is the " +
+      "PR that also gives the gallery a module to reach it through",
+  ],
+]);
 
 /** Exported names starting with a capital letter — the shape of a component export. */
 function exportedComponents(text: string): string[] {

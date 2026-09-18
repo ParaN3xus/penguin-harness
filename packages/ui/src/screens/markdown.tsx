@@ -95,7 +95,7 @@ function inline(text: string): ReactNode[] {
 }
 
 /** A fenced code block: the app's language header with a copy mark, then the code. */
-export function CodeBlockMock({ lang, text }: { lang: string; text: string }) {
+export function CodeBlock({ lang, text }: { lang: string; text: string }) {
   return (
     <div className="ui-frame my-2 overflow-hidden rounded-lg border border-line">
       <div
@@ -109,7 +109,7 @@ export function CodeBlockMock({ lang, text }: { lang: string; text: string }) {
       </div>
       <pre
         data-slot="body"
-        className="overflow-x-auto bg-[var(--ui-code-bg)] px-3 py-2.5 font-mono text-[0.8125rem] leading-relaxed text-fg"
+        className="overflow-x-auto bg-[var(--ui-code-bg)] px-3 py-2.5 font-mono text-[length:var(--ui-text-code-size)] leading-relaxed text-fg"
       >
         {text}
       </pre>
@@ -186,7 +186,7 @@ export function Markdown({
               </div>
             );
           case "code":
-            return <CodeBlockMock key={i} lang={b.lang} text={b.text} />;
+            return <CodeBlock key={i} lang={b.lang} text={b.text} />;
         }
       })}
     </div>

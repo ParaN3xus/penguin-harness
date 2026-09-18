@@ -9,7 +9,7 @@ import type { FixtureLang, Fixtures, TraceSegmentKind, TraceTurn } from "../fixt
 import { ChatTranscript } from "./chat";
 import { bytes, duration, percent, tokens, usd } from "./format";
 import { Glyph } from "./glyph";
-import { ChatHeader, DockFrame, NEUTRAL_FILL, Pill, Sidebar, StatChip } from "./parts";
+import { Badge, ChatHeader, DockFrame, NEUTRAL_FILL, Sidebar, StatChip } from "./parts";
 import { Composer } from "./transcript";
 
 /** Timeline phase inks: chart identity colours, one per kind; `other` recedes. */
@@ -34,7 +34,7 @@ const LEGEND_ORDER: readonly TraceSegmentKind[] = [
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-0.5">
-      <span className="shrink-0 text-[0.6875rem] text-fg-subtle">{label}</span>
+      <span className="shrink-0 text-xs text-fg-subtle">{label}</span>
       <span className="truncate font-mono text-sm font-(--ui-weight-strong) tabular-nums text-fg">
         {value}
       </span>
@@ -42,13 +42,17 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * The Trace's totals as a ruled section, not a card: a bordered box inside the dock frame would be
+ * a second surface for a title and a grid of pairs (§1.3 row 16).
+ */
 function Overall({ f }: { f: Fixtures }) {
   const o = f.trace.overall;
   const t = f.copy.traces;
   return (
-    <div data-shape="card" className="ui-pill-hover rounded-md border border-line bg-surface p-3">
+    <section className="border-t border-line pt-3">
       <p className="mb-2 text-xs font-(--ui-weight-strong) text-fg-muted">{t.overall}</p>
-      <div className="grid grid-cols-3 gap-x-8 gap-y-1">
+      <div className="grid grid-cols-3 gap-x-6 gap-y-1">
         <div>
           <SummaryRow label={t.turns} value={String(o.turns)} />
           <SummaryRow label={t.toolCalls} value={String(o.toolCalls)} />
@@ -68,21 +72,22 @@ function Overall({ f }: { f: Fixtures }) {
           <SummaryRow label={t.outputTps} value={`${o.outputTps} tok/s`} />
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
+/** The execution timeline sits in the turn's body under a hairline, not in a box of its own. */
 function Timeline({ turn, f }: { turn: TraceTurn; f: Fixtures }) {
   const t = f.copy.traces;
   const ticks = [0, 0.25, 0.5, 0.75, 1];
   return (
-    <div className="space-y-3 rounded-md border border-line-muted p-2">
-      <p className="text-[0.6875rem] font-(--ui-weight-medium) text-fg-muted">{t.timeline}</p>
+    <div className="space-y-3">
+      <p className="text-xs font-(--ui-weight-medium) text-fg-muted">{t.timeline}</p>
       <div className="space-y-1">
         {turn.lanes.map((lane) => (
           <div key={lane.name} className="flex items-center">
             <span className="flex h-4 w-[6.5rem] shrink-0 items-center justify-end pr-2">
-              <span className="truncate font-mono text-[0.6875rem] text-fg-muted">
+              <span className="truncate font-mono text-xs text-fg-muted">
                 {lane.name === "model"
                   ? t.modelLane
                   : lane.name === "other"
@@ -110,7 +115,7 @@ function Timeline({ turn, f }: { turn: TraceTurn; f: Fixtures }) {
             {ticks.map((p) => (
               <span
                 key={p}
-                className={`absolute top-0 font-mono text-[0.6875rem] text-fg-subtle ${
+                className={`absolute top-0 font-mono text-xs text-fg-subtle ${
                   p === 0 ? "" : p === 1 ? "-translate-x-full" : "-translate-x-1/2"
                 }`}
                 style={{ left: `${p * 100}%` }}
@@ -121,12 +126,9 @@ function Timeline({ turn, f }: { turn: TraceTurn; f: Fixtures }) {
           </div>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line-muted pt-2.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line-muted pt-3">
         {LEGEND_ORDER.map((kind) => (
-          <span
-            key={kind}
-            className="flex items-center gap-1 px-1 font-mono text-[0.6875rem] text-fg-muted"
-          >
+          <span key={kind} className="flex items-center gap-1 px-1 font-mono text-xs text-fg-muted">
             <span className={`inline-block h-2 w-3 rounded-xs ${SEGMENT_INK[kind]}`} />
             {t.legend[kind]}
           </span>
@@ -155,13 +157,13 @@ function TurnCard({
 }) {
   const t = f.copy.traces;
   return (
-    <div data-shape="card" className="ui-pill-hover overflow-hidden rounded-md border border-line">
-      <div className="flex w-full items-center gap-2 bg-surface-muted px-3 py-2">
+    <div className="overflow-hidden rounded-lg border border-line">
+      <div className="flex w-full items-center gap-2 border-b border-line bg-surface-muted px-3 py-2">
         <Glyph name={open ? "chevronDown" : "chevronRight"} size={13} className="text-fg-subtle" />
         <span className="shrink-0 text-sm font-(--ui-weight-strong) text-fg">
           {t.turn(turn.index)}
         </span>
-        {running && <Pill tone="success">{f.copy.chat.running}</Pill>}
+        {running && <Badge tone="success">{f.copy.chat.runStates.running}</Badge>}
         <span className="min-w-0 flex-1" />
         <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-fg-muted">
           <StatChip glyph="wrench" value={String(turn.toolCalls)} title={t.toolCalls} />
@@ -184,9 +186,7 @@ function TurnCard({
         <div className="space-y-3 bg-surface p-3">
           <Timeline turn={turn} f={f} />
           <div>
-            <p className="mb-1.5 text-[0.6875rem] font-(--ui-weight-medium) text-fg-muted">
-              {t.messages}
-            </p>
+            <p className="mb-1.5 text-xs font-(--ui-weight-medium) text-fg-muted">{t.messages}</p>
             <ul className="divide-y divide-line-muted rounded-md border border-line">
               {turn.events.map((ev, i) => (
                 <li
@@ -196,18 +196,16 @@ function TurnCard({
                     i === 2 ? "bg-tone-attention-bg" : ""
                   }`}
                 >
-                  <span className="shrink-0 font-mono text-[0.6875rem] text-fg-subtle">
+                  <span className="shrink-0 font-mono text-xs tabular-nums text-fg-subtle">
                     {ev.time}
                   </span>
-                  <Pill tone={TYPE_TONE[ev.messageType]} mono>
-                    {ev.payloadType}
-                  </Pill>
-                  {ev.fromSubagent && <Pill tone="done">origin</Pill>}
+                  <Badge tone={TYPE_TONE[ev.messageType]}>{ev.payloadType}</Badge>
+                  {ev.fromSubagent && <Badge tone="done">{t.fromSubagent}</Badge>}
                   <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-muted">
                     {ev.summary}
                   </span>
                   {ev.stopReason && (
-                    <span className="shrink-0 font-mono text-[0.6875rem] text-fg-subtle">
+                    <span className="shrink-0 font-mono text-xs text-fg-subtle">
                       {ev.stopReason}
                     </span>
                   )}
@@ -234,10 +232,11 @@ function TracePanel({ f }: { f: Fixtures }) {
           {tr.files.map((file, i) => (
             <span
               key={file.label}
+              role="button"
               className={`rounded-md border px-2 py-0.5 font-mono text-xs ${
                 i === tr.activeFile
                   ? "border-line-emphasis bg-accent-muted font-(--ui-weight-strong) text-fg"
-                  : "border-line text-fg-muted"
+                  : "border-line text-fg-muted hover:text-fg"
               }`}
             >
               {file.label}
@@ -249,7 +248,10 @@ function TracePanel({ f }: { f: Fixtures }) {
             {active.dateIso} · {bytes(active.sizeBytes)}
           </span>
           <span className="min-w-0 flex-1" />
-          <span className="ui-button ui-pill-hover flex items-center gap-1.5 rounded-md border border-line-emphasis bg-surface px-2.5 py-1 text-xs font-(--ui-weight-medium) text-fg">
+          <span
+            role="button"
+            className="flex items-center gap-1.5 rounded-control border border-line-emphasis bg-surface px-2.5 py-1 text-xs font-(--ui-weight-medium) text-fg"
+          >
             <Glyph name="download" size={13} />
             {t.export}
           </span>
@@ -267,7 +269,7 @@ export function TracesScreen({ lang }: { lang: FixtureLang }) {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-canvas text-fg">
       <Sidebar f={f} activeSessionId={f.session.id} />
-      <div className="ui-wash ui-grid flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <ChatHeader f={f} dock="bottom" />
         <main className="flex h-[34%] min-h-0 shrink-0 flex-col">
           <ChatTranscript f={f} />

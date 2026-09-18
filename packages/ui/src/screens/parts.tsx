@@ -7,7 +7,9 @@
  * package (the wave is noted), the screen swaps the piece for the real thing.
  */
 import type { ReactNode } from "react";
+import { Spinner } from "../components/icons/spinner/spinner";
 import type { Fixtures, RunState, SessionListItem } from "../fixtures";
+import type { ToneName } from "../tokens";
 import { usd, duration, tokens } from "./format";
 import { Glyph } from "./glyph";
 import type { GlyphName } from "./glyph";
@@ -24,17 +26,11 @@ export const NEUTRAL_FILL = "bg-[color-mix(in_oklab,var(--ui-fg)_7%,transparent)
 // Marks (W1: Spinner, Dot, StatusIcon, AgentAvatar)
 // ---------------------------------------------------------------------------
 
-/** A ring spinner in the busy tone. */
-export function Spinner({ size = 13, className = "" }: { size?: number; className?: string }) {
-  return (
-    <span
-      aria-hidden
-      style={{ width: size, height: size }}
-      data-live="spinner"
-      className={`ui-live inline-block shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent ${className}`}
-    />
-  );
-}
+/**
+ * The one Spinner already lives in the component set (rule 11 gives it the only `animate-spin`);
+ * the screens re-export it so W1 removes this line rather than rewriting call sites.
+ */
+export { Spinner };
 
 /** A 6 px state dot. Dots stay round in every theme; that is what `rounded-full` is kept for. */
 export function Dot({ className }: { className: string }) {
@@ -48,17 +44,22 @@ const STATE_GLYPH: Record<Exclude<RunState, "running">, GlyphName> = {
   stopped: "circleCross",
 };
 
-const STATE_INK: Record<RunState, string> = {
-  running: "text-tone-success-fg",
+const STATE_INK: Record<Exclude<RunState, "running">, string> = {
   waiting: "text-tone-attention-fg",
   done: "text-tone-neutral-fg",
   failed: "text-tone-danger-fg",
   stopped: "text-tone-neutral-fg",
 };
 
-/** The run-state glyph: a spinner while running, a static mark otherwise. */
-export function StatusMark({ state, label }: { state: RunState; label?: string }) {
-  if (state === "running") return <Spinner className={STATE_INK.running} />;
+/** The sentence-case word for a run state: a status mark always carries one (§1.3 row 15). */
+export function stateWord(state: RunState, f: Fixtures): string {
+  return f.copy.chat.runStates[state];
+}
+
+/** The run-state mark: a spinner while running, a static glyph otherwise, both with their word. */
+export function StatusMark({ state, f }: { state: RunState; f: Fixtures }) {
+  const label = stateWord(state, f);
+  if (state === "running") return <Spinner tone="success" label={label} />;
   return (
     <span title={label} className={STATE_INK[state]}>
       <Glyph name={STATE_GLYPH[state]} size={13} />
@@ -115,42 +116,53 @@ export function UserAvatar({ name, size = 28 }: { name: string; size?: number })
   );
 }
 
-/** A square icon button (the app's h-8 / h-6 header and toolbar squares). */
-export function IconSquare({
-  glyph,
-  size = "md",
-  active = false,
+/**
+ * A square icon button in the W1 `IconButton` shape: flat at rest, ink deepening on hover, a fill
+ * only while `pressed`. The label is required because an icon alone names nothing — it is the
+ * tooltip and the accessible name at once.
+ */
+export function IconButton({
+  icon,
   label,
+  size = "md",
+  pressed = false,
 }: {
-  glyph: GlyphName;
+  icon: GlyphName;
+  label: string;
+  /** 32 px in a header or toolbar, 24 px in a dense row. */
   size?: "sm" | "md";
-  active?: boolean;
-  label?: string;
+  pressed?: boolean;
 }) {
   const box = size === "md" ? "h-8 w-8" : "h-6 w-6";
   return (
     <span
       title={label}
-      className={`ui-pill-hover flex ${box} shrink-0 items-center justify-center rounded-md ${
-        active ? "bg-accent-muted text-fg" : "text-fg-subtle"
+      aria-label={label}
+      role="button"
+      className={`flex ${box} shrink-0 items-center justify-center rounded-control ${
+        pressed ? "bg-accent-muted text-fg" : "text-fg-subtle hover:text-fg"
       }`}
     >
-      <Glyph name={glyph} size={size === "md" ? 15 : 14} />
+      <Glyph name={icon} size={size === "md" ? 15 : 14} />
     </span>
   );
 }
 
-/** A tinted, single-line pill (the app's Badge). Pills follow the pill radius token. */
-export function Pill({
-  tone,
+/**
+ * A state or kind badge in the W1 `Badge` shape: caption size at the medium weight, the pill
+ * radius, and a tone that touches at most two of ink / line / fill — `soft` takes the neutral
+ * line so a filled badge is never one hue three times over (rule 9).
+ */
+export function Badge({
+  tone = "neutral",
+  variant = "soft",
   children,
-  mono = false,
 }: {
-  tone: "success" | "attention" | "danger" | "done" | "neutral" | "info";
+  tone?: ToneName;
+  variant?: "soft" | "outline" | "solid";
   children: ReactNode;
-  mono?: boolean;
 }) {
-  const ink: Record<typeof tone, string> = {
+  const soft: Record<ToneName, string> = {
     success: "bg-tone-success-bg text-tone-success-fg",
     attention: "bg-tone-attention-bg text-tone-attention-fg",
     danger: "bg-tone-danger-bg text-tone-danger-fg",
@@ -158,11 +170,31 @@ export function Pill({
     neutral: "bg-tone-neutral-bg text-fg-muted",
     info: "bg-tone-info-bg text-tone-info-fg",
   };
+  const outline: Record<ToneName, string> = {
+    success: "border-tone-success-line text-tone-success-fg",
+    attention: "border-tone-attention-line text-tone-attention-fg",
+    danger: "border-tone-danger-line text-tone-danger-fg",
+    done: "border-tone-done-line text-tone-done-fg",
+    neutral: "border-tone-neutral-line text-fg-muted",
+    info: "border-tone-info-line text-tone-info-fg",
+  };
+  const solid: Record<ToneName, string> = {
+    success: "bg-tone-success-emphasis text-tone-success-emphasis-fg",
+    attention: "bg-tone-attention-emphasis text-tone-attention-emphasis-fg",
+    danger: "bg-tone-danger-emphasis text-tone-danger-emphasis-fg",
+    done: "bg-tone-done-emphasis text-tone-done-emphasis-fg",
+    neutral: "bg-tone-neutral-emphasis text-tone-neutral-emphasis-fg",
+    info: "bg-tone-info-emphasis text-tone-info-emphasis-fg",
+  };
+  const look =
+    variant === "outline"
+      ? `border ${outline[tone]}`
+      : variant === "solid"
+        ? solid[tone]
+        : `border border-line ${soft[tone]}`;
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-[var(--ui-radius-pill)] px-2 py-0.5 text-[0.6875rem] font-(--ui-weight-strong) ${
-        mono ? "font-mono" : ""
-      } ${ink[tone]}`}
+      className={`inline-flex shrink-0 items-center rounded-[var(--ui-radius-pill)] px-2 py-0.5 text-xs font-(--ui-weight-medium) ${look}`}
     >
       {children}
     </span>
@@ -173,14 +205,14 @@ export function Pill({
 export function Segmented({ options, value }: { options: readonly string[]; value: number }) {
   return (
     <div
-      className={`grid gap-0.5 rounded-md p-0.5 ${NEUTRAL_FILL} ${
+      className={`grid gap-px rounded-control p-px ${NEUTRAL_FILL} ${
         options.length === 3 ? "grid-cols-3" : "grid-cols-2"
       }`}
     >
       {options.map((label, i) => (
         <span
           key={label}
-          className={`rounded-sm px-2 py-1 text-center text-xs ${
+          className={`rounded-control px-2 py-1 text-center text-xs ${
             i === value ? "bg-surface font-(--ui-weight-medium) text-fg shadow-sm" : "text-fg-muted"
           }`}
         >
@@ -191,7 +223,7 @@ export function Segmented({ options, value }: { options: readonly string[]; valu
   );
 }
 
-/** A glyph welded to a mono value (the app's StatChip). */
+/** A glyph welded to a mono value (the app's StatChip). Figures align, so they are tabular. */
 export function StatChip({
   glyph,
   value,
@@ -202,10 +234,26 @@ export function StatChip({
   title?: string;
 }) {
   return (
-    <span title={title} className="flex shrink-0 items-center gap-1 font-mono text-xs">
+    <span title={title} className="flex shrink-0 items-center gap-1 font-mono text-xs tabular-nums">
       <Glyph name={glyph} size={13} className="text-fg-subtle" />
       {value}
     </span>
+  );
+}
+
+/**
+ * A group label above a list (W4: GroupHeader), with the group's own actions on the right. The
+ * `.ui-eyebrow` hook decides its case, weight and colour — Console uppercases it, the others do
+ * not — so the markup carries only the caption rung as a floor for a theme with no recipe yet.
+ */
+export function GroupHeader({ label, actions }: { label: string; actions?: ReactNode }) {
+  return (
+    <div className="flex items-center gap-1">
+      <span className="ui-eyebrow min-w-0 flex-1 px-1 text-xs font-(--ui-weight-strong) text-fg-muted">
+        {label}
+      </span>
+      {actions}
+    </div>
   );
 }
 
@@ -239,11 +287,9 @@ function SessionRow({ item, active, f }: { item: SessionListItem; active: boolea
       {item.scheduled && <Glyph name="calendarClock" size={12} className="text-tone-neutral-fg" />}
       {item.unread && <Dot className="bg-accent" />}
       {item.running ? (
-        <Spinner size={12} className="text-tone-success-fg" />
+        <Spinner size="sm" tone="success" label={f.copy.chat.runStates.running} />
       ) : (
-        <span className="shrink-0 text-[0.6875rem] tabular-nums text-fg-subtle">
-          {item.timeLabel}
-        </span>
+        <span className="shrink-0 text-xs tabular-nums text-fg-subtle">{item.timeLabel}</span>
       )}
     </li>
   );
@@ -254,13 +300,13 @@ export function Sidebar({ f, activeSessionId }: { f: Fixtures; activeSessionId?:
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-r border-line bg-surface-muted">
       <div className="flex shrink-0 items-center gap-1 px-2 pt-2">
-        <IconSquare glyph="sidebar" label={c.collapseSidebar} />
+        <IconButton icon="sidebar" label={c.collapseSidebar} />
         <span className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-base font-(--ui-weight-strong) text-fg">
           <span className="min-w-0 flex-1 truncate">{f.user.name}</span>
           <Glyph name="chevronDown" size={14} className="text-fg-subtle" />
         </span>
       </div>
-      <nav className="shrink-0 space-y-0.5 px-2 pt-2">
+      <nav className="shrink-0 space-y-1 px-2 pt-2">
         <span className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-(--ui-weight-medium) text-fg">
           <Glyph name="newChat" size={16} className="text-fg-muted" />
           {c.newChat}
@@ -284,18 +330,20 @@ export function Sidebar({ f, activeSessionId }: { f: Fixtures; activeSessionId?:
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden px-2 pb-2">
-        <div className="mt-3 flex items-center px-1 pt-2">
-          <span className="ui-eyebrow min-w-0 flex-1 px-1 text-[0.6875rem] font-(--ui-weight-strong) uppercase tracking-wide text-fg-subtle">
-            {c.sessions}
-          </span>
-          <span className="flex items-center gap-0.5">
-            <IconSquare glyph="search" size="sm" label={c.search} />
-            <IconSquare glyph="sliders" size="sm" />
-            <IconSquare glyph="folderPlus" size="sm" />
-          </span>
+        <div className="mt-3 px-1 pt-2">
+          <GroupHeader
+            label={c.sessions}
+            actions={
+              <span className="flex items-center gap-1">
+                <IconButton icon="search" size="sm" label={c.search} />
+                <IconButton icon="sliders" size="sm" label={c.filterSessions} />
+                <IconButton icon="folderPlus" size="sm" label={c.newFolder} />
+              </span>
+            }
+          />
         </div>
         {f.sessionGroups.map((group, gi) => (
-          <div key={group.key} className="pt-2.5">
+          <div key={group.key} className="pt-3">
             <div className="flex items-center gap-1 px-1.5 py-1 text-xs text-fg-subtle">
               <Glyph name={gi === 0 ? "folder" : "clock"} size={15} />
               <span className="font-(--ui-weight-strong) text-fg-muted">{group.label}</span>
@@ -304,7 +352,7 @@ export function Sidebar({ f, activeSessionId }: { f: Fixtures; activeSessionId?:
               <span className="min-w-0 flex-1" />
               {gi === 0 && <Glyph name="plus" size={15} />}
             </div>
-            <ul className="space-y-0.5">
+            <ul className="space-y-1">
               {group.items.map((item) => (
                 <SessionRow key={item.id} item={item} active={item.id === activeSessionId} f={f} />
               ))}
@@ -338,19 +386,19 @@ export function ChatHeader({
 }) {
   const s = f.session;
   return (
-    <header className="flex shrink-0 items-center gap-2.5 border-b border-line px-4 py-2">
+    <header className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <h1 className="truncate text-sm font-(--ui-weight-strong) text-fg">{s.title}</h1>
         {s.running && (
           <span className="flex shrink-0 items-center gap-1.5 text-xs text-tone-success-fg">
-            <Spinner size={12} />
-            {f.copy.chat.running}
+            <Spinner size="sm" label={f.copy.chat.runStates.running} />
+            {f.copy.chat.runStates.running}
           </span>
         )}
       </div>
       <span className="flex items-center gap-1">
-        <IconSquare glyph="panelBottom" active={dock === "bottom"} />
-        <IconSquare glyph="panelRight" active={dock === "right"} />
+        <IconButton icon="panelBottom" label={f.copy.dock.bottomDock} pressed={dock === "bottom"} />
+        <IconButton icon="panelRight" label={f.copy.dock.rightDock} pressed={dock === "right"} />
       </span>
       <span className="flex items-center gap-3 px-2 text-fg-muted">
         <StatChip glyph="tokens" value={tokens(s.totals.tokens)} />
@@ -395,10 +443,14 @@ export function DockFrame({
             <Glyph name="cross" size={11} />
           </span>
         </span>
-        <span className="flex items-center gap-0.5">
-          <IconSquare glyph="plus" size="sm" label={f.copy.dock.newPanel} />
-          <IconSquare glyph={edge === "right" ? "panelBottom" : "panelRight"} size="sm" />
-          <IconSquare glyph="cross" size="sm" label={f.copy.dock.close} />
+        <span className="flex items-center gap-1">
+          <IconButton icon="plus" size="sm" label={f.copy.dock.newPanel} />
+          <IconButton
+            icon={edge === "right" ? "panelBottom" : "panelRight"}
+            size="sm"
+            label={f.copy.dock.movePanel}
+          />
+          <IconButton icon="cross" size="sm" label={f.copy.dock.close} />
         </span>
       </div>
       <div data-slot="body" className="min-h-0 flex-1 overflow-hidden">
