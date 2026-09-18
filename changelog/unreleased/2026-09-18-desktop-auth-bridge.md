@@ -3,6 +3,7 @@
 - **Date:** 2026-09-18
 - **Type:** fix
 - **Scope:** `desktop`, `web`
+- **PR:** [#788](https://github.com/Prism-Shadow/penguin-harness/pull/788)
 
 [中文版](2026-09-18-desktop-auth-bridge.zh.md)
 
