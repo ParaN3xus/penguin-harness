@@ -78,6 +78,10 @@ export const GLYPHS = {
   eye: "M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
   message: "M7.9 20A9 9 0 1 0 4 16.1L2 22Z",
   bot: "M12 8V4H8M4 12a8 8 0 0 1 8-4 8 8 0 0 1 8 4v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2ZM2 14h2M20 14h2M15 13v2M9 13v2",
+  // Named by fixture data (the slash menu, the dock's panel menu), so they live here, not with
+  // the modules' own extra glyphs.
+  history: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5",
+  terminal: "m4 17 6-6-6-6M12 19h8",
 } as const;
 
 export type GlyphName = keyof typeof GLYPHS;

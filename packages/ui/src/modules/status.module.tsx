@@ -13,9 +13,9 @@
  */
 import type { ToneName } from "../tokens";
 import { fixturesFor } from "../fixtures";
-import type { FixtureLang, Fixtures, TicketFixture } from "../fixtures";
+import type { Fixtures, TicketFixture } from "../fixtures";
 import { defineModule } from "../module";
-import { liveDuration, usd } from "../screens/format";
+import { duration, liveDuration, usd } from "../screens/format";
 import {
   Badge,
   Button,
@@ -33,160 +33,6 @@ import {
   Toast,
 } from "./parts";
 import type { IconName } from "./parts";
-
-/**
- * Local fixture (K3): K-redesign §4.6 adds `notices` (one per tone and a toast list) to the fixtures;
- * until #763 does, the notices, the plan and the empty states' copy live here in that shape.
- */
-const LOCAL: Readonly<
-  Record<
-    FixtureLang,
-    {
-      planTitle: string;
-      plan: readonly {
-        title: string;
-        state: "done" | "running" | "waiting" | "failed" | "stopped";
-        detail: string;
-      }[];
-      states: Record<"done" | "running" | "waiting" | "failed" | "stopped", string>;
-      ticketsTitle: string;
-      ticketStatus: Record<TicketFixture["status"], string>;
-      stopReasonsTitle: string;
-      notices: {
-        strip: { title: string; body: string };
-        callout: { title: string; body: string; action: string };
-        inline: { body: string; action: string };
-        toasts: readonly { tone: ToneName; title: string; body?: string; action?: string }[];
-      };
-      budget: {
-        title: string;
-        evalTitle: string;
-        spent: (spent: string, budget: string) => string;
-      };
-      sessionsTitle: string;
-      empty: { title: string; body: string; action: string };
-      slot: { title: string; body: string; action: string };
-    }
-  >
-> = {
-  en: {
-    planTitle: "Plan",
-    plan: [
-      { title: "Collect the docs into corpus/", state: "done", detail: "15.8s" },
-      { title: "Write the BM25 retrieval app", state: "done", detail: "1.4s" },
-      { title: "Check how citations render", state: "running", detail: "" },
-      { title: "Start the app and run the citation tests", state: "waiting", detail: "" },
-      { title: "Ingest the PDF release notes", state: "failed", detail: "4.2s" },
-      { title: "Package the app as a Docker image", state: "stopped", detail: "" },
-    ],
-    states: {
-      done: "Done",
-      running: "Running",
-      waiting: "Needs approval",
-      failed: "Failed",
-      stopped: "Stopped",
-    },
-    ticketsTitle: "Tickets",
-    ticketStatus: {
-      proposed: "Proposed",
-      in_progress: "In progress",
-      review: "In review",
-      done: "Done",
-      rejected: "Rejected",
-    },
-    stopReasonsTitle: "Stop reasons",
-    notices: {
-      strip: { title: "Trace exported", body: "48.2 KB written to trace-001.jsonl." },
-      callout: {
-        title: "90% of this month's budget is spent",
-        body: "Docs Expert Co. has used $108.20 of $120.00. Runs stop at the limit.",
-        action: "Raise budget",
-      },
-      inline: { body: "Couldn't reach the model provider.", action: "Retry" },
-      toasts: [
-        { tone: "success", title: "Model added", body: "DeepSeek V4 Flash is ready to use." },
-        {
-          tone: "danger",
-          title: "Couldn't save the key",
-          body: "The provider rejected it: 401.",
-          action: "Retry",
-        },
-      ],
-    },
-    budget: {
-      title: "Monthly budget",
-      evalTitle: "Evaluation credits",
-      spent: (spent, budget) => `${spent} of ${budget}`,
-    },
-    sessionsTitle: "Sessions",
-    empty: {
-      title: "No agents yet",
-      body: "An agent is a model, a prompt and the tools it may use. Create one to start a Session with it.",
-      action: "New agent",
-    },
-    slot: {
-      title: "No MCP servers",
-      body: "Tools from an MCP server show up in every agent that enables it.",
-      action: "Add server",
-    },
-  },
-  zh: {
-    planTitle: "计划",
-    plan: [
-      { title: "把文档收集到 corpus/", state: "done", detail: "15.8s" },
-      { title: "编写 BM25 检索应用", state: "done", detail: "1.4s" },
-      { title: "检查引用的渲染方式", state: "running", detail: "" },
-      { title: "启动应用并运行引用测试", state: "waiting", detail: "" },
-      { title: "导入 PDF 版本说明", state: "failed", detail: "4.2s" },
-      { title: "把应用打包为 Docker 镜像", state: "stopped", detail: "" },
-    ],
-    states: {
-      done: "已完成",
-      running: "运行中",
-      waiting: "待审批",
-      failed: "失败",
-      stopped: "已停止",
-    },
-    ticketsTitle: "工单",
-    ticketStatus: {
-      proposed: "已提议",
-      in_progress: "进行中",
-      review: "评审中",
-      done: "已完成",
-      rejected: "已拒绝",
-    },
-    stopReasonsTitle: "停止原因",
-    notices: {
-      strip: { title: "Trace 已导出", body: "已写入 trace-001.jsonl，共 48.2 KB。" },
-      callout: {
-        title: "本月预算已用 90%",
-        body: "Docs Expert Co. 已花费 $108.20，预算 $120.00。达到上限后运行会停止。",
-        action: "提高预算",
-      },
-      inline: { body: "无法连接模型提供方。", action: "重试" },
-      toasts: [
-        { tone: "success", title: "已添加模型", body: "DeepSeek V4 Flash 可以使用了。" },
-        { tone: "danger", title: "密钥保存失败", body: "提供方拒绝了它：401。", action: "重试" },
-      ],
-    },
-    budget: {
-      title: "月度预算",
-      evalTitle: "评估额度",
-      spent: (spent, budget) => `${spent} / ${budget}`,
-    },
-    sessionsTitle: "Session",
-    empty: {
-      title: "还没有智能体",
-      body: "智能体由模型、提示词和它可用的工具组成。创建一个，就能用它开始 Session。",
-      action: "新建智能体",
-    },
-    slot: {
-      title: "没有 MCP 服务器",
-      body: "MCP 服务器提供的工具会出现在所有启用它的智能体中。",
-      action: "添加服务器",
-    },
-  },
-};
 
 const STATE_MARK: Record<string, { tone: ToneName; icon: IconName | "spinner" }> = {
   done: { tone: "success", icon: "circleCheck" },
@@ -217,17 +63,14 @@ const PRIORITY_TONE: Record<
 };
 
 function Live({ f }: { f: Fixtures }) {
-  const local = LOCAL[f.lang];
-  const running = f.session.turns[1]!.items.find(
-    (i) => i.kind === "tool_call" && i.state === "running",
-  );
-  const clock = running?.kind === "tool_call" ? liveDuration(running.elapsedMs ?? 0) : "";
+  const states = f.copy.chat.runStates;
+  const [workspace] = f.sessionGroups;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <section className="grid grid-cols-[minmax(0,1fr)] gap-1">
-        <Heading level={5}>{local.planTitle}</Heading>
+        <Heading level={5}>{f.copy.chat.plan}</Heading>
         <ul className="grid grid-cols-[minmax(0,1fr)]">
-          {local.plan.map((step) => {
+          {f.plan.map((step) => {
             const mark = STATE_MARK[step.state]!;
             return (
               <li
@@ -236,7 +79,7 @@ function Live({ f }: { f: Fixtures }) {
               >
                 <span className="w-4 shrink-0">
                   {mark.icon === "spinner" ? (
-                    <RunSpinner tone={mark.tone} />
+                    <RunSpinner tone={mark.tone} label={states.running} />
                   ) : (
                     <StatusIcon tone={mark.tone} icon={mark.icon} />
                   )}
@@ -248,13 +91,15 @@ function Live({ f }: { f: Fixtures }) {
                 </span>
                 {step.state === "waiting" ? (
                   <span className="shrink-0 text-xs font-(--ui-weight-medium) text-tone-attention-fg">
-                    {local.states.waiting}
+                    {states.waiting}
                   </span>
                 ) : step.state === "stopped" ? (
-                  <span className="shrink-0 text-xs text-fg-muted">{local.states.stopped}</span>
+                  <span className="shrink-0 text-xs text-fg-muted">{states.stopped}</span>
                 ) : (
                   <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">
-                    {step.state === "running" ? clock : step.detail}
+                    {step.state === "running"
+                      ? liveDuration(step.elapsedMs ?? 0)
+                      : duration(step.durationMs ?? 0)}
                   </span>
                 )}
               </li>
@@ -263,12 +108,17 @@ function Live({ f }: { f: Fixtures }) {
         </ul>
       </section>
       <nav className="grid grid-cols-[minmax(0,1fr)] max-w-xs gap-px">
-        <NavRow icon="kanban" label={local.ticketsTitle} count={f.company.tickets.length} active />
+        <NavRow
+          icon="kanban"
+          label={f.copy.company.tickets}
+          count={f.company.tickets.length}
+          active
+        />
         <span className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-fg-muted">
           <GlyphIcon name="message" size={16} className="text-fg-subtle" />
-          <span className="min-w-0 flex-1 truncate">{local.sessionsTitle}</span>
+          <span className="min-w-0 flex-1 truncate">{f.copy.nav.sessions}</span>
           <Dot tone="success" live size="xs" />
-          <span className="text-xs tabular-nums">3</span>
+          <span className="text-xs tabular-nums">{workspace?.items.length ?? 0}</span>
         </span>
       </nav>
     </div>
@@ -285,7 +135,7 @@ function StatusIcon({ tone, icon }: { tone: ToneName; icon: IconName }) {
 }
 
 function Settled({ f }: { f: Fixtures }) {
-  const local = LOCAL[f.lang];
+  const company = f.copy.company;
   const reasons = ["completed", "tool_use", "max_tokens", "error"] as const;
   const reasonTone: Record<(typeof reasons)[number], ToneName> = {
     completed: "neutral",
@@ -296,7 +146,7 @@ function Settled({ f }: { f: Fixtures }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <section className="grid grid-cols-[minmax(0,1fr)] gap-1">
-        <Heading level={5}>{local.ticketsTitle}</Heading>
+        <Heading level={5}>{company.tickets}</Heading>
         <ul className="grid grid-cols-[minmax(0,1fr)]">
           {f.company.tickets.slice(0, 6).map((ticket) => {
             const status = TICKET_TONE[ticket.status];
@@ -316,7 +166,7 @@ function Settled({ f }: { f: Fixtures }) {
                   {ticket.priority}
                 </Badge>
                 <Badge tone={status.tone} variant={status.variant}>
-                  {local.ticketStatus[ticket.status]}
+                  {company.ticketStatus[ticket.status]}
                 </Badge>
               </li>
             );
@@ -324,7 +174,7 @@ function Settled({ f }: { f: Fixtures }) {
         </ul>
       </section>
       <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
-        <Heading level={5}>{local.stopReasonsTitle}</Heading>
+        <Heading level={5}>{f.copy.traces.stopReasons}</Heading>
         <p className="flex flex-wrap items-center gap-2">
           {reasons.map((reason) => (
             <Badge key={reason} tone={reasonTone[reason]} variant="outline">
@@ -338,25 +188,30 @@ function Settled({ f }: { f: Fixtures }) {
 }
 
 function Notices({ f }: { f: Fixtures }) {
-  const n = LOCAL[f.lang].notices;
+  const { byTone, toasts } = f.notices;
+  const { success: strip, attention: callout, danger: inline } = byTone;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
-      <Notice tone="info" title={n.strip.title}>
-        {n.strip.body}
+      <Notice tone={strip.tone} title={strip.title}>
+        {strip.body}
       </Notice>
       <Notice
-        tone="attention"
+        tone={callout.tone}
         variant="callout"
-        title={n.callout.title}
-        action={<Button variant="secondary">{n.callout.action}</Button>}
+        title={callout.title}
+        action={callout.action && <Button variant="secondary">{callout.action}</Button>}
       >
-        {n.callout.body}
+        {callout.body}
       </Notice>
-      <Notice tone="danger" variant="inline" action={<Link>{n.inline.action}</Link>}>
-        {n.inline.body}
+      <Notice
+        tone={inline.tone}
+        variant="inline"
+        action={inline.action && <Link>{inline.action}</Link>}
+      >
+        {inline.title}
       </Notice>
       <div className="grid grid-cols-[minmax(0,1fr)] justify-items-end gap-2 pt-2">
-        {n.toasts.map((toast) => (
+        {toasts.map((toast) => (
           <Toast
             key={toast.title}
             tone={toast.tone}
@@ -371,27 +226,41 @@ function Notices({ f }: { f: Fixtures }) {
 }
 
 function LoadingAndEmpty({ f }: { f: Fixtures }) {
-  const local = LOCAL[f.lang];
+  const agents = f.copy.agents;
   const spend = f.company.org.spend;
+  // The employee past their budget: the one bar that turns danger.
+  const over = f.company.employees.find(
+    (e) => e.budgetUsd !== undefined && e.spendUsd > e.budgetUsd,
+  );
+  const rows = [
+    {
+      title: f.copy.company.monthlyBudget,
+      spent: spend.costUsd,
+      budget: spend.budgetUsd,
+      tone: "neutral" as const,
+    },
+    ...(over?.budgetUsd === undefined
+      ? []
+      : [
+          {
+            title: `${over.name} · ${over.title}`,
+            spent: over.spendUsd,
+            budget: over.budgetUsd,
+            tone: "danger" as const,
+          },
+        ]),
+  ];
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <section className="grid grid-cols-[minmax(0,1fr)] gap-4">
-        {[
-          {
-            title: local.budget.title,
-            spent: spend.costUsd,
-            budget: spend.budgetUsd,
-            tone: "neutral" as const,
-          },
-          { title: local.budget.evalTitle, spent: 19.2, budget: 20, tone: "danger" as const },
-        ].map((row) => (
+        {rows.map((row) => (
           <div key={row.title} className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
             <div className="flex items-baseline justify-between gap-2 text-sm">
               <span className="text-fg">{row.title}</span>
               <span
                 className={`text-xs tabular-nums ${row.tone === "danger" ? "text-tone-danger-fg" : "text-fg-muted"}`}
               >
-                {local.budget.spent(usd(row.spent), usd(row.budget))}
+                {f.copy.common.spentOf(usd(row.spent), usd(row.budget))}
               </span>
             </div>
             <ProgressBar value={row.spent / row.budget} tone={row.tone} label={row.title} />
@@ -410,19 +279,19 @@ function LoadingAndEmpty({ f }: { f: Fixtures }) {
         ))}
       </section>
       <EmptyState
-        title={local.empty.title}
-        description={local.empty.body}
+        title={agents.empty.title}
+        description={agents.empty.body}
         action={
           <Button variant="primary" leading={<GlyphIcon name="plus" size={13} />}>
-            {local.empty.action}
+            {agents.newAgent}
           </Button>
         }
       />
       <EmptyState
         variant="slot"
-        title={local.slot.title}
-        description={local.slot.body}
-        action={<Button variant="secondary">{local.slot.action}</Button>}
+        title={agents.mcpEmpty.title}
+        description={agents.mcpEmpty.body}
+        action={<Button variant="secondary">{agents.mcpEmpty.action}</Button>}
       />
     </div>
   );

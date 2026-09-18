@@ -5,111 +5,31 @@
  * stand-ins for W1's `Button`, `IconButton`, `Link`, `CopyButton`, `Kbd` and `CreateButtons`.
  */
 import { fixturesFor } from "../fixtures";
-import type { FixtureLang, Fixtures } from "../fixtures";
+import type { Fixtures } from "../fixtures";
 import { defineModule } from "../module";
 import { AgentTile } from "../screens/parts";
 import { Button, GlyphIcon, Heading, IconButton, Kbd, Link, Modal, SearchInput } from "./parts";
 import type { ButtonState, ButtonVariant } from "./parts";
 
-/** Local fixture (K3): the actions' labels. The rows come from `fixtures` (agents, models). */
-const COPY: Readonly<
-  Record<
-    FixtureLang,
-    {
-      agentsTitle: string;
-      searchAgents: string;
-      createWithAi: string;
-      newAgent: string;
-      more: string;
-      deleteTitle: (name: string) => string;
-      deleteBody: string;
-      cancel: string;
-      delete: string;
-      keysTitle: string;
-      copy: string;
-      edit: string;
-      remove: string;
-      getKey: string;
-      openPalette: string;
-      close: string;
-      states: Record<ButtonState, string>;
-      variants: Record<ButtonVariant, string>;
-    }
-  >
-> = {
-  en: {
-    agentsTitle: "Agents",
-    searchAgents: "Search agents",
-    createWithAi: "Create with AI",
-    newAgent: "New agent",
-    more: "More",
-    deleteTitle: (name) => `Delete “${name}”?`,
-    deleteBody: "Its Sessions stay in the sidebar; schedules that start it are turned off.",
-    cancel: "Cancel",
-    delete: "Delete agent",
-    keysTitle: "API keys",
-    copy: "Copy",
-    edit: "Edit",
-    remove: "Remove",
-    getKey: "Get a key",
-    openPalette: "Command palette",
-    close: "Close",
-    states: {
-      rest: "rest",
-      hover: "hover",
-      focus: "focus",
-      disabled: "disabled",
-      loading: "loading",
-    },
-    variants: {
-      primary: "Save",
-      secondary: "Cancel",
-      danger: "Delete",
-      ghost: "Skip",
-      link: "Details",
-    },
-  },
-  zh: {
-    agentsTitle: "智能体",
-    searchAgents: "搜索智能体",
-    createWithAi: "用 AI 创建",
-    newAgent: "新建智能体",
-    more: "更多",
-    deleteTitle: (name) => `删除「${name}」？`,
-    deleteBody: "它的 Session 仍保留在侧栏中；启动它的定时任务会被关闭。",
-    cancel: "取消",
-    delete: "删除智能体",
-    keysTitle: "API 密钥",
-    copy: "复制",
-    edit: "编辑",
-    remove: "移除",
-    getKey: "获取密钥",
-    openPalette: "命令面板",
-    close: "关闭",
-    states: { rest: "静止", hover: "悬停", focus: "焦点", disabled: "禁用", loading: "加载中" },
-    variants: { primary: "保存", secondary: "取消", danger: "删除", ghost: "跳过", link: "详情" },
-  },
-};
-
 function Toolbar({ f }: { f: Fixtures }) {
-  const local = COPY[f.lang];
+  const a = f.copy.agents;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Heading level={3} className="mr-auto">
-          {local.agentsTitle}
+          {f.copy.nav.agents}
         </Heading>
         <Button variant="secondary" leading={<GlyphIcon name="sparkle" size={13} />}>
-          {local.createWithAi}
+          {a.createWithAi}
         </Button>
         <Button variant="primary" leading={<GlyphIcon name="plus" size={13} />}>
-          {local.newAgent}
+          {a.newAgent}
         </Button>
       </div>
       <div className="flex items-center gap-2">
-        <SearchInput placeholder={local.searchAgents} />
-        <IconButton label={local.more} icon="sliders" />
-        <IconButton label={local.more} icon="more" />
+        <SearchInput placeholder={a.search} />
+        <IconButton label={f.copy.nav.filterSessions} icon="sliders" />
+        <IconButton label={f.copy.common.more} icon="more" />
       </div>
       <ul className="grid grid-cols-[minmax(0,1fr)]">
         {f.agents.map((agent) => (
@@ -129,18 +49,18 @@ function Toolbar({ f }: { f: Fixtures }) {
 }
 
 function Footer({ f }: { f: Fixtures }) {
-  const local = COPY[f.lang];
+  const a = f.copy.agents;
   const agent = f.agents[1] ?? f.agents[0]!;
   return (
     <div className="flex min-h-72 items-center justify-center">
       <Modal
         className="w-full max-w-sm"
-        title={local.deleteTitle(agent.name)}
-        description={local.deleteBody}
+        title={a.deleteTitle(agent.name)}
+        description={a.deleteBody}
         footer={
           <>
-            <Button variant="secondary">{local.cancel}</Button>
-            <Button variant="danger">{local.delete}</Button>
+            <Button variant="secondary">{f.copy.common.cancel}</Button>
+            <Button variant="danger">{a.delete}</Button>
           </>
         }
       />
@@ -148,11 +68,8 @@ function Footer({ f }: { f: Fixtures }) {
   );
 }
 
-/** Masked key suffixes for the three provider rows. */
-const KEY_TAILS = ["a91f", "7c2e", "04bd"] as const;
-
 /** A code block's header: the language and its copy button (W5's `CodeBlock`). */
-function CodeBlock({ copyLabel }: { copyLabel: string }) {
+function CodeBlock({ code, copyLabel }: { code: string; copyLabel: string }) {
   return (
     <section className="ui-frame grid overflow-hidden rounded-md border border-line">
       <div
@@ -167,52 +84,54 @@ function CodeBlock({ copyLabel }: { copyLabel: string }) {
         data-slot="body"
         className="overflow-x-auto bg-[var(--ui-code-bg)] px-3 py-2 font-mono text-xs leading-relaxed text-fg"
       >
-        penguin server start --port 4630
+        {code}
       </pre>
     </section>
   );
 }
 
 function DenseRow({ f }: { f: Fixtures }) {
-  const local = COPY[f.lang];
-  const providers = [...new Map(f.models.map((m) => [m.provider, m])).values()].slice(0, 3);
+  const c = f.copy.common;
+  const secrets = f.vault.slice(0, 3);
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <div className="flex items-center gap-2">
           <Heading level={5} className="mr-auto">
-            {local.keysTitle}
+            {f.copy.vault.title}
           </Heading>
-          <Link external>{local.getKey}</Link>
+          <Link external>{c.learnMore}</Link>
         </div>
         <ul className="grid grid-cols-[minmax(0,1fr)]">
-          {providers.map((model, i) => (
+          {secrets.map((secret, i) => (
             <li
-              key={model.provider}
+              key={secret.name}
               className={`flex h-10 items-center gap-2 rounded-md px-2 ${i === 1 ? "bg-surface-muted" : ""}`}
             >
-              <AgentTile id={model.provider} name={model.providerLabel} size={18} />
-              <span className="min-w-0 flex-1 truncate text-sm text-fg">{model.providerLabel}</span>
-              <span className="font-mono text-xs text-fg-muted">sk-…{KEY_TAILS[i]}</span>
+              <GlyphIcon name="key" size={14} className="text-fg-subtle" />
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg">
+                {secret.name}
+              </span>
+              <span className="text-xs text-fg-muted">{secret.kind}</span>
               <span className={`flex items-center ${i === 1 ? "" : "invisible"}`}>
-                <IconButton label={local.copy} icon="copy" size="sm" hovered={i === 1} />
-                <IconButton label={local.edit} icon="pencil" size="sm" />
-                <IconButton label={local.remove} icon="trash" size="sm" />
+                <IconButton label={c.copy} icon="copy" size="sm" hovered={i === 1} />
+                <IconButton label={c.edit} icon="pencil" size="sm" />
+                <IconButton label={c.remove} icon="trash" size="sm" />
               </span>
             </li>
           ))}
         </ul>
       </section>
-      <CodeBlock copyLabel={local.copy} />
+      <CodeBlock code={f.session.runCommand} copyLabel={c.copy} />
 
       <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-fg-muted">
         <span className="flex items-center gap-1.5">
           <Kbd keys={["⌘", "K"]} />
-          {local.openPalette}
+          {f.copy.palette.title}
         </span>
         <span className="flex items-center gap-1.5">
           <Kbd keys={["Esc"]} />
-          {local.close}
+          {c.close}
         </span>
       </p>
     </div>
@@ -222,8 +141,20 @@ function DenseRow({ f }: { f: Fixtures }) {
 const VARIANT_ORDER: readonly ButtonVariant[] = ["primary", "secondary", "danger", "ghost", "link"];
 const STATE_ORDER: readonly ButtonState[] = ["rest", "hover", "focus", "disabled", "loading"];
 
+/** What each variant says in the matrix: the verb it is usually given. */
+function variantLabel(f: Fixtures, variant: ButtonVariant): string {
+  const c = f.copy.common;
+  const labels: Record<ButtonVariant, string> = {
+    primary: c.save,
+    secondary: c.cancel,
+    danger: c.delete,
+    ghost: c.skip,
+    link: c.details,
+  };
+  return labels[variant];
+}
+
 function States({ f }: { f: Fixtures }) {
-  const local = COPY[f.lang];
   return (
     <div className="overflow-x-auto">
       <table className="border-separate border-spacing-x-3 border-spacing-y-2 text-xs">
@@ -231,8 +162,8 @@ function States({ f }: { f: Fixtures }) {
           <tr>
             <th />
             {STATE_ORDER.map((state) => (
-              <th key={state} className="text-left font-(--ui-weight-body) text-fg-muted">
-                {local.states[state]}
+              <th key={state} className="text-left font-mono font-(--ui-weight-body) text-fg-muted">
+                {state}
               </th>
             ))}
           </tr>
@@ -246,7 +177,7 @@ function States({ f }: { f: Fixtures }) {
               {STATE_ORDER.map((state) => (
                 <td key={state}>
                   <Button variant={variant} state={state} size="xs">
-                    {local.variants[variant]}
+                    {variantLabel(f, variant)}
                   </Button>
                 </td>
               ))}

@@ -12,35 +12,9 @@
  */
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
-import type {
-  AssistantTextItem,
-  ChatItem,
-  ChatTurn,
-  FixtureLang,
-  Fixtures,
-  ToolCallItem,
-} from "../fixtures";
+import type { AssistantTextItem, ChatItem, ChatTurn, Fixtures } from "../fixtures";
 import { defineModule } from "../module";
 import { Turn } from "../screens/transcript";
-
-/**
- * Local fixture (K3): the failed run of the citation test — the command's output and the reply
- * that reads it. Not part of K-redesign §4.6; it belongs beside the session in `fixtures/` if a
- * failed tool row joins the dataset.
- */
-const FAILED_OUTPUT = `TAP version 13
-# Subtest: every [n] citation opens a file under corpus/
-not ok 1 - every [n] citation opens a file under corpus/
-  ---
-  error: 'expected 200, got 404 for /corpus/claude-code-docs/hooks.md'
-  ...
-ok 2 - a question with no match cites nothing
-# tests 2 · pass 1 · fail 1`;
-
-const FAILED_REPLY: Readonly<Record<FixtureLang, string>> = {
-  en: "The test caught a real gap: `hooks.md` was renamed upstream to `hooks-guide.md`, so citation [2] points at a file the index still lists. Re-indexing the corpus, then running the suite again.",
-  zh: "测试抓到了一个真实的问题：上游把 `hooks.md` 改名为 `hooks-guide.md`，而索引里还留着旧文件，所以引用 [2] 指向了不存在的文件。先重建语料索引，再重新跑一遍测试。",
-};
 
 function item<T extends ChatItem = ChatItem>(turn: ChatTurn, id: string): T {
   const found = turn.items.find((candidate) => candidate.id === id);
@@ -96,28 +70,12 @@ function Approval({ f }: { f: Fixtures }) {
 
 function Failed({ f }: { f: Fixtures }) {
   const turn2 = f.session.turns[1]!;
-  const test = item<ToolCallItem>(turn2, "tc7");
-  const reply = item<AssistantTextItem>(turn2, "tx4");
+  const run = f.failedRun;
   const turn: ChatTurn = {
     index: 2,
     running: false,
-    items: [
-      item(turn2, "u2"),
-      item(turn2, "th3"),
-      item(turn2, "tc4"),
-      { ...test, state: "failed", durationMs: 2_140, output: FAILED_OUTPUT },
-      { ...reply, id: "tx-failed", markdown: FAILED_REPLY[f.lang] },
-    ],
-    stats: {
-      toolCalls: 3,
-      inputTokens: 24_920,
-      cacheReadTokens: 21_310,
-      cacheWriteTokens: 2_240,
-      outputTokens: 1_352,
-      costUsd: 0.011,
-      elapsedMs: 46_300,
-      outputTps: 64,
-    },
+    items: [item(turn2, "u2"), item(turn2, "th3"), item(turn2, "tc4"), run.call, run.reply],
+    stats: run.stats,
   };
   return (
     <Transcript>

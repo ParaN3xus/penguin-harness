@@ -9,10 +9,11 @@
  * and `Text` the eyebrow, `Heading` the display face, `Dot` the live pulse, `Tabs` the underline),
  * and the package's de-slop guard reads the enclosing function's name to check it.
  */
+import type { AccentSwatchFixture } from "../fixtures";
 import type { ToneName } from "../tokens";
 import type { ReactNode } from "react";
 import { GLYPHS } from "../screens/glyph";
-import { Spinner } from "../screens/parts";
+import { Spinner } from "../components/icons/spinner/spinner";
 
 // ---------------------------------------------------------------------------------------------
 // Icons (W1: GlyphIcon, ICONS)
@@ -34,7 +35,6 @@ export const ICON_PATHS = {
   arrowUp: "m5 12 7-7 7 7M12 19V5",
   arrowDown: "M12 5v14M19 12l-7 7-7-7",
   sort: "m21 16-4 4-4-4M17 20V4M3 8l4-4 4 4M7 4v16",
-  terminal: "m4 17 6-6-6-6M12 19h8",
   image:
     "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM9 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM21 15l-3.1-3.1a2 2 0 0 0-2.8 0L6 21",
   lock: "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2ZM7 11V7a5 5 0 0 1 10 0v4",
@@ -51,7 +51,6 @@ export const ICON_PATHS = {
   eyeOff:
     "M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20M14.12 14.12a3 3 0 1 1-4.24-4.24",
   grip: "M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01",
-  history: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5",
   paperclip:
     "m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48",
   stop: "M7 7h10v10H7z",
@@ -178,12 +177,24 @@ export function Dot({
   );
 }
 
-/** The screens' spinner in a tone's ink: every module spinner goes through here. */
-export function RunSpinner({ tone = "success" }: { tone?: ToneName | "inherit" }) {
-  return (
-    <span className={`inline-flex shrink-0 ${tone === "inherit" ? "" : TONE_INK[tone]}`}>
-      <Spinner size={12} />
+/**
+ * The package's one Spinner in a tone's ink: every module spinner goes through here. `label`
+ * announces what runs; without one the spinner sits beside the word that says so, and assistive
+ * tech hears the word once rather than twice.
+ */
+export function RunSpinner({
+  tone = "success",
+  label,
+}: {
+  tone?: ToneName | "inherit";
+  label?: string;
+}) {
+  return label === undefined ? (
+    <span aria-hidden className="inline-flex shrink-0">
+      <Spinner size="sm" tone={tone} label="" />
     </span>
+  ) : (
+    <Spinner size="sm" tone={tone} label={label} />
   );
 }
 
@@ -1049,29 +1060,23 @@ export function Segmented({
   );
 }
 
-/**
- * Round swatches, the selected one ringed. Stand-in colours: the tone emphasis inks, which share
- * the presets' hues, until the accent presets are fixture data (a module holds no colour literal).
- */
-export const SWATCH_COLOURS = [
-  "var(--ui-accent)",
-  "var(--ui-tone-info-emphasis)",
-  "var(--ui-tone-success-emphasis)",
-  "var(--ui-tone-done-emphasis)",
-  "var(--ui-tone-danger-emphasis)",
-  "var(--ui-tone-attention-emphasis)",
-] as const;
-
-export function SwatchPicker({ value, labels }: { value: number; labels: readonly string[] }) {
+/** Round swatches in the presets' own colours, the selected one ringed. */
+export function SwatchPicker({
+  value,
+  swatches,
+}: {
+  value: number;
+  swatches: readonly AccentSwatchFixture[];
+}) {
   return (
     <span className="flex items-center gap-2">
-      {SWATCH_COLOURS.map((colour, i) => (
+      {swatches.map((swatch, i) => (
         <span
-          key={colour}
+          key={swatch.id}
           role="radio"
           aria-checked={i === value}
-          aria-label={labels[i]}
-          style={{ background: colour }}
+          aria-label={swatch.label}
+          style={{ background: swatch.color }}
           className={`size-5 rounded-full ${i === value ? "outline-2 outline-offset-2 outline-line-emphasis" : ""}`}
         />
       ))}

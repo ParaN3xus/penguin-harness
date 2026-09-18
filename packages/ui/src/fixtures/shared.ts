@@ -573,3 +573,72 @@ export const USAGE_SERIES: Readonly<Record<"cacheRead" | "cacheWrite" | "output"
   cacheWrite: [34, 52, 18, 61, 44, 9, 3],
   output: [21, 30, 11, 38, 33, 6, 2],
 };
+
+// ---------------------------------------------------------------------------
+// The Task seen from the modules: a failed run, the slash menu, the dock's panels, the plugin
+// library's totals, the group chat and the docs answer's formula
+// ---------------------------------------------------------------------------
+
+/** The user's id: the human in the organization's group chat. */
+export const USER_ID = "alex";
+
+/** The citation test's output while the index still lists a file renamed upstream. */
+export const OUTPUT_TEST_FAILED = `TAP version 13
+# Subtest: every [n] citation opens a file under corpus/
+not ok 1 - every [n] citation opens a file under corpus/
+  ---
+  error: 'expected 200, got 404 for /corpus/claude-code-docs/hooks.md'
+  ...
+ok 2 - a question with no match cites nothing
+# tests 2 · pass 1 · fail 1`;
+
+/** The built-in slash commands, minus their descriptions. */
+export const SLASH_COMMANDS: readonly {
+  key: "compact" | "model" | "clear";
+  name: string;
+  icon: GlyphName;
+}[] = [
+  { key: "compact", name: "/compact", icon: "history" },
+  { key: "model", name: "/model", icon: "models" },
+  { key: "clear", name: "/clear", icon: "newChat" },
+];
+
+/** The panel kinds a dock's "+" offers, minus their words. */
+export const PANEL_MENU: readonly {
+  key: "subagents" | "trajectories" | "files" | "terminal";
+  icon: GlyphName;
+}[] = [
+  { key: "subagents", icon: "bot" },
+  { key: "trajectories", icon: "eye" },
+  { key: "files", icon: "folder" },
+  { key: "terminal", icon: "terminal" },
+];
+
+/** The plugin library's totals; `PLUGIN_ROWS` are the first page of its installed list. */
+export const PLUGIN_LIBRARY = {
+  installed: 12,
+  enabled: 9,
+  skills: 31,
+  mcpServers: 4,
+  updates: 2,
+  marketplaces: 3,
+  lastSync: "2026-09-14 14:02",
+} as const;
+
+/** The group chat's stand-up about the citation ticket: who spoke when. The words are prose. */
+export const CHANNEL_MESSAGES: readonly {
+  key: "standup" | "onIt" | "testPlan" | "renamed" | "reindex" | "moved";
+  from: string;
+  time: string;
+}[] = [
+  { key: "standup", from: "ceo", time: "09:02" },
+  { key: "onIt", from: "rag-engineer", time: "09:05" },
+  { key: "testPlan", from: "rag-engineer", time: "09:06" },
+  { key: "renamed", from: "qa-lead", time: "09:31" },
+  { key: "reindex", from: USER_ID, time: "09:33" },
+  { key: "moved", from: "docs-curator", time: "09:40" },
+];
+
+/** BM25's score, as the docs answer sets it. */
+export const BM25_FORMULA =
+  "score(D, Q) = Σ IDF(qᵢ) · f(qᵢ, D) · (k₁ + 1) / (f(qᵢ, D) + k₁ · (1 − b + b · |D| / avgdl))";

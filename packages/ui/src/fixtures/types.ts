@@ -190,6 +190,8 @@ export interface ChatSession {
   /** Provider + model id, the pair a model reference always is. */
   model: { provider: string; modelId: string };
   workspace: string;
+  /** The command the settled answer tells the user to run. */
+  runCommand: string;
   createdAtIso: string;
   running: boolean;
   /** The chat header's three session totals. */
@@ -395,6 +397,15 @@ export interface CalendarEventFixture {
   lastOutcome?: CalendarOutcome;
 }
 
+/** One message of the organization's group chat. */
+export interface ChannelMessageFixture {
+  /** An employee's agent id, or the user's id for the human in the room. */
+  from: string;
+  /** `HH:MM` in the organization's timezone, as the bubble prints it. */
+  time: string;
+  text: string;
+}
+
 export interface CompanyFixture {
   org: {
     id: string;
@@ -408,6 +419,8 @@ export interface CompanyFixture {
   tickets: TicketFixture[];
   /** The week the calendar opens on (a Monday, local date) and the events in it. */
   calendar: { weekStartIso: string; events: CalendarEventFixture[] };
+  /** The group chat named after `org.id`: the morning's stand-up about the citation ticket. */
+  channel: { messages: ChannelMessageFixture[] };
 }
 
 // ---------------------------------------------------------------------------
@@ -442,6 +455,12 @@ export interface FormFieldFixture {
   label: string;
   kind: "text" | "password" | "select" | "textarea";
   value: string;
+  /** Marked as required: the form cannot be sent while it is empty. */
+  required?: boolean;
+  /** What the field shows while it is empty. */
+  placeholder?: string;
+  /** Printed inside the field ahead of the value, like a URL's scheme. */
+  prefix?: string;
   /** The line under the field when it is valid. */
   hint?: string;
   /** What the field says when it is wrong; its presence is what makes it the invalid one. */
@@ -461,10 +480,28 @@ export interface AccentSwatchFixture {
   color: string;
 }
 
+/** One box of a checkbox group or one option of a radio group. */
+export interface FormChoiceFixture {
+  label: string;
+  hint?: string;
+  checked: boolean;
+}
+
+/** A labelled set of choices: several may be on (`checkboxes`) or exactly one (`radios`). */
+export interface FormGroupFixture {
+  kind: "checkboxes" | "radios";
+  label: string;
+  choices: readonly FormChoiceFixture[];
+}
+
 export interface FormFixture {
   title: string;
   description: string;
   fields: readonly FormFieldFixture[];
+  /** The search field that picks the provider's default model out of its catalog. */
+  search: { label: string; placeholder: string };
+  /** What the provider's models can do, and where their prices come from. */
+  groups: readonly FormGroupFixture[];
   /** The one line a form shows above its footer while a field is wrong. */
   errorSummary: string;
   submit: string;
@@ -478,6 +515,8 @@ export type MenuEntryFixture =
   | {
       icon: GlyphName;
       label: string;
+      /** A roomy row's second line: what the entry opens. */
+      description?: string;
       /** The keys a `Kbd` prints, in press order. */
       shortcut?: readonly string[];
       /** The one destructive item; a menu has at most one. */
@@ -487,6 +526,8 @@ export type MenuEntryFixture =
 export interface MenuFixtures {
   /** What a message row's "…" opens. */
   message: readonly MenuEntryFixture[];
+  /** What a dock's "+" offers: one row per panel kind, each saying what it shows. */
+  panels: readonly MenuEntryFixture[];
 }
 
 /** A row of the Vault table: a secret, what kind it is, and which Agents may read it. */
@@ -535,17 +576,102 @@ export interface UsageFixture {
   buckets: Readonly<Record<"cacheRead" | "cacheWrite" | "output", string>>;
 }
 
+/** The plugin library's totals: the page lists four installed plugins out of these. */
+export interface PluginLibraryFixture {
+  installed: number;
+  enabled: number;
+  skills: number;
+  mcpServers: number;
+  updates: number;
+  /** Plugin sources the library installs from. */
+  marketplaces: number;
+  /** `YYYY-MM-DD HH:MM` in the server's timezone, as the facts grid prints it. */
+  lastSync: string;
+}
+
+// ---------------------------------------------------------------------------
+// The Task seen from other sides: its plan, its failed run, a slash menu, a docs answer
+// ---------------------------------------------------------------------------
+
+/** A built-in slash command as the composer's menu lists it. */
+export interface SlashCommandFixture {
+  name: string;
+  description: string;
+  icon: GlyphName;
+}
+
+/** A step of the Task's to-do list, with its run state and, once settled, its duration. */
+export interface PlanStepFixture {
+  title: string;
+  state: RunState;
+  durationMs?: number;
+  /** Live clock of the running step. */
+  elapsedMs?: number;
+}
+
+/**
+ * The citation test as it runs while the index is stale: turn 2's waiting command, run and
+ * failed, with its TAP output; the reply that reads the failure; and the turn's closing stats.
+ */
+export interface FailedRunFixture {
+  call: ToolCallItem;
+  reply: AssistantTextItem;
+  stats: TurnStats;
+}
+
+/** A run of inline Markdown: plain text, inline code, or a link's text. */
+export type InlineFixture = string | { code: string } | { link: string };
+
+/**
+ * An answer the docs expert writes, in the shapes Markdown has: a title, a paragraph with code
+ * and a link, a list, a table, a quoted note, and a formula under its own heading.
+ */
+export interface DocsAnswerFixture {
+  title: string;
+  intro: readonly InlineFixture[];
+  scopesTitle: string;
+  scopes: readonly (readonly InlineFixture[])[];
+  table: { head: readonly string[]; rows: readonly (readonly string[])[] };
+  note: readonly InlineFixture[];
+  rankingTitle: string;
+  ranking: string;
+  /** The BM25 score, set as the answer's display formula. */
+  formula: string;
+}
+
 // ---------------------------------------------------------------------------
 // App copy and type specimens
 // ---------------------------------------------------------------------------
 
 /**
- * The product chrome the screens print, copied from the web app's dictionaries so a mock-up
- * reads like the app. Not a second dictionary for the app: it exists for the gallery only, and
- * components receive their copy as props.
+ * The product chrome the screens and the gallery's modules print, copied from the web app's
+ * dictionaries so a mock-up reads like the app. Not a second dictionary for the app: it exists
+ * for the gallery only, and components receive their copy as props.
  */
 export interface AppCopy {
   appName: string;
+  /** The verbs and pager words every surface shares. */
+  common: {
+    cancel: string;
+    save: string;
+    delete: string;
+    remove: string;
+    edit: string;
+    copy: string;
+    close: string;
+    more: string;
+    skip: string;
+    details: string;
+    download: string;
+    refresh: string;
+    learnMore: string;
+    previousPage: string;
+    nextPage: string;
+    /** A pager's position: which rows of how many. */
+    range: (from: number, to: number, total: number) => string;
+    /** Spend against its limit, both already formatted. */
+    spentOf: (spent: string, limit: string) => string;
+  };
   nav: {
     newChat: string;
     agents: string;
@@ -557,9 +683,11 @@ export interface AppCopy {
     files: string;
     sessions: string;
     collapseSidebar: string;
+    expandSidebar: string;
     search: string;
     filterSessions: string;
     newFolder: string;
+    pin: string;
   };
   chat: {
     /** The five run states in sentence case: a status mark always carries its word. */
@@ -582,11 +710,21 @@ export interface AppCopy {
     approvalModes: Record<"allow-all" | "read-only" | "deny-all" | "always-ask", string>;
     thinkingLevels: Record<"low" | "medium" | "high", string>;
     skills: string;
+    /** The slash menu's group of built-in commands. */
+    commands: string;
+    /** The heading over the Task's to-do list. */
+    plan: string;
+    send: string;
     stop: string;
     copy: string;
     fork: string;
     approve: string;
     deny: string;
+    /** The context gauge's reading, both figures already formatted. */
+    contextOf: (used: string, window: string) => string;
+    /** A command log's last line: its exit code and how long it ran. */
+    exitStatus: (code: number, duration: string) => string;
+    outputComplete: string;
   };
   dock: {
     subagents: (n: number) => string;
@@ -620,6 +758,15 @@ export interface AppCopy {
     zoom: string;
     messages: string;
     fromSubagent: string;
+    /** The stat tiles above the Overall grid. */
+    tokens: string;
+    cacheHitRate: string;
+    overTurns: (n: number) => string;
+    stopReasons: string;
+    /** A Trace file's name, from its `#001` label. */
+    file: (label: string) => string;
+    fileFacts: Record<"written" | "size" | "events" | "model", string>;
+    latestEvents: string;
   };
   settings: {
     title: string;
@@ -648,6 +795,120 @@ export interface AppCopy {
     toolAliasesInfo: string;
     moreInfo: string;
     close: string;
+    sendWith: string;
+    /** The two ways to send, as their keys print. */
+    sendKeys: readonly string[];
+    notify: string;
+    notifyInfo: string;
+    /** The notice over the settings a server policy holds. */
+    managedTitle: string;
+    managedBody: string;
+    uploadsInfo: string;
+    /** The upload limits a server offers, in megabytes. */
+    uploadSizes: readonly string[];
+    /** Asked when the dialog closes with a pick not yet saved. */
+    discard: { title: string; body: string; keep: string; confirm: string };
+  };
+  /** The model library and a model's own page. */
+  models: {
+    search: string;
+    pageInfo: string;
+    providerDocs: string;
+    default: string;
+    setDefault: string;
+    tabs: Record<"overview" | "pricing" | "usage", string>;
+    model: string;
+    provider: string;
+    modelId: string;
+    context: string;
+    contextWindow: string;
+    cacheRead: string;
+    cacheWrite: string;
+    output: string;
+    /** A price column: its bucket per million tokens. */
+    perMTok: (bucket: string) => string;
+    pricing: string;
+    capabilities: string;
+    images: string;
+    textOnly: string;
+    usedBy: string;
+    sessionsThisWeek: (n: number) => string;
+  };
+  /** The Agents page. */
+  agents: {
+    info: string;
+    search: string;
+    newAgent: string;
+    createWithAi: string;
+    delete: string;
+    deleteTitle: (name: string) => string;
+    deleteBody: string;
+    empty: { title: string; body: string };
+    schedules: string;
+    schedulesEmpty: { title: string; body: string; action: string };
+    mcpEmpty: { title: string; body: string; action: string };
+  };
+  /** The Plugin library page. */
+  plugins: {
+    info: string;
+    search: string;
+    install: string;
+    installed: string;
+    installedHint: string;
+    marketplaces: string;
+    facts: Record<
+      "installed" | "enabled" | "skills" | "mcpServers" | "updates" | "lastSync",
+      string
+    >;
+  };
+  /** The Vault page: the secrets Agents may read. */
+  vault: {
+    title: string;
+    columns: Record<"name" | "kind" | "usedBy" | "updated", string>;
+  };
+  /** The Files panel. */
+  files: {
+    search: string;
+    upload: string;
+    added: string;
+    modified: string;
+    empty: { title: string; body: string };
+    copyPath: string;
+    lines: (n: number) => string;
+    dropTitle: (folder: string) => string;
+    dropBody: string;
+  };
+  /** The command palette's own chrome; its rows are `Fixtures.commandPalette`. */
+  palette: {
+    title: string;
+    placeholder: string;
+    keyHints: Record<"navigate" | "open" | "close", string>;
+  };
+  /** Company mode: the board, the calendar, the org chart and the group chat. */
+  company: {
+    tickets: string;
+    ticketStatus: Record<TicketStatus, string>;
+    blocked: string;
+    sessions: (n: number) => string;
+    outcomes: Record<CalendarOutcome, string>;
+    upcoming: string;
+    now: string;
+    employeeStates: Record<EmployeeState, string>;
+    monthlyBudget: string;
+    noBudget: string;
+    overBudget: string;
+    members: (n: number) => string;
+    /** The system line a ticket's first Session posts in the chat. */
+    started: (name: string, ticketId: string) => string;
+    messagePlaceholder: (channel: string) => string;
+    searchMessages: string;
+  };
+  /** The Cost Center's usage charts. */
+  usage: {
+    weekTitle: string;
+    outputThisWeek: string;
+    monthSpend: string;
+    thresholds: string;
   };
   auth: {
     username: string;
@@ -701,7 +962,12 @@ export interface Fixtures {
   menus: MenuFixtures;
   vault: readonly VaultEntryFixture[];
   plugins: readonly PluginFixture[];
+  pluginLibrary: PluginLibraryFixture;
   commandPalette: readonly CommandGroupFixture[];
+  slashCommands: readonly SlashCommandFixture[];
   usage: UsageFixture;
+  plan: readonly PlanStepFixture[];
+  failedRun: FailedRunFixture;
+  docsAnswer: DocsAnswerFixture;
   specimens: TypeSpecimens;
 }

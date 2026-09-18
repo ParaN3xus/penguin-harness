@@ -6,7 +6,7 @@
  */
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
-import type { FixtureLang, Fixtures, ModelFixture } from "../fixtures";
+import type { Fixtures, ModelFixture } from "../fixtures";
 import { defineModule } from "../module";
 import { AgentTile } from "../screens/parts";
 import { tokens, usd } from "../screens/format";
@@ -21,65 +21,6 @@ import {
   SearchInput,
 } from "./parts";
 import type { IconName } from "./parts";
-
-/**
- * Local fixture (K3): the slash menu's commands and the picker's copy. K-redesign §4.6 adds a
- * `commandPalette` group list, not a slash-command list; this belongs in `fixtures/` beside it.
- */
-const COPY: Readonly<
-  Record<
-    FixtureLang,
-    {
-      commands: readonly { name: string; description: string; icon: IconName }[];
-      commandsLabel: string;
-      skillsLabel: string;
-      skills: readonly { name: string; description: string }[];
-      searchModels: string;
-      contextUsed: (share: string) => string;
-      attach: string;
-      send: string;
-    }
-  >
-> = {
-  en: {
-    commandsLabel: "Commands",
-    commands: [
-      {
-        name: "/compact",
-        description: "Summarize the conversation to free context",
-        icon: "history",
-      },
-      { name: "/model", description: "Switch the model for this Session", icon: "models" },
-      { name: "/clear", description: "Start over in a new Session", icon: "newChat" },
-    ],
-    skillsLabel: "Skills",
-    skills: [
-      { name: "/penguin-sdk", description: "Build apps on the PenguinHarness SDK" },
-      { name: "/docs-review", description: "Check rendered docs for dead links" },
-    ],
-    searchModels: "Search models",
-    contextUsed: (share) => `${share} of context used`,
-    attach: "Attach files",
-    send: "Send",
-  },
-  zh: {
-    commandsLabel: "命令",
-    commands: [
-      { name: "/compact", description: "压缩对话，腾出上下文", icon: "history" },
-      { name: "/model", description: "为当前 Session 切换模型", icon: "models" },
-      { name: "/clear", description: "在新的 Session 中重新开始", icon: "newChat" },
-    ],
-    skillsLabel: "技能",
-    skills: [
-      { name: "/penguin-sdk", description: "基于 PenguinHarness SDK 构建应用" },
-      { name: "/docs-review", description: "检查渲染后文档中的失效链接" },
-    ],
-    searchModels: "搜索模型",
-    contextUsed: (share) => `已用上下文 ${share}`,
-    attach: "添加附件",
-    send: "发送",
-  },
-};
 
 type ComposerState = "idle" | "running" | "chips" | "slash" | "picker";
 
@@ -159,11 +100,9 @@ function SendButton({ state, label }: { state: "idle" | "ready" | "running"; lab
 function ComposerCard({ f, state }: { f: Fixtures; state: ComposerState }) {
   const s = f.session;
   const c = f.copy.chat;
-  const local = COPY[f.lang];
   const model = f.models.find((m) => m.modelId === s.model.modelId);
   const draft = state === "idle" ? "" : state === "slash" ? "/" : s.composer.draft;
   const chips = state === "chips" || state === "picker" ? s.composer.chips : [];
-  const share = `${((s.context.tokens / s.context.window) * 100).toFixed(1)}%`;
   return (
     <div className="ui-glass rounded-lg border border-line-emphasis bg-surface px-2.5 pb-2 pt-2">
       {chips.length > 0 && (
@@ -192,14 +131,14 @@ function ComposerCard({ f, state }: { f: Fixtures; state: ComposerState }) {
         {draft && <span aria-hidden className="ml-px inline-block h-5 w-px translate-y-1 bg-fg" />}
       </p>
       <div className="mt-1 flex items-center gap-2 text-xs">
-        <IconButton label={local.attach} icon="plus" />
+        <IconButton label={c.attach} icon="plus" />
         <ToolbarTrigger icon="shield" label={c.approvalModes[s.composer.approvalMode]} />
         <ToolbarTrigger icon="book" label={c.skills} />
         <span className="min-w-0 flex-1" />
         <ContextRing
           used={s.context.tokens}
           window={s.context.window}
-          label={local.contextUsed(share)}
+          label={c.contextOf(tokens(s.context.tokens), tokens(s.context.window))}
         />
         <ToolbarTrigger icon="sparkle" label={c.thinkingLevels[s.composer.thinkingLevel]} />
         <ToolbarTrigger
@@ -208,7 +147,7 @@ function ComposerCard({ f, state }: { f: Fixtures; state: ComposerState }) {
         />
         <SendButton
           state={state === "running" ? "running" : draft && state !== "slash" ? "ready" : "idle"}
-          label={state === "running" ? c.stop : local.send}
+          label={state === "running" ? c.stop : c.send}
         />
       </div>
     </div>
@@ -216,11 +155,13 @@ function ComposerCard({ f, state }: { f: Fixtures; state: ComposerState }) {
 }
 
 function SlashMenu({ f }: { f: Fixtures }) {
-  const local = COPY[f.lang];
+  const c = f.copy.chat;
+  // Every enabled plugin offers its skill under its own name.
+  const skills = f.plugins.filter((plugin) => plugin.enabled);
   return (
     <FloatingPanel className="w-96">
-      <MenuLabel>{local.commandsLabel}</MenuLabel>
-      {local.commands.map((command, i) => (
+      <MenuLabel>{c.commands}</MenuLabel>
+      {f.slashCommands.map((command, i) => (
         <MenuItem
           key={command.name}
           icon={command.icon}
@@ -230,9 +171,14 @@ function SlashMenu({ f }: { f: Fixtures }) {
         />
       ))}
       <MenuSeparator />
-      <MenuLabel>{local.skillsLabel}</MenuLabel>
-      {local.skills.map((skill) => (
-        <MenuItem key={skill.name} icon="book" label={skill.name} description={skill.description} />
+      <MenuLabel>{c.skills}</MenuLabel>
+      {skills.map((skill) => (
+        <MenuItem
+          key={skill.name}
+          icon="book"
+          label={`/${skill.name}`}
+          description={skill.description}
+        />
       ))}
     </FloatingPanel>
   );
@@ -259,13 +205,12 @@ function ModelRow({ model, selected }: { model: ModelFixture; selected: boolean 
 }
 
 function ModelPicker({ f }: { f: Fixtures }) {
-  const local = COPY[f.lang];
   // The first three providers: enough to show grouping without a scroll.
   const providers = [...new Set(f.models.map((m) => m.providerLabel))].slice(0, 3);
   return (
     <FloatingPanel className="w-96">
       <div className="p-1">
-        <SearchInput placeholder={local.searchModels} />
+        <SearchInput placeholder={f.copy.models.search} />
       </div>
       {providers.map((provider) => (
         <div key={provider}>

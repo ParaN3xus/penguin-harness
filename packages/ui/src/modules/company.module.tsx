@@ -17,7 +17,6 @@ import type {
   CalendarOutcome,
   EmployeeFixture,
   EmployeeState,
-  FixtureLang,
   Fixtures,
   TicketFixture,
 } from "../fixtures";
@@ -26,143 +25,6 @@ import { AgentTile, UserAvatar } from "../screens/parts";
 import { usd } from "../screens/format";
 import { Badge, Count, GlyphIcon, IconButton, ProgressBar, RunSpinner, StatusWord } from "./parts";
 import type { IconName } from "./parts";
-
-/**
- * Local fixture (K3): the board, calendar and org labels, and the group chat's messages. The
- * channel is not part of K-redesign §4.6; it belongs in `fixtures/` beside `company`.
- */
-const LOCAL: Readonly<
-  Record<
-    FixtureLang,
-    {
-      columns: Record<"proposed" | "in_progress" | "review" | "done", string>;
-      blocked: string;
-      sessions: (n: number) => string;
-      days: readonly string[];
-      outcomes: Record<CalendarOutcome | "upcoming", string>;
-      now: string;
-      states: Record<EmployeeState, string>;
-      noBudget: string;
-      overBudget: string;
-      channel: {
-        name: string;
-        members: (n: number) => string;
-        system: string;
-        messages: readonly { from: string; time: string; text: string }[];
-        placeholder: string;
-        search: string;
-      };
-    }
-  >
-> = {
-  en: {
-    columns: {
-      proposed: "Proposed",
-      in_progress: "In progress",
-      review: "In review",
-      done: "Done",
-    },
-    blocked: "Blocked",
-    sessions: (n) => `${n} ${n === 1 ? "Session" : "Sessions"}`,
-    days: ["Mon 14", "Tue 15", "Wed 16", "Thu 17", "Fri 18", "Sat 19", "Sun 20"],
-    outcomes: {
-      fired: "Ran",
-      queued: "Queued",
-      paused: "Paused",
-      missed: "Missed",
-      error: "Failed",
-      upcoming: "Upcoming",
-    },
-    now: "now",
-    states: { running: "Running", idle: "Idle", paused: "Paused" },
-    noBudget: "No budget",
-    overBudget: "Over budget",
-    channel: {
-      name: "docs-expert-co",
-      members: (n) => `${n} members`,
-      system: "Rui started 2026-09-14-citation-links",
-      messages: [
-        {
-          from: "ceo",
-          time: "09:02",
-          text: "Stand-up: citations are today's P0. Rui, can you own the fix? Theo, review it once it is up.",
-        },
-        {
-          from: "rag-engineer",
-          time: "09:05",
-          text: "On it: hits get filtered before they reach the prompt. Draft in about twenty minutes.",
-        },
-        {
-          from: "rag-engineer",
-          time: "09:06",
-          text: "citations.test.ts will cover a question that matches and one that cannot.",
-        },
-        {
-          from: "qa-lead",
-          time: "09:31",
-          text: "Reviewing. Do we re-index when a file is renamed upstream?",
-        },
-        { from: "me", time: "09:33", text: "Yes, add a nightly re-index to the calendar." },
-        {
-          from: "docs-curator",
-          time: "09:40",
-          text: "hooks-guide.md is in the corpus now; the old hooks.md path returns 404.",
-        },
-      ],
-      placeholder: "Message #docs-expert-co",
-      search: "Search messages",
-    },
-  },
-  zh: {
-    columns: { proposed: "已提议", in_progress: "进行中", review: "评审中", done: "已完成" },
-    blocked: "受阻",
-    sessions: (n) => `${n} 个 Session`,
-    days: ["周一 14", "周二 15", "周三 16", "周四 17", "周五 18", "周六 19", "周日 20"],
-    outcomes: {
-      fired: "已运行",
-      queued: "排队中",
-      paused: "已暂停",
-      missed: "已错过",
-      error: "失败",
-      upcoming: "即将运行",
-    },
-    now: "现在",
-    states: { running: "运行中", idle: "空闲", paused: "已暂停" },
-    noBudget: "不限预算",
-    overBudget: "超出预算",
-    channel: {
-      name: "docs-expert-co",
-      members: (n) => `${n} 位成员`,
-      system: "Rui 开始处理 2026-09-14-citation-links",
-      messages: [
-        {
-          from: "ceo",
-          time: "09:02",
-          text: "站会：今天的 P0 是引用问题。Rui 负责修复，Theo 在提交后评审。",
-        },
-        {
-          from: "rag-engineer",
-          time: "09:05",
-          text: "收到：先在检索结果进入提示词之前过滤掉失效条目，大约二十分钟后给出草稿。",
-        },
-        {
-          from: "rag-engineer",
-          time: "09:06",
-          text: "citations.test.ts 会覆盖一个能匹配的问题和一个无法匹配的问题。",
-        },
-        { from: "qa-lead", time: "09:31", text: "正在评审。上游改了文件名时，我们会重建索引吗？" },
-        { from: "me", time: "09:33", text: "会，把每晚重建索引加到日历里。" },
-        {
-          from: "docs-curator",
-          time: "09:40",
-          text: "hooks-guide.md 已加入语料，旧的 hooks.md 路径现在返回 404。",
-        },
-      ],
-      placeholder: "发送消息到 #docs-expert-co",
-      search: "搜索消息",
-    },
-  },
-};
 
 const PRIORITY: Record<
   TicketFixture["priority"],
@@ -181,7 +43,6 @@ const employee = (f: Fixtures, id: string): EmployeeFixture | undefined =>
 // ---------------------------------------------------------------------------------------------
 
 function TicketCard({ f, ticket }: { f: Fixtures; ticket: TicketFixture }) {
-  const local = LOCAL[f.lang];
   const owner = employee(f, ticket.ownerAgentId);
   const priority = PRIORITY[ticket.priority];
   return (
@@ -191,10 +52,10 @@ function TicketCard({ f, ticket }: { f: Fixtures; ticket: TicketFixture }) {
         <Badge tone={priority.tone} variant={priority.variant}>
           {ticket.priority}
         </Badge>
-        {ticket.running && <RunSpinner />}
+        {ticket.running && <RunSpinner label={f.copy.chat.runStates.running} />}
         {ticket.blocked && (
           <StatusWord tone="attention" icon="alert">
-            {local.blocked}
+            {f.copy.company.blocked}
           </StatusWord>
         )}
       </div>
@@ -211,20 +72,20 @@ function TicketCard({ f, ticket }: { f: Fixtures; ticket: TicketFixture }) {
 }
 
 function Board({ f }: { f: Fixtures }) {
-  const local = LOCAL[f.lang];
+  const status = f.copy.company.ticketStatus;
   const columns = ["proposed", "in_progress", "review", "done"] as const;
   return (
     <div className="grid grid-cols-4 items-start gap-3">
-      {columns.map((status) => {
-        const tickets = f.company.tickets.filter((t) => t.status === status);
+      {columns.map((column) => {
+        const tickets = f.company.tickets.filter((t) => t.status === column);
         return (
           <section
-            key={status}
+            key={column}
             className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-lg bg-surface-muted p-2 [--radius-inner:max(var(--ui-radius-xs),calc(var(--ui-radius-lg)-0.5rem))]"
           >
             <div className="flex items-center gap-2 px-1 pt-1">
               <span className="min-w-0 flex-1 truncate text-sm font-(--ui-weight-medium) text-fg">
-                {local.columns[status]}
+                {status[column]}
               </span>
               <Count n={tickets.length} />
             </div>
@@ -298,15 +159,22 @@ const OUTCOME_MARK: Record<Occurrence["outcome"], { icon: IconName; tone: string
 };
 
 function Calendar({ f }: { f: Fixtures }) {
-  const local = LOCAL[f.lang];
+  const c = f.copy.company;
   const all = occurrences(f);
+  // The week's day names with their dates: `Mon 14`, `周一 14`.
+  const start = Date.parse(`${f.company.calendar.weekStartIso}T00:00:00Z`);
+  const days = f.usage.days.map(
+    (name, i) => `${name} ${new Date(start + i * 86_400_000).getUTCDate()}`,
+  );
+  const outcome = (o: Occurrence) =>
+    o.outcome === "upcoming" ? c.upcoming : c.outcomes[o.outcome];
   const nowLocal = new Date(NOW + OFFSET_H * 3_600_000);
   const nowH = nowLocal.getUTCHours() + nowLocal.getUTCMinutes() / 60;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
       <div className="grid grid-cols-[3rem_repeat(7,minmax(0,1fr))] border-b border-line pb-2 text-xs text-fg-muted">
         <span />
-        {local.days.map((day, i) => (
+        {days.map((day, i) => (
           <span key={day} className={`px-1 ${i === 2 ? "font-(--ui-weight-medium) text-fg" : ""}`}>
             {day}
           </span>
@@ -326,7 +194,7 @@ function Calendar({ f }: { f: Fixtures }) {
             </p>
           ))}
         </div>
-        {local.days.map((day, dayIndex) => (
+        {days.map((day, dayIndex) => (
           <div key={day} className="relative border-l border-line-muted">
             {HOURS.map((h) => (
               <div
@@ -343,7 +211,7 @@ function Calendar({ f }: { f: Fixtures }) {
                 return (
                   <div
                     key={o.event.name}
-                    title={`${o.event.title} · ${local.outcomes[o.outcome]}`}
+                    title={`${o.event.title} · ${outcome(o)}`}
                     className={`absolute inset-x-0.5 overflow-hidden rounded-sm border border-line px-1 py-0.5 text-xs ${
                       o.outcome === "upcoming"
                         ? "bg-surface text-fg"
@@ -368,7 +236,7 @@ function Calendar({ f }: { f: Fixtures }) {
                 style={{ top: `${(nowH - FIRST_HOUR) * ROW_REM}rem` }}
               >
                 <span className="absolute bottom-0.5 right-1 text-xs leading-none font-(--ui-weight-medium) text-fg">
-                  {local.now}
+                  {c.now}
                 </span>
               </div>
             )}
@@ -376,12 +244,12 @@ function Calendar({ f }: { f: Fixtures }) {
         ))}
       </div>
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-12 text-xs text-fg-muted">
-        {(["fired", "queued", "missed", "paused"] as const).map((outcome) => {
-          const mark = OUTCOME_MARK[outcome]!;
+        {(["fired", "queued", "missed", "paused"] as const).map((kind) => {
+          const mark = OUTCOME_MARK[kind]!;
           return (
-            <span key={outcome} className="flex items-center gap-1">
+            <span key={kind} className="flex items-center gap-1">
               <GlyphIcon name={mark.icon} size={11} className={mark.tone} />
-              {local.outcomes[outcome]}
+              {c.outcomes[kind]}
             </span>
           );
         })}
@@ -401,7 +269,7 @@ const STATE_WORD: Record<EmployeeState, { tone: ToneName; icon?: IconName | "spi
 };
 
 function OrgNode({ f, person }: { f: Fixtures; person: EmployeeFixture }) {
-  const local = LOCAL[f.lang];
+  const c = f.copy.company;
   const state = STATE_WORD[person.state];
   const over = person.budgetUsd !== undefined && person.spendUsd > person.budgetUsd;
   return (
@@ -416,7 +284,7 @@ function OrgNode({ f, person }: { f: Fixtures; person: EmployeeFixture }) {
         </span>
       </div>
       <StatusWord tone={state.tone} icon={state.icon}>
-        {local.states[person.state]}
+        {c.employeeStates[person.state]}
       </StatusWord>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-1">
         {person.budgetUsd !== undefined && (
@@ -433,9 +301,9 @@ function OrgNode({ f, person }: { f: Fixtures; person: EmployeeFixture }) {
           <span>
             {person.budgetUsd !== undefined
               ? over
-                ? local.overBudget
+                ? c.overBudget
                 : usd(person.budgetUsd)
-              : local.noBudget}
+              : c.noBudget}
           </span>
         </span>
       </div>
@@ -505,7 +373,7 @@ function ChannelBubble({
   text: string;
   first: boolean;
 }) {
-  const own = from === "me";
+  const own = from === f.user.id;
   const sender = employee(f, from);
   return (
     <div className={`flex gap-2 ${own ? "flex-row-reverse" : ""} ${first ? "pt-3" : "pt-1"}`}>
@@ -540,13 +408,18 @@ function ChannelBubble({
 }
 
 function Channel({ f }: { f: Fixtures }) {
-  const c = LOCAL[f.lang].channel;
+  const c = f.copy.company;
+  const name = f.company.org.id;
   const people = f.company.employees;
+  const messages = f.company.channel.messages;
+  // The system line the running ticket's first Session posted.
+  const ticket = f.company.tickets.find((t) => t.running);
+  const owner = ticket && employee(f, ticket.ownerAgentId);
   return (
     <div className="flex h-[40rem] flex-col overflow-hidden rounded-lg border border-line bg-canvas">
       <header className="flex items-center gap-2 border-b border-line px-4 py-2.5">
         <GlyphIcon name="hash" size={16} className="text-fg-muted" />
-        <span className="text-sm font-(--ui-weight-medium) text-fg">{c.name}</span>
+        <span className="text-sm font-(--ui-weight-medium) text-fg">{name}</span>
         <span className="flex -space-x-1 pl-2">
           {people.map((p) => (
             <span key={p.agentId} className="rounded-sm ring-2 ring-canvas">
@@ -556,28 +429,30 @@ function Channel({ f }: { f: Fixtures }) {
         </span>
         <span className="text-xs text-fg-muted">{c.members(people.length + 1)}</span>
         <span className="min-w-0 flex-1" />
-        <IconButton label={c.search} icon="search" size="sm" />
+        <IconButton label={c.searchMessages} icon="search" size="sm" />
       </header>
       <div className="min-h-0 flex-1 overflow-hidden px-4 pb-4">
-        <p className="flex items-center gap-3 pt-4 text-xs text-fg-subtle">
-          <span className="h-px flex-1 bg-line-muted" />
-          {c.system}
-          <span className="h-px flex-1 bg-line-muted" />
-        </p>
-        {c.messages.map((message, i) => (
+        {ticket && owner && (
+          <p className="flex items-center gap-3 pt-4 text-xs text-fg-subtle">
+            <span className="h-px flex-1 bg-line-muted" />
+            {c.started(owner.name, ticket.ticketId)}
+            <span className="h-px flex-1 bg-line-muted" />
+          </p>
+        )}
+        {messages.map((message, i) => (
           <ChannelBubble
             key={`${message.from}-${message.time}`}
             f={f}
             from={message.from}
             time={message.time}
             text={message.text}
-            first={i === 0 || c.messages[i - 1]!.from !== message.from}
+            first={i === 0 || messages[i - 1]!.from !== message.from}
           />
         ))}
       </div>
       <div className="border-t border-line px-4 py-3">
         <span className="flex h-9 items-center rounded-md border border-line bg-surface px-3 text-sm text-fg-subtle">
-          {c.placeholder}
+          {c.messagePlaceholder(name)}
         </span>
       </div>
     </div>

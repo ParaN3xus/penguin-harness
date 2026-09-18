@@ -8,6 +8,8 @@ import {
   ACCENT_SWATCHES,
   AGENT_ID,
   APP_URL,
+  BM25_FORMULA,
+  CHANNEL_MESSAGES,
   CMD_APP,
   CMD_COLLECT,
   CMD_TEST,
@@ -20,7 +22,10 @@ import {
   OUTPUT_EDIT,
   OUTPUT_READ,
   OUTPUT_READ_INDEX,
+  OUTPUT_TEST_FAILED,
   OUTPUT_WRITE,
+  PANEL_MENU,
+  PLUGIN_LIBRARY,
   RAG_PATH,
   RAG_TS_AFTER,
   MESSAGE_MENU,
@@ -32,6 +37,7 @@ import {
   REVIEWER_AGENT_ID,
   RUN_COMMAND,
   SESSION_ID,
+  SLASH_COMMANDS,
   SUBAGENT_SESSION_ID,
   TEST_PATH,
   TEST_TS,
@@ -42,6 +48,7 @@ import {
   TURN2_SPAN_MS,
   TURN2_START_MS,
   USAGE_SERIES,
+  USER_ID,
   VAULT_KEYS,
   VAULT_ROWS,
   WORKSPACE,
@@ -55,16 +62,21 @@ import type { ToneName } from "../tokens";
 import type {
   AppCopy,
   CalendarEventFixture,
+  ChatItem,
   CommandGroupFixture,
+  DocsAnswerFixture,
   EmployeeFixture,
   FixtureAgent,
   FixtureLang,
   Fixtures,
   FormFieldFixture,
+  FormGroupFixture,
   MenuEntryFixture,
   NoticeFixture,
+  PlanStepFixture,
   PluginFixture,
   TicketFixture,
+  ToolCallItem,
   TypeSpecimens,
   VaultEntryFixture,
 } from "./types";
@@ -101,6 +113,8 @@ export interface FixtureProse {
       reviewThinking: string;
       reviewReadDescription: string;
       reviewReply: string;
+      /** What the agent says when the citation test fails on a file renamed upstream. */
+      failedReply: string;
     };
     draft: string;
   };
@@ -128,6 +142,8 @@ export interface FixtureProse {
       "standup" | "triage" | "review" | "evalRun" | "retro" | "report",
       { title: string; prompt: string }
     >;
+    /** The group chat's messages, one per entry of `CHANNEL_MESSAGES`. */
+    channel: Record<(typeof CHANNEL_MESSAGES)[number]["key"], string>;
   };
   /**
    * The sets K-redesign §4.6 adds. Only their words live here: the colours, versions, icons,
@@ -143,13 +159,19 @@ export interface FixtureProse {
     description: string;
     /** In render order; exactly one carries `error` and exactly one is `disabled`. */
     fields: readonly FormFieldFixture[];
+    search: { label: string; placeholder: string };
+    groups: readonly FormGroupFixture[];
     errorSummary: string;
     submit: string;
     cancel: string;
     /** One label per preset in `ACCENT_SWATCHES`, in its order. */
     swatchLabels: readonly string[];
   };
-  menus: Record<"copy" | "fork" | "export" | "delete", string>;
+  menus: Record<"copy" | "fork" | "export" | "delete", string> & {
+    panels: Record<(typeof PANEL_MENU)[number]["key"], { label: string; description: string }>;
+  };
+  slashCommands: Record<(typeof SLASH_COMMANDS)[number]["key"], string>;
+  docsAnswer: Omit<DocsAnswerFixture, "formula">;
   vault: Record<VaultKey, { kind: string; updated: string }>;
   plugins: Record<PluginKey, { description: string }>;
   palette: {
@@ -370,10 +392,10 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
 
   const sb = prose.sidebar;
 
-  return {
+  const data: Omit<Fixtures, "plan" | "failedRun"> = {
     lang,
     copy,
-    user: { id: "alex", name: prose.userName, isAdmin: true },
+    user: { id: USER_ID, name: prose.userName, isAdmin: true },
     agents,
     session: {
       id: SESSION_ID,
@@ -381,6 +403,7 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
       agentId: AGENT_ID,
       model: { provider: "deepseek", modelId: "deepseek-v4-pro" },
       workspace: WORKSPACE,
+      runCommand: RUN_COMMAND,
       createdAtIso: at(0),
       running: true,
       totals: { tokens: 43_830, costUsd: 0.0231, elapsedMs: 71_840 },
@@ -836,6 +859,8 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
       title: prose.forms.title,
       description: prose.forms.description,
       fields: prose.forms.fields,
+      search: prose.forms.search,
+      groups: prose.forms.groups,
       errorSummary: prose.forms.errorSummary,
       submit: prose.forms.submit,
       cancel: prose.forms.cancel,
@@ -855,6 +880,10 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
               ...(entry.danger === undefined ? {} : { danger: entry.danger }),
             },
       ),
+      panels: PANEL_MENU.map((panel): MenuEntryFixture => ({
+        icon: panel.icon,
+        ...prose.menus.panels[panel.key],
+      })),
     },
     vault: VAULT_KEYS.map((key): VaultEntryFixture => ({
       ...VAULT_ROWS[key],
@@ -864,6 +893,7 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
       ...PLUGIN_ROWS[key],
       ...prose.plugins[key],
     })),
+    pluginLibrary: { ...PLUGIN_LIBRARY },
     commandPalette: [
       {
         label: prose.palette.groups.commands,
@@ -883,6 +913,11 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
         })),
       },
     ] satisfies CommandGroupFixture[],
+    slashCommands: SLASH_COMMANDS.map((command) => ({
+      name: command.name,
+      description: prose.slashCommands[command.key],
+      icon: command.icon,
+    })),
     usage: {
       days: prose.usage.days,
       cacheRead: USAGE_SERIES.cacheRead,
@@ -901,7 +936,97 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
       employees,
       tickets,
       calendar: { weekStartIso: "2026-09-14", events },
+      channel: {
+        messages: CHANNEL_MESSAGES.map((message) => ({
+          from: message.from,
+          time: message.time,
+          text: prose.company.channel[message.key],
+        })),
+      },
     },
+    docsAnswer: { ...prose.docsAnswer, formula: BM25_FORMULA },
     specimens: prose.specimens,
+  };
+
+  return {
+    ...data,
+    plan: planSteps(
+      data.session.turns.flatMap((turn) => turn.items),
+      [tk.pdf.title, tk.deploy.title],
+    ),
+    failedRun: failedRun(data.session.turns[1]!.items, t2.failedReply),
+  };
+}
+
+/** A tool call of the dataset by its item id; the dataset is built above, so a miss is a bug. */
+function callById(items: readonly ChatItem[], id: string): ToolCallItem {
+  const call = items.find(
+    (item): item is ToolCallItem => item.kind === "tool_call" && item.id === id,
+  );
+  if (!call) throw new Error(`fixture tool call ${id} is missing`);
+  return call;
+}
+
+/**
+ * The Task's to-do list: the calls the session made, by their descriptions and states, then two
+ * steps that went wrong on the way — an import that failed and a packaging run that was stopped.
+ */
+function planSteps(
+  items: readonly ChatItem[],
+  [failed, stopped]: readonly [string, string],
+): PlanStepFixture[] {
+  const step = (id: string): PlanStepFixture => {
+    const call = callById(items, id);
+    return {
+      title: call.subtitle ?? call.alias,
+      state: call.state,
+      ...(call.state === "done" && call.durationMs !== undefined
+        ? { durationMs: call.durationMs }
+        : {}),
+      ...(call.state === "running" && call.elapsedMs !== undefined
+        ? { elapsedMs: call.elapsedMs }
+        : {}),
+    };
+  };
+  return [
+    step("tc1"),
+    step("tc2"),
+    step("tc6"),
+    step("tc7"),
+    { title: failed, state: "failed", durationMs: 4_200 },
+    { title: stopped, state: "stopped" },
+  ];
+}
+
+/**
+ * Turn 2 as it goes when the index still lists a file renamed upstream: the waiting test command,
+ * approved and run, fails; the agent reads the failure; the turn closes with its stats.
+ */
+function failedRun(turn2: readonly ChatItem[], reply: string): Fixtures["failedRun"] {
+  const test = callById(turn2, "tc7");
+  return {
+    call: {
+      ...test,
+      state: "failed",
+      durationMs: 2_140,
+      output: OUTPUT_TEST_FAILED,
+      decision: { verdict: "allow", source: "manual" },
+    },
+    reply: {
+      kind: "text",
+      id: "tx-failed",
+      markdown: reply,
+      atIso: iso(TURN2_START_MS + TURN2_SPAN_MS),
+    },
+    stats: {
+      toolCalls: 4,
+      inputTokens: 24_920,
+      cacheReadTokens: 21_310,
+      cacheWriteTokens: 2_240,
+      outputTokens: 1_352,
+      costUsd: 0.011,
+      elapsedMs: TURN2_SPAN_MS,
+      outputTps: 64,
+    },
   };
 }

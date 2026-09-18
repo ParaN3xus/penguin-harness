@@ -2,7 +2,7 @@
  * Stats & charts: a Trace's numbers.
  *
  * - Overview: the stat strip (cost, tokens, elapsed, cache hit), the Overall summary as a ruled
- *   key-value grid, the per-turn chips, the context ring and the tokens-per-turn sparkline;
+ *   key-value grid, the per-turn chips, the context ring and the week's output sparkline;
  * - Timeline: turn 2's execution timeline — a lane for the model and one per tool, the time axis,
  *   the legend — and the events it cross-highlights;
  * - Usage: a week of tokens by bucket as stacked bars, and the month's spend against its budget
@@ -12,76 +12,11 @@
  * `Ring`, `Sparkline` and `ChartFrame`.
  */
 import { fixturesFor } from "../fixtures";
-import type { FixtureLang, Fixtures, TraceSegmentKind } from "../fixtures";
+import type { Fixtures, TraceSegmentKind } from "../fixtures";
 import { defineModule } from "../module";
 import { duration, percent, tokens, usd } from "../screens/format";
 import { Badge, GlyphIcon, KeyValue, RuledSection } from "./parts";
 import type { IconName } from "./parts";
-
-/**
- * Local fixture (K3): K-redesign §4.6 adds a `usage` series (7 days × 3 buckets) to the fixtures;
- * until #763 does, it lives here in that shape, with the labels the three variants print.
- */
-const LOCAL: Readonly<
-  Record<
-    FixtureLang,
-    {
-      usage: {
-        days: readonly string[];
-        cacheRead: readonly number[];
-        cacheWrite: readonly number[];
-        output: readonly number[];
-      };
-      buckets: { cacheRead: string; cacheWrite: string; output: string };
-      weekTitle: string;
-      budgetTitle: string;
-      budgetOf: (spent: string, budget: string) => string;
-      thresholds: string;
-      tiles: { cost: string; tokens: string; elapsed: string; cacheHit: string };
-      context: (used: string, window: string) => string;
-      sparkline: string;
-      turnChips: string;
-      turnsDetail: (n: number) => string;
-    }
-  >
-> = {
-  en: {
-    usage: {
-      days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-      cacheRead: [182, 240, 96, 310, 268, 40, 12],
-      cacheWrite: [34, 52, 18, 61, 44, 9, 3],
-      output: [21, 30, 11, 38, 33, 6, 2],
-    },
-    buckets: { cacheRead: "Cache read", cacheWrite: "Cache write", output: "Output" },
-    weekTitle: "Tokens this week, thousands",
-    budgetTitle: "September spend",
-    budgetOf: (spent, budget) => `${spent} of ${budget}`,
-    thresholds: "Warn at 80 %, stop at 95 %",
-    tiles: { cost: "Cost", tokens: "Tokens", elapsed: "Elapsed", cacheHit: "Cache hit" },
-    context: (used, window) => `${used} of ${window} context`,
-    sparkline: "Output tokens per turn",
-    turnChips: "Turn 2",
-    turnsDetail: (n) => `over ${n} turns`,
-  },
-  zh: {
-    usage: {
-      days: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"],
-      cacheRead: [182, 240, 96, 310, 268, 40, 12],
-      cacheWrite: [34, 52, 18, 61, 44, 9, 3],
-      output: [21, 30, 11, 38, 33, 6, 2],
-    },
-    buckets: { cacheRead: "缓存读取", cacheWrite: "缓存写入", output: "输出" },
-    weekTitle: "本周 Token，单位千",
-    budgetTitle: "九月花费",
-    budgetOf: (spent, budget) => `${spent} / ${budget}`,
-    thresholds: "80% 时提醒，95% 时停止",
-    tiles: { cost: "成本", tokens: "Token", elapsed: "用时", cacheHit: "缓存命中" },
-    context: (used, window) => `上下文 ${used} / ${window}`,
-    sparkline: "每轮输出 Token",
-    turnChips: "第 2 轮",
-    turnsDetail: (n) => `共 ${n} 轮`,
-  },
-};
 
 /** Timeline phase inks: chart identity colours, one per kind; `other` recedes. */
 const SEGMENT_INK: Record<TraceSegmentKind, string> = {
@@ -181,31 +116,23 @@ function Sparkline({ values, label }: { values: readonly number[]; label: string
 }
 
 function Overview({ f }: { f: Fixtures }) {
-  const local = LOCAL[f.lang];
   const t = f.copy.traces;
   const o = f.trace.overall;
   const turn = f.trace.turns[1]!;
   const ctx = f.session.context;
+  const context = f.copy.chat.contextOf(tokens(ctx.tokens), tokens(ctx.window));
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <div className="flex divide-x divide-line">
+        <StatTile label={t.cost} value={usd(o.costUsd)} detail={t.overTurns(o.turns)} />
         <StatTile
-          label={local.tiles.cost}
-          value={usd(o.costUsd)}
-          detail={local.turnsDetail(o.turns)}
-        />
-        <StatTile
-          label={local.tiles.tokens}
+          label={t.tokens}
           value={tokens(o.inputTokens + o.outputTokens)}
           detail={`${tokens(o.outputTokens)} ${t.outputTokens}`}
         />
+        <StatTile label={t.elapsed} value={duration(o.elapsedMs)} detail={`${o.outputTps} tok/s`} />
         <StatTile
-          label={local.tiles.elapsed}
-          value={duration(o.elapsedMs)}
-          detail={`${o.outputTps} tok/s`}
-        />
-        <StatTile
-          label={local.tiles.cacheHit}
+          label={t.cacheHitRate}
           value={percent(o.cacheReadTokens, o.inputTokens)}
           detail={tokens(o.cacheReadTokens)}
         />
@@ -227,7 +154,7 @@ function Overview({ f }: { f: Fixtures }) {
       </RuledSection>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 border-t border-line pt-4">
         <span className="flex items-center gap-3">
-          <Badge>{local.turnChips}</Badge>
+          <Badge>{t.turn(turn.index)}</Badge>
           <StatChip icon="wrench" value={String(turn.toolCalls)} label={t.toolCalls} />
           <StatChip icon="arrowUpLine" value={tokens(turn.inputTokens)} label={t.inputTokens} />
           <StatChip icon="arrowDownLine" value={tokens(turn.outputTokens)} label={t.outputTokens} />
@@ -235,17 +162,12 @@ function Overview({ f }: { f: Fixtures }) {
         </span>
         <span className="flex flex-wrap items-center gap-x-10 gap-y-4">
           <span className="flex items-center gap-3">
-            <Ring
-              share={ctx.tokens / ctx.window}
-              label={local.context(tokens(ctx.tokens), tokens(ctx.window))}
-            />
-            <span className="text-xs text-fg-muted">
-              {local.context(tokens(ctx.tokens), tokens(ctx.window))}
-            </span>
+            <Ring share={ctx.tokens / ctx.window} label={context} />
+            <span className="text-xs text-fg-muted">{context}</span>
           </span>
           <span className="flex items-center gap-3">
-            <Sparkline values={[612, 1_326, 480, 1_938, 842, 1_352]} label={local.sparkline} />
-            <span className="text-xs text-fg-muted">{local.sparkline}</span>
+            <Sparkline values={f.usage.output} label={f.copy.usage.outputThisWeek} />
+            <span className="text-xs text-fg-muted">{f.copy.usage.outputThisWeek}</span>
           </span>
         </span>
       </div>
@@ -353,8 +275,8 @@ function Timeline({ f }: { f: Fixtures }) {
 }
 
 function Usage({ f }: { f: Fixtures }) {
-  const local = LOCAL[f.lang];
-  const u = local.usage;
+  const copy = f.copy.usage;
+  const u = f.usage;
   const totals = u.days.map((_, i) => u.cacheRead[i]! + u.cacheWrite[i]! + u.output[i]!);
   const max = Math.ceil(Math.max(...totals) / 100) * 100;
   const spend = f.company.org.spend;
@@ -362,7 +284,7 @@ function Usage({ f }: { f: Fixtures }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-10">
       <section className="grid grid-cols-[minmax(0,1fr)] gap-3">
-        <p className="text-sm font-(--ui-weight-medium) text-fg">{local.weekTitle}</p>
+        <p className="text-sm font-(--ui-weight-medium) text-fg">{copy.weekTitle}</p>
         <div className="flex gap-3">
           <div className="flex h-44 w-8 flex-col justify-between text-right font-mono text-xs tabular-nums text-fg-subtle">
             <span>{max}</span>
@@ -404,9 +326,9 @@ function Usage({ f }: { f: Fixtures }) {
         <div className="flex flex-wrap gap-x-4 gap-y-1 pl-13">
           {(
             [
-              ["bg-chart-cache-read", local.buckets.cacheRead],
-              ["bg-chart-cache-write", local.buckets.cacheWrite],
-              ["bg-chart-output", local.buckets.output],
+              ["bg-chart-cache-read", u.buckets.cacheRead],
+              ["bg-chart-cache-write", u.buckets.cacheWrite],
+              ["bg-chart-output", u.buckets.output],
             ] as const
           ).map(([ink, label]) => (
             <span key={label} className="flex items-center gap-1.5 text-xs text-fg-muted">
@@ -418,9 +340,9 @@ function Usage({ f }: { f: Fixtures }) {
       </section>
       <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="text-sm font-(--ui-weight-medium) text-fg">{local.budgetTitle}</p>
+          <p className="text-sm font-(--ui-weight-medium) text-fg">{copy.monthSpend}</p>
           <p className="font-mono text-xs tabular-nums text-fg-muted">
-            {local.budgetOf(usd(spend.costUsd), usd(spend.budgetUsd))}
+            {f.copy.common.spentOf(usd(spend.costUsd), usd(spend.budgetUsd))}
           </p>
         </div>
         <span className="relative block h-2 w-full bg-tone-neutral-bg">
@@ -431,7 +353,7 @@ function Usage({ f }: { f: Fixtures }) {
           <span className="absolute -inset-y-1 left-[80%] w-px bg-tone-attention-fg" />
           <span className="absolute -inset-y-1 left-[95%] w-px bg-tone-danger-fg" />
         </span>
-        <p className="text-xs text-fg-muted">{local.thresholds}</p>
+        <p className="text-xs text-fg-muted">{copy.thresholds}</p>
       </section>
     </div>
   );

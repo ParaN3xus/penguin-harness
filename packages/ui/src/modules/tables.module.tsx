@@ -6,214 +6,11 @@
  */
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
-import type { FixtureLang, Fixtures, ModelFixture } from "../fixtures";
+import type { Fixtures, ModelFixture } from "../fixtures";
 import { defineModule } from "../module";
 import { AgentTile } from "../screens/parts";
 import { tokens, usd } from "../screens/format";
 import { Badge, Button, GlyphIcon, GroupHeader, IconButton, KeyValue, Switch } from "./parts";
-import type { IconName } from "./parts";
-
-/**
- * Local fixture (K3): K-redesign §4.6 adds a `vault` list of six rows and a `plugins` list of four
- * installed items to the fixtures; until #763 does, they live here in that shape.
- */
-const LOCAL: Readonly<
-  Record<
-    FixtureLang,
-    {
-      columns: {
-        model: string;
-        context: string;
-        cacheRead: string;
-        output: string;
-        vision: string;
-      };
-      defaultBadge: string;
-      actions: { edit: string; more: string };
-      vault: {
-        columns: { name: string; kind: string; usedBy: string; updated: string };
-        rows: readonly { name: string; kind: string; agents: readonly string[]; updated: string }[];
-      };
-      plugins: {
-        label: string;
-        rows: readonly {
-          name: string;
-          version: string;
-          description: string;
-          icon: IconName;
-          enabled: boolean;
-        }[];
-        pager: (from: number, to: number, total: number) => string;
-        previous: string;
-        next: string;
-      };
-      facts: readonly [string, string, string, string, string, string];
-      expanded: {
-        pricing: string;
-        cacheWrite: string;
-        capabilities: string;
-        vision: string;
-        tools: string;
-        setDefault: string;
-      };
-    }
-  >
-> = {
-  en: {
-    columns: {
-      model: "Model",
-      context: "Context",
-      cacheRead: "Cache read",
-      output: "Output",
-      vision: "Images",
-    },
-    defaultBadge: "Default",
-    actions: { edit: "Edit", more: "More" },
-    vault: {
-      columns: { name: "Name", kind: "Kind", usedBy: "Used by", updated: "Updated" },
-      rows: [
-        {
-          name: "DEEPSEEK_API_KEY",
-          kind: "API key",
-          agents: ["default_agent", "docs-reviewer"],
-          updated: "Sep 14",
-        },
-        {
-          name: "OPENROUTER_API_KEY",
-          kind: "API key",
-          agents: ["default_agent"],
-          updated: "Sep 12",
-        },
-        { name: "GITHUB_TOKEN", kind: "Token", agents: ["docs-reviewer"], updated: "Sep 9" },
-        { name: "SLACK_WEBHOOK_URL", kind: "Webhook", agents: [], updated: "Aug 30" },
-        { name: "PROXY_PASSWORD", kind: "Password", agents: [], updated: "Aug 21" },
-        { name: "S3_UPLOAD_SECRET", kind: "Secret", agents: ["default_agent"], updated: "Aug 3" },
-      ],
-    },
-    plugins: {
-      label: "Installed",
-      rows: [
-        {
-          name: "penguin-sdk",
-          version: "0.2.13",
-          description: "Build apps on the PenguinHarness SDK",
-          icon: "book",
-          enabled: true,
-        },
-        {
-          name: "docs-review",
-          version: "1.4.0",
-          description: "Check rendered docs for dead links and citations",
-          icon: "search",
-          enabled: true,
-        },
-        {
-          name: "github",
-          version: "2.1.3",
-          description: "Issues, pull requests and reviews over MCP",
-          icon: "fork",
-          enabled: false,
-        },
-        {
-          name: "slack-notify",
-          version: "0.9.1",
-          description: "Post a message when a Task finishes",
-          icon: "bell",
-          enabled: true,
-        },
-      ],
-      pager: (from, to, total) => `${from}–${to} of ${total}`,
-      previous: "Previous page",
-      next: "Next page",
-    },
-    facts: ["Plugins", "Enabled", "Skills", "MCP servers", "Updates", "Last sync"],
-    expanded: {
-      pricing: "Pricing per million tokens",
-      cacheWrite: "Cache write",
-      capabilities: "Capabilities",
-      vision: "Images",
-      tools: "Tool calls",
-      setDefault: "Set as default",
-    },
-  },
-  zh: {
-    columns: {
-      model: "模型",
-      context: "上下文",
-      cacheRead: "缓存读取",
-      output: "输出",
-      vision: "图片",
-    },
-    defaultBadge: "默认",
-    actions: { edit: "编辑", more: "更多" },
-    vault: {
-      columns: { name: "名称", kind: "类型", usedBy: "使用者", updated: "更新" },
-      rows: [
-        {
-          name: "DEEPSEEK_API_KEY",
-          kind: "API 密钥",
-          agents: ["default_agent", "docs-reviewer"],
-          updated: "9 月 14 日",
-        },
-        {
-          name: "OPENROUTER_API_KEY",
-          kind: "API 密钥",
-          agents: ["default_agent"],
-          updated: "9 月 12 日",
-        },
-        { name: "GITHUB_TOKEN", kind: "令牌", agents: ["docs-reviewer"], updated: "9 月 9 日" },
-        { name: "SLACK_WEBHOOK_URL", kind: "Webhook", agents: [], updated: "8 月 30 日" },
-        { name: "PROXY_PASSWORD", kind: "密码", agents: [], updated: "8 月 21 日" },
-        { name: "S3_UPLOAD_SECRET", kind: "密钥", agents: ["default_agent"], updated: "8 月 3 日" },
-      ],
-    },
-    plugins: {
-      label: "已安装",
-      rows: [
-        {
-          name: "penguin-sdk",
-          version: "0.2.13",
-          description: "基于 PenguinHarness SDK 构建应用",
-          icon: "book",
-          enabled: true,
-        },
-        {
-          name: "docs-review",
-          version: "1.4.0",
-          description: "检查渲染后文档的失效链接与引用",
-          icon: "search",
-          enabled: true,
-        },
-        {
-          name: "github",
-          version: "2.1.3",
-          description: "经由 MCP 处理 Issue、Pull Request 与评审",
-          icon: "fork",
-          enabled: false,
-        },
-        {
-          name: "slack-notify",
-          version: "0.9.1",
-          description: "Task 完成时发送一条消息",
-          icon: "bell",
-          enabled: true,
-        },
-      ],
-      pager: (from, to, total) => `第 ${from}–${to} 项，共 ${total} 项`,
-      previous: "上一页",
-      next: "下一页",
-    },
-    facts: ["插件", "已启用", "技能", "MCP 服务器", "可更新", "上次同步"],
-    expanded: {
-      pricing: "每百万 Token 价格",
-      cacheWrite: "缓存写入",
-      capabilities: "能力",
-      vision: "图片",
-      tools: "工具调用",
-      setDefault: "设为默认",
-    },
-  },
-};
 
 /** A table's header row: `band` is a filled row, `plain` a rule under the labels. */
 function TableHead({ band, children }: { band: boolean; children: ReactNode }) {
@@ -274,20 +71,20 @@ function Table({
   /** A model id whose row is opened on its details. */
   expanded?: string;
 }) {
-  const local = LOCAL[f.lang];
+  const m = f.copy.models;
   const models = f.models.slice(0, 6);
   return (
     <div className="overflow-hidden rounded-lg border border-line">
       <table className="w-full border-collapse">
         <TableHead band>
           {expanded !== undefined && <th className="w-8" />}
-          <Th>{local.columns.model}</Th>
-          <Th align="right">{local.columns.context}</Th>
-          <Th align="right">{local.columns.cacheRead}</Th>
+          <Th>{m.model}</Th>
+          <Th align="right">{m.context}</Th>
+          <Th align="right">{m.cacheRead}</Th>
           <Th align="right" sorted>
-            {local.columns.output}
+            {m.output}
           </Th>
-          <Th align="right">{local.columns.vision}</Th>
+          <Th align="right">{m.images}</Th>
           <th className="w-20" />
         </TableHead>
         <tbody>
@@ -324,8 +121,7 @@ function ModelRows({
   hovered: boolean;
   expandable: boolean;
 }) {
-  const local = LOCAL[f.lang];
-  const e = local.expanded;
+  const m = f.copy.models;
   const cell = "border-t border-line px-3 py-2 text-right font-mono text-xs tabular-nums text-fg";
   return (
     <>
@@ -336,7 +132,7 @@ function ModelRows({
           </td>
         )}
         <td className="border-t border-line px-3 py-2">
-          <ModelCell model={model} badge={model.isDefault ? local.defaultBadge : undefined} />
+          <ModelCell model={model} badge={model.isDefault ? m.default : undefined} />
         </td>
         <td className={cell}>{tokens(model.contextWindow)}</td>
         <td className={cell}>{usd(model.pricing.cacheRead)}</td>
@@ -350,8 +146,8 @@ function ModelRows({
         </td>
         <td className="border-t border-line px-2 py-2">
           <span className={`flex justify-end ${hovered ? "" : "invisible"}`}>
-            <IconButton label={local.actions.edit} icon="pencil" size="sm" />
-            <IconButton label={local.actions.more} icon="more" size="sm" />
+            <IconButton label={f.copy.common.edit} icon="pencil" size="sm" />
+            <IconButton label={f.copy.common.more} icon="more" size="sm" />
           </span>
         </td>
       </tr>
@@ -360,33 +156,29 @@ function ModelRows({
           <td colSpan={7} className="border-t border-line-muted bg-surface-muted px-10 pb-4 pt-3">
             <div className="grid grid-cols-2 gap-6">
               <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
-                <p className="text-xs text-fg-muted">{e.pricing}</p>
+                <p className="text-xs text-fg-muted">{m.pricing}</p>
                 <KeyValue
                   columns={3}
                   items={[
-                    {
-                      label: local.columns.cacheRead,
-                      value: usd(model.pricing.cacheRead),
-                      mono: true,
-                    },
-                    { label: e.cacheWrite, value: usd(model.pricing.cacheWrite), mono: true },
-                    { label: local.columns.output, value: usd(model.pricing.output), mono: true },
+                    { label: m.cacheRead, value: usd(model.pricing.cacheRead), mono: true },
+                    { label: m.cacheWrite, value: usd(model.pricing.cacheWrite), mono: true },
+                    { label: m.output, value: usd(model.pricing.output), mono: true },
                   ]}
                 />
               </div>
               <div className="grid grid-cols-[minmax(0,1fr)] content-start gap-2">
-                <p className="text-xs text-fg-muted">{e.capabilities}</p>
+                <p className="text-xs text-fg-muted">{m.capabilities}</p>
                 <p className="flex flex-wrap items-center gap-2">
                   <Badge tone={model.supportsVision ? "success" : "neutral"} variant="outline">
-                    {e.vision}
+                    {model.supportsVision ? m.images : m.textOnly}
                   </Badge>
                   <Badge tone="success" variant="outline">
-                    {e.tools}
+                    {f.copy.traces.toolCalls}
                   </Badge>
                 </p>
                 <p className="pt-1">
                   <Button variant="secondary" size="xs">
-                    {e.setDefault}
+                    {m.setDefault}
                   </Button>
                 </p>
               </div>
@@ -403,7 +195,7 @@ function Band({ f }: { f: Fixtures }) {
 }
 
 function Plain({ f }: { f: Fixtures }) {
-  const v = LOCAL[f.lang].vault;
+  const v = f.copy.vault;
   const cell = "border-b border-line-muted px-3 py-2.5";
   return (
     <table className="w-full border-collapse">
@@ -414,7 +206,7 @@ function Plain({ f }: { f: Fixtures }) {
         <Th align="right">{v.columns.updated}</Th>
       </TableHead>
       <tbody>
-        {v.rows.map((row) => (
+        {f.vault.map((row) => (
           <tr key={row.name}>
             <td className={cell}>
               <span className="flex items-center gap-2">
@@ -473,24 +265,25 @@ function ListRow({
 }
 
 function Dense({ f }: { f: Fixtures }) {
-  const p = LOCAL[f.lang].plugins;
-  const [plugins, enabled, skills, servers, updates, synced] = LOCAL[f.lang].facts;
+  const c = f.copy.common;
+  const facts = f.copy.plugins.facts;
+  const library = f.pluginLibrary;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <KeyValue
         items={[
-          { label: plugins, value: "12" },
-          { label: enabled, value: "9" },
-          { label: skills, value: "31" },
-          { label: servers, value: "4" },
-          { label: updates, value: "2" },
-          { label: synced, value: "2026-09-14 14:02", mono: true },
+          { label: facts.installed, value: String(library.installed) },
+          { label: facts.enabled, value: String(library.enabled) },
+          { label: facts.skills, value: String(library.skills) },
+          { label: facts.mcpServers, value: String(library.mcpServers) },
+          { label: facts.updates, value: String(library.updates) },
+          { label: facts.lastSync, value: library.lastSync, mono: true },
         ]}
       />
       <div>
-        <GroupHeader label={p.label} count={12} />
+        <GroupHeader label={f.copy.plugins.installed} count={library.installed} />
         <ul className="grid grid-cols-[minmax(0,1fr)]">
-          {p.rows.map((row) => (
+          {f.plugins.map((row) => (
             <ListRow
               key={row.name}
               lead={
@@ -509,9 +302,9 @@ function Dense({ f }: { f: Fixtures }) {
           ))}
         </ul>
         <div className="flex items-center justify-end gap-2 border-t border-line-muted pt-2 text-xs text-fg-muted">
-          <span className="tabular-nums">{p.pager(1, 4, 12)}</span>
-          <IconButton label={p.previous} icon="chevronLeft" size="sm" />
-          <IconButton label={p.next} icon="chevronRight" size="sm" hovered />
+          <span className="tabular-nums">{c.range(1, f.plugins.length, library.installed)}</span>
+          <IconButton label={c.previousPage} icon="chevronLeft" size="sm" />
+          <IconButton label={c.nextPage} icon="chevronRight" size="sm" hovered />
         </div>
       </div>
     </div>

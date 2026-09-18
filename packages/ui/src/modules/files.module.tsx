@@ -12,69 +12,16 @@
  */
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
-import type { FileNode, FixtureLang, Fixtures } from "../fixtures";
+import type { FileNode, Fixtures } from "../fixtures";
 import { defineModule } from "../module";
 import { bytes } from "../screens/format";
 import { Breadcrumbs, EmptyState, GlyphIcon, IconButton, SearchInput } from "./parts";
-
-/** Local fixture (K3): the panel's labels. The tree and the preview come from `fixtures`. */
-const COPY: Readonly<
-  Record<
-    FixtureLang,
-    {
-      title: string;
-      search: string;
-      refresh: string;
-      upload: string;
-      added: string;
-      modified: string;
-      emptyTitle: string;
-      emptyBody: string;
-      copyPath: string;
-      download: string;
-      lines: (n: number) => string;
-      dropTitle: (folder: string) => string;
-      dropBody: string;
-    }
-  >
-> = {
-  en: {
-    title: "Files",
-    search: "Search files",
-    refresh: "Refresh",
-    upload: "Upload files",
-    added: "Added in this session",
-    modified: "Modified in this session",
-    emptyTitle: "No file selected",
-    emptyBody: "Pick a file in the tree to preview it here.",
-    copyPath: "Copy path",
-    download: "Download",
-    lines: (n) => `${n} lines`,
-    dropTitle: (folder) => `Drop to upload to ${folder}`,
-    dropBody: "Files over 50 MB are skipped.",
-  },
-  zh: {
-    title: "文件",
-    search: "搜索文件",
-    refresh: "刷新",
-    upload: "上传文件",
-    added: "本次会话新增",
-    modified: "本次会话修改",
-    emptyTitle: "未选择文件",
-    emptyBody: "在左侧目录树中选择一个文件即可在此预览。",
-    copyPath: "复制路径",
-    download: "下载",
-    lines: (n) => `${n} 行`,
-    dropTitle: (folder) => `松开即可上传到 ${folder}`,
-    dropBody: "超过 50 MB 的文件会被跳过。",
-  },
-};
 
 /** Folders shown open: the ones leading to this session's changes. */
 const OPEN = new Set(["claude-code-expert", "claude-code-expert/src", "claude-code-expert/test"]);
 
 function TreeRow({ node, depth, f }: { node: FileNode; depth: number; f: Fixtures }) {
-  const local = COPY[f.lang];
+  const copy = f.copy.files;
   const open = node.kind === "dir" && OPEN.has(node.path);
   const selected = node.path === f.filePreview.path;
   return (
@@ -100,7 +47,7 @@ function TreeRow({ node, depth, f }: { node: FileNode; depth: number; f: Fixture
         <span className="min-w-0 flex-1 truncate">{node.name}</span>
         {node.change && (
           <span
-            title={node.change === "added" ? local.added : local.modified}
+            title={node.change === "added" ? copy.added : copy.modified}
             className={`font-mono text-xs ${node.change === "added" ? "text-tone-success-fg" : "text-tone-attention-fg"}`}
           >
             {node.change === "added" ? "A" : "M"}
@@ -121,18 +68,18 @@ function TreeRow({ node, depth, f }: { node: FileNode; depth: number; f: Fixture
 }
 
 function TreePane({ f }: { f: Fixtures }) {
-  const local = COPY[f.lang];
+  const copy = f.copy.files;
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-line">
       <div className="grid grid-cols-[minmax(0,1fr)] gap-2 border-b border-line p-2">
         <div className="flex items-center gap-1 pl-1">
           <span className="min-w-0 flex-1 text-sm font-(--ui-weight-medium) text-fg">
-            {local.title}
+            {f.copy.nav.files}
           </span>
-          <IconButton label={local.refresh} icon="refresh" size="sm" />
-          <IconButton label={local.upload} icon="upload" size="sm" />
+          <IconButton label={f.copy.common.refresh} icon="refresh" size="sm" />
+          <IconButton label={copy.upload} icon="upload" size="sm" />
         </div>
-        <SearchInput placeholder={local.search} />
+        <SearchInput placeholder={copy.search} />
       </div>
       <ul className="min-h-0 flex-1 overflow-hidden p-1">
         <TreeRow node={f.fileTree} depth={0} f={f} />
@@ -142,18 +89,18 @@ function TreePane({ f }: { f: Fixtures }) {
 }
 
 function PreviewPane({ f }: { f: Fixtures }) {
-  const local = COPY[f.lang];
+  const copy = f.copy.files;
   const lines = f.filePreview.content.split("\n");
   return (
     <section className="flex min-w-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <Breadcrumbs items={f.filePreview.path.split("/")} />
         <span className="shrink-0 text-xs tabular-nums text-fg-subtle">
-          {local.lines(lines.length)}
+          {copy.lines(lines.length)}
         </span>
         <span className="min-w-0 flex-1" />
-        <IconButton label={local.copyPath} icon="copy" size="sm" />
-        <IconButton label={local.download} icon="download" size="sm" />
+        <IconButton label={copy.copyPath} icon="copy" size="sm" />
+        <IconButton label={f.copy.common.download} icon="download" size="sm" />
       </div>
       <pre className="min-h-0 flex-1 overflow-hidden bg-[var(--ui-code-bg)] py-2 font-mono text-xs leading-relaxed text-fg">
         {lines.slice(0, 26).map((line, i) => (
@@ -179,11 +126,11 @@ function Panel({ f, children }: { f: Fixtures; children: ReactNode }) {
 }
 
 function Tree({ f }: { f: Fixtures }) {
-  const local = COPY[f.lang];
+  const copy = f.copy.files;
   return (
     <Panel f={f}>
       <div className="flex min-w-0 flex-1 items-center justify-center p-6">
-        <EmptyState variant="slot" title={local.emptyTitle} description={local.emptyBody} />
+        <EmptyState variant="slot" title={copy.empty.title} description={copy.empty.body} />
       </div>
     </Panel>
   );
@@ -199,13 +146,13 @@ function Preview({ f }: { f: Fixtures }) {
 
 /** The drop target over a pane: an info-toned dashed outline and the folder it uploads to. */
 function DropOverlay({ folder, f }: { folder: string; f: Fixtures }) {
-  const local = COPY[f.lang];
+  const copy = f.copy.files;
   return (
     <div className="absolute inset-0 flex bg-[color-mix(in_oklab,var(--ui-canvas)_82%,transparent)] p-4">
       <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-tone-info-emphasis text-center">
         <GlyphIcon name="upload" size={24} className="text-tone-info-fg" />
-        <p className="text-sm font-(--ui-weight-medium) text-fg">{local.dropTitle(folder)}</p>
-        <p className="text-xs text-fg-muted">{local.dropBody}</p>
+        <p className="text-sm font-(--ui-weight-medium) text-fg">{copy.dropTitle(folder)}</p>
+        <p className="text-xs text-fg-muted">{copy.dropBody}</p>
       </div>
     </div>
   );

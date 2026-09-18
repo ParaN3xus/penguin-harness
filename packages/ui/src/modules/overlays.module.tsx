@@ -6,19 +6,18 @@
  * - Dialog: the paged settings dialog over the dimmed chat, a discard confirmation above it;
  * - Drawer: a Trace file's details in a side drawer;
  * - Toasts: the stack in the corner;
- * - Palette: the command palette with a query, grouped results and key hints.
+ * - Palette: the command palette as it opens — its commands and recent chats, and key hints.
  *
  * Static stand-ins for W3's `Menu`, `FloatingPanel`, `InfoPopover`, `Tooltip`, `Modal`,
  * `PagedDialog`, `ConfirmModal`, `Drawer` and `Toaster`, and W8's `CommandPalette`.
  */
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
-import type { ChatTurn, FixtureLang, Fixtures } from "../fixtures";
+import type { ChatTurn, Fixtures } from "../fixtures";
 import { defineModule } from "../module";
 import { bytes } from "../screens/format";
 import { AgentTile } from "../screens/parts";
 import { Turn } from "../screens/transcript";
-import type { ToneName } from "../tokens";
 import {
   Button,
   FloatingPanel,
@@ -37,215 +36,6 @@ import {
   Toast,
   Tooltip,
 } from "./parts";
-import type { IconName } from "./parts";
-
-/**
- * Local fixture (K3): K-redesign §4.6 adds `menus` (context menu items with shortcuts, a danger item),
- * `commandPalette` (groups) and `notices` (a toast list) to the fixtures; until #763 does, they live
- * here in that shape.
- */
-const LOCAL: Readonly<
-  Record<
-    FixtureLang,
-    {
-      menus: {
-        message: readonly (
-          | { icon: IconName; label: string; shortcut?: readonly string[]; danger?: boolean }
-          | "separator"
-        )[];
-        panelsLabel: string;
-        panels: readonly { icon: IconName; label: string; description: string }[];
-      };
-      info: { title: string; body: string; link: string };
-      tooltip: string;
-      confirm: { title: string; body: string; cancel: string; discard: string };
-      drawer: {
-        title: string;
-        facts: readonly [string, string, string, string];
-        eventsLabel: string;
-        export: string;
-        delete: string;
-      };
-      toasts: readonly { tone: ToneName; title: string; body?: string; action?: string }[];
-      palette: {
-        query: string;
-        groups: readonly {
-          label: string;
-          items: readonly {
-            icon?: IconName;
-            agent?: string;
-            label: string;
-            hint?: string;
-            keys?: readonly string[];
-          }[];
-        }[];
-        hints: readonly [string, string, string];
-      };
-    }
-  >
-> = {
-  en: {
-    menus: {
-      message: [
-        { icon: "copy", label: "Copy message", shortcut: ["⌘", "C"] },
-        { icon: "fork", label: "Fork chat from here" },
-        { icon: "pencil", label: "Edit and resend" },
-        "separator",
-        { icon: "download", label: "Export as Markdown" },
-        "separator",
-        { icon: "trash", label: "Delete message", shortcut: ["⌫"], danger: true },
-      ],
-      panelsLabel: "Add a panel",
-      panels: [
-        {
-          icon: "bot",
-          label: "Subagents",
-          description: "The call graph and each child's transcript",
-        },
-        { icon: "eye", label: "Trajectories", description: "Trace files, timelines and events" },
-        { icon: "folder", label: "Files", description: "The Workspace tree and previews" },
-        { icon: "terminal", label: "Terminal", description: "A shell in the Workspace" },
-      ],
-    },
-    info: {
-      title: "Tool short names",
-      body: "Tool cards name the built-in tools by a short alias: read_file reads as “read”. The Trace keeps the full names.",
-      link: "Learn more",
-    },
-    tooltip: "Send to background",
-    confirm: {
-      title: "Discard your changes?",
-      body: "The accent and font size you picked are not saved yet.",
-      cancel: "Keep editing",
-      discard: "Discard",
-    },
-    drawer: {
-      title: "Trace #001",
-      facts: ["Written", "Size", "Events", "Model"],
-      eventsLabel: "Latest events",
-      export: "Export",
-      delete: "Delete",
-    },
-    toasts: [
-      { tone: "success", title: "Trace exported", body: "trace-001.jsonl · 48.2 KB" },
-      {
-        tone: "attention",
-        title: "A command needs approval",
-        body: "exec · Start the app and run the citation tests",
-        action: "Review",
-      },
-      {
-        tone: "danger",
-        title: "Couldn't reach DeepSeek",
-        body: "The request timed out after 60s.",
-        action: "Retry",
-      },
-    ],
-    palette: {
-      query: "cit",
-      groups: [
-        {
-          label: "Sessions",
-          items: [
-            { agent: "default_agent", label: "Make every citation open a real file", hint: "now" },
-            { agent: "docs-reviewer", label: "Review hooks.md citations", hint: "5h" },
-          ],
-        },
-        {
-          label: "Actions",
-          items: [
-            { icon: "newChat", label: "New chat", keys: ["⌘", "N"] },
-            { icon: "download", label: "Export the citation Trace" },
-          ],
-        },
-        {
-          label: "Go to",
-          items: [
-            { icon: "models", label: "Models" },
-            { icon: "usage", label: "Cost Center" },
-          ],
-        },
-      ],
-      hints: ["navigate", "open", "close"],
-    },
-  },
-  zh: {
-    menus: {
-      message: [
-        { icon: "copy", label: "复制消息", shortcut: ["⌘", "C"] },
-        { icon: "fork", label: "从这里分叉对话" },
-        { icon: "pencil", label: "编辑后重发" },
-        "separator",
-        { icon: "download", label: "导出为 Markdown" },
-        "separator",
-        { icon: "trash", label: "删除消息", shortcut: ["⌫"], danger: true },
-      ],
-      panelsLabel: "添加面板",
-      panels: [
-        { icon: "bot", label: "子智能体", description: "调用关系与每个子会话的记录" },
-        { icon: "eye", label: "轨迹观测", description: "Trace 文件、时间线与事件" },
-        { icon: "folder", label: "文件", description: "Workspace 目录树与预览" },
-        { icon: "terminal", label: "终端", description: "位于 Workspace 的 shell" },
-      ],
-    },
-    info: {
-      title: "工具短名",
-      body: "工具卡片用短名称呼内置工具，read_file 显示为「读取」。Trace 中保留完整名称。",
-      link: "了解更多",
-    },
-    tooltip: "转入后台执行",
-    confirm: {
-      title: "放弃修改？",
-      body: "刚选的主题色和字号还没有保存。",
-      cancel: "继续编辑",
-      discard: "放弃",
-    },
-    drawer: {
-      title: "Trace #001",
-      facts: ["写入时间", "大小", "事件数", "模型"],
-      eventsLabel: "最近的事件",
-      export: "导出",
-      delete: "删除",
-    },
-    toasts: [
-      { tone: "success", title: "Trace 已导出", body: "trace-001.jsonl · 48.2 KB" },
-      {
-        tone: "attention",
-        title: "有命令等待审批",
-        body: "执行命令 · 启动应用并运行引用测试",
-        action: "查看",
-      },
-      { tone: "danger", title: "无法连接 DeepSeek", body: "请求在 60 秒后超时。", action: "重试" },
-    ],
-    palette: {
-      query: "引用",
-      groups: [
-        {
-          label: "Session",
-          items: [
-            { agent: "default_agent", label: "让每个引用都打开真实文件", hint: "刚刚" },
-            { agent: "docs-reviewer", label: "检查 hooks.md 的引用", hint: "5 小时" },
-          ],
-        },
-        {
-          label: "操作",
-          items: [
-            { icon: "newChat", label: "新对话", keys: ["⌘", "N"] },
-            { icon: "download", label: "导出引用相关的 Trace" },
-          ],
-        },
-        {
-          label: "前往",
-          items: [
-            { icon: "models", label: "模型库" },
-            { icon: "usage", label: "成本中心" },
-          ],
-        },
-      ],
-      hints: ["切换", "打开", "关闭"],
-    },
-  },
-};
 
 /**
  * The quiet part of the conversation — prompts and short replies, no code or tables — so an
@@ -288,14 +78,14 @@ function Stage({
 }
 
 function InfoPopover({ f }: { f: Fixtures }) {
-  const info = LOCAL[f.lang].info;
+  const s = f.copy.settings;
   return (
     <FloatingPanel className="w-72">
       <div className="grid grid-cols-[minmax(0,1fr)] gap-1 px-2 py-1.5 text-sm">
-        <p className="font-(--ui-weight-medium) text-fg">{info.title}</p>
-        <p className="text-fg-muted">{info.body}</p>
+        <p className="font-(--ui-weight-medium) text-fg">{s.toolAliases}</p>
+        <p className="text-fg-muted">{s.toolAliasesInfo}</p>
         <p className="pt-1">
-          <Link external>{info.link}</Link>
+          <Link external>{f.copy.common.learnMore}</Link>
         </p>
       </div>
     </FloatingPanel>
@@ -303,12 +93,12 @@ function InfoPopover({ f }: { f: Fixtures }) {
 }
 
 function Menus({ f }: { f: Fixtures }) {
-  const local = LOCAL[f.lang];
+  const tooltip = f.copy.chat.sendToBackground;
   return (
     <Stage f={f} className="items-start justify-between">
       <div className="grid grid-cols-[minmax(0,1fr)] w-60 gap-6">
         <FloatingPanel>
-          {local.menus.message.map((item, i) =>
+          {f.menus.message.map((item, i) =>
             item === "separator" ? (
               <MenuSeparator key={i} />
             ) : (
@@ -324,22 +114,26 @@ function Menus({ f }: { f: Fixtures }) {
           )}
         </FloatingPanel>
         <span className="flex items-center gap-2">
-          <IconButton label={local.tooltip} icon="arrowDownLine" hovered />
-          <Tooltip label={local.tooltip} />
+          <IconButton label={tooltip} icon="arrowDownLine" hovered />
+          <Tooltip label={tooltip} />
         </span>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)] w-80 justify-items-end gap-6">
         <FloatingPanel className="w-full">
-          <MenuLabel>{local.menus.panelsLabel}</MenuLabel>
-          {local.menus.panels.map((panel, i) => (
-            <MenuItem
-              key={panel.label}
-              icon={panel.icon}
-              label={panel.label}
-              description={panel.description}
-              active={i === 0}
-            />
-          ))}
+          <MenuLabel>{f.copy.dock.newPanel}</MenuLabel>
+          {f.menus.panels.map((panel, i) =>
+            panel === "separator" ? (
+              <MenuSeparator key={i} />
+            ) : (
+              <MenuItem
+                key={panel.label}
+                icon={panel.icon}
+                label={panel.label}
+                description={panel.description}
+                active={i === 0}
+              />
+            ),
+          )}
         </FloatingPanel>
         <InfoPopover f={f} />
       </div>
@@ -401,7 +195,7 @@ function PagedDialog({ f }: { f: Fixtures }) {
 }
 
 function Dialogs({ f }: { f: Fixtures }) {
-  const c = LOCAL[f.lang].confirm;
+  const c = f.copy.settings.discard;
   return (
     <Stage f={f} dim className="items-center justify-center">
       <PagedDialog f={f} />
@@ -412,8 +206,8 @@ function Dialogs({ f }: { f: Fixtures }) {
           description={c.body}
           footer={
             <>
-              <Button variant="secondary">{c.cancel}</Button>
-              <Button variant="danger">{c.discard}</Button>
+              <Button variant="secondary">{c.keep}</Button>
+              <Button variant="danger">{c.confirm}</Button>
             </>
           }
         />
@@ -423,15 +217,15 @@ function Dialogs({ f }: { f: Fixtures }) {
 }
 
 function DrawerPanel({ f }: { f: Fixtures }) {
-  const d = LOCAL[f.lang].drawer;
+  const t = f.copy.traces;
   const file = f.trace.files[f.trace.activeFile]!;
   const turn = f.trace.turns[0]!;
-  const [written, size, events, model] = d.facts;
+  const { written, size, events, model } = t.fileFacts;
   return (
     <aside className="absolute inset-y-0 right-0 flex w-96 flex-col border-l border-line bg-overlay shadow-xl">
       <div className="flex items-center gap-2 border-b border-line px-4 py-3">
         <p className="min-w-0 flex-1 truncate text-base font-(--ui-weight-medium) text-fg">
-          {d.title}
+          {t.file(file.label)}
         </p>
         <IconButton label={f.copy.dock.close} icon="cross" size="sm" />
       </div>
@@ -446,7 +240,7 @@ function DrawerPanel({ f }: { f: Fixtures }) {
           ]}
         />
         <div className="grid grid-cols-[minmax(0,1fr)] gap-1">
-          <p className="text-xs text-fg-muted">{d.eventsLabel}</p>
+          <p className="text-xs text-fg-muted">{t.latestEvents}</p>
           {turn.events.slice(-5).map((event) => (
             <p
               key={event.time}
@@ -462,9 +256,9 @@ function DrawerPanel({ f }: { f: Fixtures }) {
         </div>
       </div>
       <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
-        <Button variant="secondary">{d.delete}</Button>
+        <Button variant="secondary">{f.copy.common.delete}</Button>
         <Button variant="primary" leading={<GlyphIcon name="download" size={13} />}>
-          {d.export}
+          {t.export}
         </Button>
       </div>
     </aside>
@@ -482,7 +276,7 @@ function Drawer({ f }: { f: Fixtures }) {
 function Toasts({ f }: { f: Fixtures }) {
   return (
     <Stage f={f} className="flex-col items-end gap-2">
-      {LOCAL[f.lang].toasts.map((toast) => (
+      {f.notices.toasts.map((toast) => (
         <Toast
           key={toast.title}
           tone={toast.tone}
@@ -496,20 +290,20 @@ function Toasts({ f }: { f: Fixtures }) {
 }
 
 function CommandPalette({ f }: { f: Fixtures }) {
-  const p = LOCAL[f.lang].palette;
+  const p = f.copy.palette;
   let index = 0;
   return (
     <Modal className="w-full max-w-xl self-start">
       <div className="flex items-center gap-2 border-b border-line px-4 py-3">
         <GlyphIcon name="search" size={16} className="text-fg-subtle" />
-        <span className="min-w-0 flex-1 text-base text-fg">
-          {p.query}
-          <span aria-hidden className="ml-px inline-block h-5 w-px translate-y-1 bg-fg" />
+        <span className="flex min-w-0 flex-1 items-center text-base text-fg-subtle">
+          <span aria-hidden className="mr-px inline-block h-5 w-px bg-fg" />
+          <span className="truncate">{p.placeholder}</span>
         </span>
         <Kbd keys={["Esc"]} />
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-2 p-2 [--radius-inner:max(var(--ui-radius-xs),calc(var(--ui-radius-lg)-0.5rem))]">
-        {p.groups.map((group) => (
+        {f.commandPalette.map((group) => (
           <div key={group.label}>
             <p className="px-2 pb-1 pt-1.5 text-xs text-fg-muted">{group.label}</p>
             {group.items.map((item) => {
@@ -519,10 +313,10 @@ function CommandPalette({ f }: { f: Fixtures }) {
                   key={item.label}
                   className={`flex items-center gap-2 rounded-[var(--radius-inner)] px-2 py-1.5 text-sm text-fg ${active ? "bg-surface-muted" : ""}`}
                 >
-                  {item.agent ? (
+                  {item.agentId ? (
                     <AgentTile
-                      id={item.agent}
-                      name={f.agents.find((a) => a.id === item.agent)?.name ?? item.agent}
+                      id={item.agentId}
+                      name={f.agents.find((a) => a.id === item.agentId)?.name ?? item.agentId}
                       size={16}
                     />
                   ) : (
@@ -540,15 +334,15 @@ function CommandPalette({ f }: { f: Fixtures }) {
       <div className="flex items-center gap-4 border-t border-line px-4 py-2 text-xs text-fg-muted">
         <span className="flex items-center gap-1.5">
           <Kbd keys={["↑", "↓"]} />
-          {p.hints[0]}
+          {p.keyHints.navigate}
         </span>
         <span className="flex items-center gap-1.5">
           <Kbd keys={["↵"]} />
-          {p.hints[1]}
+          {p.keyHints.open}
         </span>
         <span className="flex items-center gap-1.5">
           <Kbd keys={["Esc"]} />
-          {p.hints[2]}
+          {p.keyHints.close}
         </span>
       </div>
     </Modal>

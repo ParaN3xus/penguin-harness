@@ -13,99 +13,12 @@
  */
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
-import type { FileDiff, FixtureLang, Fixtures, ToolCallItem } from "../fixtures";
+import type { FileDiff, Fixtures, InlineFixture, ToolCallItem } from "../fixtures";
 import { defineModule } from "../module";
 import { duration } from "../screens/format";
 import { GlyphIcon, IconButton } from "./parts";
 
-type Inline = string | { code: string } | { link: string };
-
-/** Local fixture (K3): a docs answer in Markdown's shapes. Not part of K-redesign §4.6. */
-const DOCS: Readonly<
-  Record<
-    FixtureLang,
-    {
-      h1: string;
-      intro: readonly Inline[];
-      h2: string;
-      scopes: readonly (readonly Inline[])[];
-      table: { head: readonly string[]; rows: readonly (readonly string[])[] };
-      note: readonly Inline[];
-      h3: string;
-      ranking: string;
-      copy: string;
-      exit: (code: number, ms: string) => string;
-      tail: string;
-    }
-  >
-> = {
-  en: {
-    h1: "Configure hooks in Claude Code",
-    intro: [
-      "Hooks run your own commands at fixed points of a Session. They live under ",
-      { code: "hooks" },
-      " in ",
-      { code: "settings.json" },
-      ", and the full list of events is in the ",
-      { link: "hooks reference" },
-      " [1].",
-    ],
-    h2: "Where hooks are read from",
-    scopes: [
-      [{ code: "~/.claude/settings.json" }, " — every project on this machine"],
-      [{ code: ".claude/settings.json" }, " — this project, checked in"],
-      [{ code: ".claude/settings.local.json" }, " — this project, ignored by git"],
-    ],
-    table: {
-      head: ["Event", "Fires", "Can block"],
-      rows: [
-        ["PreToolUse", "before a tool call runs", "yes"],
-        ["PostToolUse", "after the tool returns", "no"],
-        ["Stop", "when the reply ends", "yes"],
-      ],
-    },
-    note: ["A hook that exits with code 2 blocks the call and shows its stderr to the model [2]."],
-    h3: "How the sources were ranked",
-    ranking: "Each chunk of the corpus was scored against the question with BM25:",
-    copy: "Copy",
-    exit: (code, ms) => `exit ${code} · ${ms}`,
-    tail: "Output complete",
-  },
-  zh: {
-    h1: "在 Claude Code 中配置 Hooks",
-    intro: [
-      "Hooks 会在 Session 的固定时机运行你自己的命令。它们写在 ",
-      { code: "settings.json" },
-      " 的 ",
-      { code: "hooks" },
-      " 字段下，完整的事件列表见 ",
-      { link: "Hooks 参考" },
-      " [1]。",
-    ],
-    h2: "Hooks 从哪里读取",
-    scopes: [
-      [{ code: "~/.claude/settings.json" }, "：本机上的所有项目"],
-      [{ code: ".claude/settings.json" }, "：当前项目，纳入版本库"],
-      [{ code: ".claude/settings.local.json" }, "：当前项目，被 git 忽略"],
-    ],
-    table: {
-      head: ["事件", "触发时机", "能否阻止"],
-      rows: [
-        ["PreToolUse", "工具调用执行之前", "能"],
-        ["PostToolUse", "工具返回之后", "不能"],
-        ["Stop", "回复结束时", "能"],
-      ],
-    },
-    note: ["以退出码 2 结束的 hook 会阻止这次调用，并把它的 stderr 交给模型 [2]。"],
-    h3: "来源是如何排序的",
-    ranking: "语料中的每个片段都用 BM25 与问题计算得分：",
-    copy: "复制",
-    exit: (code, ms) => `退出码 ${code} · ${ms}`,
-    tail: "输出完毕",
-  },
-};
-
-function InlineText({ parts }: { parts: readonly Inline[] }) {
+function InlineText({ parts }: { parts: readonly InlineFixture[] }) {
   return (
     <>
       {parts.map((part, i) =>
@@ -129,15 +42,15 @@ function InlineText({ parts }: { parts: readonly Inline[] }) {
 }
 
 function Prose({ f }: { f: Fixtures }) {
-  const d = DOCS[f.lang];
+  const d = f.docsAnswer;
   const h = "text-fg font-(--ui-weight-strong)";
   return (
     <article className="mx-auto grid max-w-2xl gap-4 text-(length:--ui-text-prose-size) leading-(--ui-text-prose-lh) text-fg">
-      <h1 className={`text-(length:--ui-md-h1-size) leading-snug ${h}`}>{d.h1}</h1>
+      <h1 className={`text-(length:--ui-md-h1-size) leading-snug ${h}`}>{d.title}</h1>
       <p>
         <InlineText parts={d.intro} />
       </p>
-      <h2 className={`pt-2 text-(length:--ui-md-h2-size) leading-snug ${h}`}>{d.h2}</h2>
+      <h2 className={`pt-2 text-(length:--ui-md-h2-size) leading-snug ${h}`}>{d.scopesTitle}</h2>
       <ul className="grid grid-cols-[minmax(0,1fr)] list-disc gap-1 pl-5">
         {d.scopes.map((scope, i) => (
           <li key={i}>
@@ -176,11 +89,9 @@ function Prose({ f }: { f: Fixtures }) {
       <blockquote className="border-l-2 border-line-emphasis pl-4 text-fg-muted">
         <InlineText parts={d.note} />
       </blockquote>
-      <h3 className={`pt-2 text-(length:--ui-md-h3-size) leading-snug ${h}`}>{d.h3}</h3>
+      <h3 className={`pt-2 text-(length:--ui-md-h3-size) leading-snug ${h}`}>{d.rankingTitle}</h3>
       <p>{d.ranking}</p>
-      <p className="overflow-x-auto text-center font-mono text-sm text-fg">
-        score(D, Q) = Σ IDF(qᵢ) · f(qᵢ, D) · (k₁ + 1) / (f(qᵢ, D) + k₁ · (1 − b + b · |D| / avgdl))
-      </p>
+      <p className="overflow-x-auto text-center font-mono text-sm text-fg">{d.formula}</p>
     </article>
   );
 }
@@ -227,7 +138,7 @@ function CodeBlock({
 }
 
 function Code({ f }: { f: Fixtures }) {
-  const d = DOCS[f.lang];
+  const copy = f.copy.common.copy;
   const source = f.filePreview.content.split("\n").slice(0, 24).join("\n");
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
@@ -235,13 +146,9 @@ function Code({ f }: { f: Fixtures }) {
         lang={f.filePreview.language}
         path={f.filePreview.path}
         code={source}
-        copy={d.copy}
+        copy={copy}
       />
-      <CodeBlock
-        lang="bash"
-        code={"cd claude-code-expert && npm install && npm start"}
-        copy={d.copy}
-      />
+      <CodeBlock lang="bash" code={f.session.runCommand} copy={copy} />
     </div>
   );
 }
@@ -346,7 +253,7 @@ function LogView({ command, output, foot }: { command: string; output: string; f
 }
 
 function Log({ f }: { f: Fixtures }) {
-  const d = DOCS[f.lang];
+  const c = f.copy.chat;
   const clone = f.session.turns[0]!.items.find((i): i is ToolCallItem => i.kind === "tool_call")!;
   const args = JSON.parse(clone.argumentsJson) as { cmd: string };
   return (
@@ -356,9 +263,9 @@ function Log({ f }: { f: Fixtures }) {
       foot={
         <>
           <GlyphIcon name="circleCheck" size={13} className="text-tone-success-fg" />
-          <span className="tabular-nums">{d.exit(0, duration(clone.durationMs ?? 0))}</span>
+          <span className="tabular-nums">{c.exitStatus(0, duration(clone.durationMs ?? 0))}</span>
           <span className="min-w-0 flex-1" />
-          <span>{d.tail}</span>
+          <span>{c.outputComplete}</span>
         </>
       }
     />
