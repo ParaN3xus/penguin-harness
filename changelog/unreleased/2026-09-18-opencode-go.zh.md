@@ -3,6 +3,7 @@
 - **Date:** 2026-09-18
 - **Type:** feature
 - **Scope:** `model-catalog`, `web`, `docs`
+- **PR:** [#786](https://github.com/Prism-Shadow/penguin-harness/pull/786)
 
 [English](2026-09-18-opencode-go.md)
 
