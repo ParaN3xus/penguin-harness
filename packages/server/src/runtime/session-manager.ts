@@ -2445,6 +2445,8 @@ export class SessionsModule {
       pathPrepend: env.pathPrepend,
       confineSpawn: env.confineSpawn,
       sandboxDefaults: () => sandbox.currentSettings(),
+      sandboxLocalNetwork: () =>
+        sandbox.backends().some((b) => b.dimensions.includes("network-local")),
     });
     this.manager = manager;
     this.sessionService = sessionService;

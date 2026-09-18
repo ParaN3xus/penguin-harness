@@ -69,7 +69,7 @@ import type { ChannelHub } from "../../runtime/channel.js";
 import type { MessagingBridge } from "../../runtime/messaging/bridge.js";
 import type { SessionManager, RecallStore } from "../../runtime/session-manager.js";
 import type { PreviewTokenSigner } from "../../services/preview-token.js";
-import { sessionSandboxOf, type SessionService } from "../../services/session-service.js";
+import type { SessionService } from "../../services/session-service.js";
 
 /** What this route group reaches — bound by its module (src/modules). */
 export interface SessionsRouteDeps {
@@ -153,6 +153,7 @@ function parseSandboxPick(body: unknown): Partial<SessionSandbox> | undefined {
   ] as const);
   const network = optionalEnum(raw as Record<string, unknown>, "network", [
     "open",
+    "local",
     "none",
   ] as const);
   if (mode !== undefined) pick.mode = mode;
@@ -1765,7 +1766,7 @@ export class SessionApiRoutes {
       agentConfigService,
       projectConfigService,
       access,
-      sandboxDefaults: () => sessionSandboxOf(sessionService.defaultSandbox()),
+      sandboxDefaults: () => sessionService.sandboxView(sessionService.defaultSandbox()),
     });
     this.commandPolicyRoutes = commandPolicyRoutes({ projectConfigService, access });
     this.agentsRoutes = agentsRoutes({
