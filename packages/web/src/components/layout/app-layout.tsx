@@ -24,8 +24,7 @@ import { COMPANY_MODE_ICON, CloseIcon, NAV_ICONS } from "../ui/icons";
 import { useCompany } from "../../state/company";
 import { COMPANY_NAV_ICONS } from "../../features/company/company-nav-icons";
 import { ChannelRailRows } from "../../features/company/channel-sidebar";
-import { DeskRailRows, TempSessionRailRow } from "../../features/company/org-session-groups";
-import { useTempSessionTracker } from "../../features/company/temp-session";
+import { DeskRailRows, TempSessionRailRows } from "../../features/company/org-session-groups";
 import {
   COMPANY_NAV_KEYS,
   isOrgRoute,
@@ -291,17 +290,17 @@ function CollapsedRail({ onExpand }: { onExpand: () => void }) {
             </Tooltip>
           );
         })}
-        {/* The organization's channels and then its desks, under the pages the way they sit
-            under the nav in the pinned sidebar. A hairline says where each run ends; a channel
-            row carries its own unread count and a desk its running dot, since a rail with no
-            labels must still say how much is waiting. */}
+        {/* The organization's channels, its desks and then its Temporary entries, under the
+            pages the way they sit under the nav in the pinned sidebar. A hairline says where each
+            run ends; a channel row carries its own unread count and a desk or an entry its
+            running dot, since a rail with no labels must still say how much is waiting. */}
         {inCompany && navOrg !== null && (
           <>
             <span aria-hidden className="my-0.5 h-px w-5 shrink-0 bg-gray-200 dark:bg-gray-800" />
             <ChannelRailRows projectId={navOrg.projectId} orgId={navOrg.orgId} />
             <span aria-hidden className="my-0.5 h-px w-5 shrink-0 bg-gray-200 dark:bg-gray-800" />
-            <TempSessionRailRow projectId={navOrg.projectId} orgId={navOrg.orgId} />
             <DeskRailRows projectId={navOrg.projectId} orgId={navOrg.orgId} />
+            <TempSessionRailRows projectId={navOrg.projectId} orgId={navOrg.orgId} />
           </>
         )}
       </nav>
@@ -369,9 +368,6 @@ export function AppLayout() {
   useCompletionNotifications();
   // Desktop shell only: keeps the tray menu in the language this window is in.
   useTrayLocale();
-  // Company mode's temporary sidebar row follows the location from here, the one component on
-  // screen for every route, so a navigation made while the sidebar is collapsed still counts.
-  useTempSessionTracker();
   // The single eager owner of the update checks (use-update-badges.ts): one request per
   // browser session, so a dot can be there on a fresh load instead of waiting for someone to
   // open the sidebar menu. Every other anchor reads the same caches passively.

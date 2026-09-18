@@ -11,8 +11,8 @@ Company mode's ticket board and ticket dialog changed how they are clicked. A wh
 became the target that opens the ticket, and dragging it moved it between columns, after a long
 press on a touch screen. Inside the dialog the parent, the child tickets and the ticket sessions
 opened from their titles instead of corner buttons. Clicking a ticket session had landed back on
-the board with the dialog closed; it opened the conversation, and the company sidebar gained one
-temporary row for it.
+the board with the dialog closed; it opened the conversation, and the company sidebar listed it in
+a new Temporary group.
 
 ## Board
 
@@ -42,11 +42,15 @@ temporary row for it.
   closed before the router committed the new location, and the board, still mounted, removed
   `?ticket=` from its query against its own location, replacing the conversation's history entry.
   The board stopped writing its query once the browser has left it.
-- The opened session showed in the company sidebar as one row under a **Temporary** header, above
-  the desks, with the employee's avatar, the session title, a ✕ and a "Back to ticket" link; the
-  collapsed rail showed its avatar. The row lasted while the conversation was on screen and was
-  dropped on any other location. The ✕ and the link returned to the page the session was opened
-  from, with its ticket open again. A desk session opened from a ticket kept its own desk row
-  instead.
+- The opened session went to the top of a collapsible **Temporary** group in the company sidebar,
+  below **Desks** and shown only while it listed something. Each row had the employee's avatar, the
+  session title, its run mark and a ✕; the collapsed rail showed the entries' avatars after the
+  desk avatars.
+- An entry stayed until its ✕ removed it. Going elsewhere or reloading the page kept it, and a ✕
+  pressed on the session on screen removed only the row. Opening a listed session again moved it
+  to the top.
+- The list was kept in the browser's localStorage, per user, Project and organization, and held
+  the 20 most recent sessions. A desk session opened from a ticket was not listed; its desk row
+  already named it.
 - The company mode guide described the board's click and drag, the dialog's titles and the
-  temporary row, in both languages.
+  Temporary group, in both languages.

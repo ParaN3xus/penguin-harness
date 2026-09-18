@@ -3541,9 +3541,9 @@ Scenarios:
       noEmployees: "This organization has no employees yet",
       untitledSession: "Untitled session",
       loadFailed: "The employee list could not be loaded",
-      temporary: "Temporary",
-      closeTemporary: "Close the temporary session",
-      backToTicket: (title: string): string => `Back to ticket "${title}"`,
+      temporary: (n: number): string => `Temporary (${n})`,
+      temporaryEntry: (title: string): string => `Temporary · ${title}`,
+      closeTemporary: "Remove from Temporary",
     },
     overview: {
       title: "Overview",

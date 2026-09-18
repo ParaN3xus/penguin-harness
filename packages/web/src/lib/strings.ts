@@ -3514,10 +3514,11 @@ Benchmark：
       noEmployees: "这个组织还没有员工",
       untitledSession: "未命名会话",
       loadFailed: "员工列表加载失败",
-      /** The header of the one ticket session opened from a ticket, drawn above the desks while it is on screen. */
-      temporary: "临时",
-      closeTemporary: "关闭临时会话",
-      backToTicket: (title: string): string => `返回工单「${title}」`,
+      /** The group below the desks listing the ticket sessions opened from a ticket, each kept until removed. */
+      temporary: (n: number): string => `临时（${n}）`,
+      /** A Temporary entry's name on the collapsed rail, where no group header says where it belongs. */
+      temporaryEntry: (title: string): string => `临时 · ${title}`,
+      closeTemporary: "从临时中移除",
     },
     overview: {
       title: "概览",

@@ -20,13 +20,13 @@
  * button that underlines on hover and names its destination in its tooltip — while the rest of
  * their row stays inert, so the controls and marks beside a title are never a click target.
  * A parent or a child swaps the dialog's own ticket. Only a session leaves the page, since a
- * conversation has no in-place form: it opens as the full conversation page, and the company
- * sidebar keeps one temporary row for it, with the way back to this ticket (temp-session.ts).
+ * conversation has no in-place form: it opens as the full conversation page and joins the
+ * company sidebar's Temporary group (temp-session.ts).
  * A session's live status is not drawn: a ticket reports its own work, not what a session is
  * doing this second.
  */
 import { Fragment, useCallback, useEffect, useId, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import type {
   OrgEmployeeItem,
   OrgTicketDetail,
@@ -79,6 +79,8 @@ import {
 } from "./ticket-board";
 import { ticketHistoryRows, ticketSummaryCounts } from "./ticket-history";
 import { dayKey } from "./calendar-geom";
+import { orgKey } from "./company-nav";
+import { deskRows } from "./org-sessions";
 import { chatPath, openTempSession } from "./temp-session";
 
 const PRIORITIES: readonly OrgTicketPriority[] = ["P0", "P1", "P2"];
@@ -141,7 +143,6 @@ function TicketDialog({
   onOpenTicket: (ticketId: string) => void;
 }) {
   const navigate = useNavigate();
-  const location = useLocation();
   const company = useCompany();
   const { setCurrentAgentId } = useProject();
   const { currency } = useTheme();
@@ -389,21 +390,19 @@ function TicketDialog({
     );
 
   /**
-   * Opens a ticket session: the one way out of the dialog. The session becomes the company
-   * sidebar's temporary row — remembering this page and this ticket as the way back — and the
+   * Opens a ticket session: the one way out of the dialog. The session goes to the top of the
+   * company sidebar's Temporary group (a desk session keeps its desk row instead) and the
    * conversation opens as its full page. The current Agent follows it, as a desk row's does.
    */
   const openSession = (session: { sessionId: string; agentId: string; title?: string }) => {
-    if (detail === null) return;
-    openTempSession({
+    const desks = deskRows(company.orgChart, company.orgSessions.get(orgKey(projectId, orgId)));
+    openTempSession(
+      me,
       projectId,
       orgId,
-      sessionId: session.sessionId,
-      agentId: session.agentId,
-      title: session.title ?? "",
-      ticket: { ticketId: detail.ticketId, title: detail.title },
-      returnTo: `${location.pathname}${location.search}`,
-    });
+      { sessionId: session.sessionId, agentId: session.agentId, title: session.title ?? "" },
+      desks.map((d) => d.sessionId),
+    );
     if (session.agentId !== "") setCurrentAgentId(session.agentId);
     onClose();
     navigate(chatPath(session.sessionId));

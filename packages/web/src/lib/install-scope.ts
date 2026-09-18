@@ -302,10 +302,10 @@ export const KEY_RULES: readonly KeyRule[] = [
     why: "A dismissed empty-page note, keyed by user, Project and organization id of this root.",
   },
   {
-    kind: "exact",
-    key: "penguin.company.tempSession",
+    kind: "family",
+    key: "penguin.orgTempSessions.",
     scope: "install",
-    why: "The company sidebar's temporary ticket-session row (sessionStorage), naming a Project, organization, Session and ticket of this root.",
+    why: "The company sidebar's Temporary group of ticket sessions, keyed by user, Project and organization id and naming Sessions and Agents of this root.",
   },
   {
     kind: "family",

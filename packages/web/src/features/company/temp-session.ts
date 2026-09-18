@@ -1,175 +1,272 @@
 /**
- * The company sidebar's temporary row: the one ticket session the reader opened from a ticket.
+ * The company sidebar's Temporary group: the ticket sessions the reader opened from a ticket.
  *
- * Ticket sessions are never listed in the sidebar — there are many of them and each belongs to
- * the ticket that started it — but a conversation on screen with nothing in the sidebar naming
- * it leaves the reader nowhere to stand. So opening one from a ticket's dialog records it here,
- * the sidebar draws it as a single row under a 「临时」 header, and the record lasts exactly as
- * long as the reader stays on that conversation:
+ * Ticket sessions are never listed wholesale. There are many of them, and each belongs to the
+ * ticket that started it. But a conversation opened from a ticket needs a place in the sidebar
+ * that names it and leads back to it later. So opening one from a ticket's dialog adds it to
+ * this list, and the sidebar draws the list as a collapsible group below the Desks group:
  *
- * - While the navigation to it is still on its way, the record survives on the page it was
- *   opened from (the router commits a new location in a transition, after the click).
- * - Once the conversation has been reached, any other location drops it: another session, a
- *   channel, a page.
- * - Dismissing it, or following its "back to ticket" link, returns to the page it was opened
- *   from with the ticket open again.
+ * - Opening a session puts it at the top, or moves it there if it is already listed.
+ * - An entry stays until the reader removes it with its ✕. Going elsewhere keeps it, and so does
+ *   a reload.
+ * - The list holds at most MAX_TEMP_SESSIONS entries; opening one more drops the oldest.
+ * - A desk session is never listed: its desk row already names it.
  *
- * The lifecycle is a pure function of the record and the current path, so it holds however
- * often and from wherever it is evaluated; the record is mirrored into sessionStorage so a
- * reload on the conversation keeps its row. State is module-level: the record belongs to the
- * browser tab, like the location it follows.
+ * The list is kept in localStorage, one key per user, Project and organization: two people on
+ * one browser keep separate lists, and one organization's sessions never show in another's
+ * sidebar. Nothing here follows the location; where the reader is only decides which row is
+ * marked as the one on screen.
+ *
+ * The list logic is pure, and the store takes its storage as an argument (vitest runs in Node,
+ * with no localStorage). A read that fails lists nothing, and a write that fails keeps the list
+ * in memory for this tab.
  */
-import { useEffect, useSyncExternalStore } from "react";
-import { useLocation } from "react-router";
+import { useSyncExternalStore } from "react";
 
-export interface TempSession {
-  projectId: string;
-  orgId: string;
+/** One ticket session in the Temporary group. */
+export interface TempSessionEntry {
   sessionId: string;
   /** The employee the session runs as: the row's avatar. */
   agentId: string;
   /** The title the ticket listed it under, until the session list has its own. */
   title: string;
-  /** The ticket it was opened from, for the way back; null when it was opened from elsewhere. */
-  ticket: { ticketId: string; title: string } | null;
-  /** The location (path and query) it was opened from — where dismissing it returns. */
-  returnTo: string;
-  /** The conversation has been on screen at least once. */
-  arrived: boolean;
 }
+
+/** A row the group draws: an entry, marked when it is the session on screen. */
+export interface TempSessionRow extends TempSessionEntry {
+  active: boolean;
+}
+
+/**
+ * The most entries one list holds, newest first. Enough for the tickets of a working day, and
+ * short enough to stay a glanceable group rather than a second session list.
+ */
+export const MAX_TEMP_SESSIONS = 20;
 
 /** The route a Session opens at. */
 export function chatPath(sessionId: string): string {
   return `/chat/${sessionId}`;
 }
 
-/** The path part of a stored location (the query and hash dropped). */
-function pathOf(location: string): string {
-  const cut = location.search(/[?#]/);
-  return cut === -1 ? location : location.slice(0, cut);
+const KEY_PREFIX = "penguin.orgTempSessions.";
+
+/** The list's storage key: one per user, Project and organization. A signed-out browser gets its own bucket. */
+export function tempSessionsKey(userId: string | null, projectId: string, orgId: string): string {
+  return `${KEY_PREFIX}${userId ?? ""}.${projectId}.${orgId}`;
 }
+
+function isDesk(sessionId: string, deskSessionIds: Iterable<string | null>): boolean {
+  for (const id of deskSessionIds) if (id === sessionId) return true;
+  return false;
+}
+
+const EMPTY: readonly TempSessionEntry[] = [];
 
 /**
- * The record after the shell has settled on `pathname`: kept (and marked arrived) on its own
- * conversation, kept on the page it was opened from while the navigation is still pending, and
- * dropped everywhere else.
+ * The list after opening `entry`: at the top and listed once, with the oldest dropped past the
+ * cap. A desk session leaves the list as it was, the same array.
  */
-export function tempSessionAt(temp: TempSession | null, pathname: string): TempSession | null {
-  if (temp === null) return null;
-  if (pathname === chatPath(temp.sessionId)) {
-    return temp.arrived ? temp : { ...temp, arrived: true };
-  }
-  if (!temp.arrived && pathname === pathOf(temp.returnTo)) return temp;
-  return null;
-}
-
-/**
- * The record the sidebar draws for one organization: that organization's, and not a desk the
- * 工位 group already lists (a desk can contribute to a ticket too, and has its row already).
- */
-export function visibleTempSession(
-  temp: TempSession | null,
-  org: { projectId: string; orgId: string } | null,
-  deskSessionIds: Iterable<string | null>,
-): TempSession | null {
-  if (temp === null || org === null) return null;
-  if (temp.projectId !== org.projectId || temp.orgId !== org.orgId) return null;
-  for (const id of deskSessionIds) if (id === temp.sessionId) return null;
-  return temp;
-}
-
-// ---------------------------------------------------------------------------
-// The store: one record per browser tab.
-// ---------------------------------------------------------------------------
-
-const STORAGE_KEY = "penguin.company.tempSession";
-
-function isTempSession(value: unknown): value is TempSession {
-  if (typeof value !== "object" || value === null) return false;
-  const v = value as Record<string, unknown>;
-  const ticket = v.ticket as Record<string, unknown> | null | undefined;
-  return (
-    typeof v.projectId === "string" &&
-    typeof v.orgId === "string" &&
-    typeof v.sessionId === "string" &&
-    typeof v.agentId === "string" &&
-    typeof v.title === "string" &&
-    typeof v.returnTo === "string" &&
-    typeof v.arrived === "boolean" &&
-    (ticket === null ||
-      (typeof ticket === "object" &&
-        typeof ticket.ticketId === "string" &&
-        typeof ticket.title === "string"))
+export function withOpened(
+  list: readonly TempSessionEntry[],
+  entry: TempSessionEntry,
+  deskSessionIds: Iterable<string | null> = [],
+): readonly TempSessionEntry[] {
+  if (isDesk(entry.sessionId, deskSessionIds)) return list;
+  return [entry, ...list.filter((e) => e.sessionId !== entry.sessionId)].slice(
+    0,
+    MAX_TEMP_SESSIONS,
   );
 }
 
-function readStored(): TempSession | null {
-  try {
-    const raw = globalThis.sessionStorage?.getItem(STORAGE_KEY);
-    if (raw === null || raw === undefined) return null;
-    const parsed: unknown = JSON.parse(raw);
-    return isTempSession(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeStored(temp: TempSession | null): void {
-  try {
-    if (temp === null) globalThis.sessionStorage?.removeItem(STORAGE_KEY);
-    else globalThis.sessionStorage?.setItem(STORAGE_KEY, JSON.stringify(temp));
-  } catch {
-    // Storage blocked: the row still works, it just does not survive a reload.
-  }
-}
-
-let current: TempSession | null = readStored();
-const listeners = new Set<() => void>();
-
-function set(next: TempSession | null): void {
-  if (next === current) return;
-  current = next;
-  writeStored(next);
-  for (const listener of listeners) listener();
-}
-
-export function getTempSession(): TempSession | null {
-  return current;
-}
-
-/** Records the ticket session being opened; the caller navigates to it. */
-export function openTempSession(temp: Omit<TempSession, "arrived">): void {
-  set({ ...temp, arrived: false });
-}
-
-export function clearTempSession(): void {
-  set(null);
-}
-
-/** Applies the lifecycle to the location the shell is on. */
-export function settleTempSession(pathname: string): void {
-  set(tempSessionAt(current, pathname));
-}
-
-export function subscribeTempSession(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-export function useTempSession(): TempSession | null {
-  return useSyncExternalStore(subscribeTempSession, getTempSession, getTempSession);
+/** The list after removing one session. A session it does not hold leaves it as it was, the same array. */
+export function withDismissed(
+  list: readonly TempSessionEntry[],
+  sessionId: string,
+): readonly TempSessionEntry[] {
+  if (!list.some((e) => e.sessionId === sessionId)) return list;
+  return list.filter((e) => e.sessionId !== sessionId);
 }
 
 /**
- * Keeps the record in step with the location. Mounted once, by the app layout, which is on
- * screen for every route — so a navigation made while the sidebar is collapsed or its drawer
- * closed is still seen.
+ * The rows the group draws, wherever the reader is: every entry except a desk session, which
+ * has its desk row. The session on screen is marked; being somewhere else only moves the mark.
  */
-export function useTempSessionTracker(): void {
-  const { pathname } = useLocation();
-  useEffect(() => {
-    settleTempSession(pathname);
-  }, [pathname]);
+export function tempSessionRows(
+  list: readonly TempSessionEntry[],
+  deskSessionIds: Iterable<string | null>,
+  activeSessionId: string | null,
+): TempSessionRow[] {
+  const desks = new Set(deskSessionIds);
+  return list
+    .filter((e) => !desks.has(e.sessionId))
+    .map((e) => ({ ...e, active: e.sessionId === activeSessionId }));
+}
+
+/**
+ * A stored list, entry by entry. An entry that is not one (a truncated write, a hand edit) is
+ * skipped rather than failing the list; a repeated session keeps its newest place, and the cap
+ * holds even for a list written by hand.
+ */
+export function parseTempSessions(raw: string | null): TempSessionEntry[] {
+  if (raw === null || raw === "") return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const out: TempSessionEntry[] = [];
+  const seen = new Set<string>();
+  for (const item of parsed) {
+    if (typeof item !== "object" || item === null) continue;
+    const { sessionId, agentId, title } = item as Record<string, unknown>;
+    if (typeof sessionId !== "string" || sessionId === "" || seen.has(sessionId)) continue;
+    if (typeof agentId !== "string") continue;
+    seen.add(sessionId);
+    out.push({ sessionId, agentId, title: typeof title === "string" ? title : "" });
+    if (out.length === MAX_TEMP_SESSIONS) break;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// The store
+// ---------------------------------------------------------------------------
+
+/** The subset of localStorage the store uses; tests pass an in-memory one. */
+export interface TempSessionStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export interface TempSessionStore {
+  /** One list, newest first. The same array until it changes, as useSyncExternalStore needs. */
+  list(key: string): readonly TempSessionEntry[];
+  open(key: string, entry: TempSessionEntry, deskSessionIds?: Iterable<string | null>): void;
+  dismiss(key: string, sessionId: string): void;
+  /** Drops the copy held for `key` (for every key when null), so the next read goes back to storage. */
+  reread(key: string | null): void;
+  subscribe(listener: () => void): () => void;
+}
+
+/**
+ * A store over `storage`, resolved on each access so a storage that throws (blocked site data)
+ * is caught where it is used. Each list is read from storage once and then held in memory.
+ */
+export function createTempSessionStore(
+  storage: () => TempSessionStorage | null | undefined,
+): TempSessionStore {
+  const lists = new Map<string, readonly TempSessionEntry[]>();
+  const listeners = new Set<() => void>();
+  const notify = (): void => {
+    for (const listener of listeners) listener();
+  };
+
+  const list = (key: string): readonly TempSessionEntry[] => {
+    const held = lists.get(key);
+    if (held !== undefined) return held;
+    let read: readonly TempSessionEntry[] = EMPTY;
+    try {
+      const parsed = parseTempSessions(storage()?.getItem(key) ?? null);
+      if (parsed.length > 0) read = parsed;
+    } catch {
+      // Unreadable storage: nothing is listed.
+    }
+    lists.set(key, read);
+    return read;
+  };
+
+  const write = (key: string, next: readonly TempSessionEntry[]): void => {
+    lists.set(key, next);
+    try {
+      const target = storage();
+      if (next.length === 0) target?.removeItem(key);
+      else target?.setItem(key, JSON.stringify(next));
+    } catch {
+      // Quota or blocked storage: the list lasts as long as this tab.
+    }
+    notify();
+  };
+
+  return {
+    list,
+    open(key, entry, deskSessionIds = []) {
+      const current = list(key);
+      const next = withOpened(current, entry, deskSessionIds);
+      if (next !== current) write(key, next);
+    },
+    dismiss(key, sessionId) {
+      const current = list(key);
+      const next = withDismissed(current, sessionId);
+      if (next !== current) write(key, next);
+    },
+    reread(key) {
+      if (key === null) lists.clear();
+      else if (!lists.delete(key)) return;
+      notify();
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}
+
+/** The app's store, over this browser's localStorage. */
+const store = createTempSessionStore(() => globalThis.localStorage);
+
+let watchingOtherTabs = false;
+
+/**
+ * Another tab's write replaces the copy held here. Without this, a tab still holding an entry
+ * that another tab removed would write it back the next time it opened or removed one.
+ */
+function watchOtherTabs(): void {
+  if (watchingOtherTabs || typeof window === "undefined") return;
+  watchingOtherTabs = true;
+  window.addEventListener("storage", (event) => {
+    if (event.key === null) store.reread(null);
+    else if (event.key.startsWith(KEY_PREFIX)) store.reread(event.key);
+  });
+}
+
+function subscribe(listener: () => void): () => void {
+  watchOtherTabs();
+  return store.subscribe(listener);
+}
+
+/** One organization's Temporary list for this user, newest first. */
+export function useTempSessions(
+  userId: string | null,
+  projectId: string,
+  orgId: string,
+): readonly TempSessionEntry[] {
+  const key = tempSessionsKey(userId, projectId, orgId);
+  const read = (): readonly TempSessionEntry[] => store.list(key);
+  return useSyncExternalStore(subscribe, read, read);
+}
+
+/** Adds a ticket session to the list, or moves it to the top; a desk session is left out. The caller navigates to it. */
+export function openTempSession(
+  userId: string | null,
+  projectId: string,
+  orgId: string,
+  entry: TempSessionEntry,
+  deskSessionIds: Iterable<string | null>,
+): void {
+  store.open(tempSessionsKey(userId, projectId, orgId), entry, deskSessionIds);
+}
+
+/** Removes one entry. Nothing navigates: the page stays where it is, even on that session. */
+export function dismissTempSession(
+  userId: string | null,
+  projectId: string,
+  orgId: string,
+  sessionId: string,
+): void {
+  store.dismiss(tempSessionsKey(userId, projectId, orgId), sessionId);
 }

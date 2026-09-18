@@ -1,130 +1,254 @@
 /**
- * temp-session.ts unit tests: the company sidebar's temporary row for a ticket session. It
- * survives the pending navigation on the page it was opened from, is marked arrived on its own
- * conversation, and drops on any other location; the sidebar draws it only for its own
- * organization and never for a desk the 工位 group already lists; the store follows the same
- * lifecycle and tells its subscribers.
+ * temp-session.ts unit tests: the company sidebar's Temporary group of ticket sessions. Opening
+ * a session adds it at the top or moves it there, ✕ removes it, and nothing else does: going
+ * elsewhere only moves the on-screen mark, and a reload reads the list back from storage. The
+ * list is capped with the oldest dropped, never holds a desk session, and is kept per user,
+ * Project and organization.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
+  MAX_TEMP_SESSIONS,
   chatPath,
-  clearTempSession,
-  getTempSession,
-  openTempSession,
-  settleTempSession,
-  subscribeTempSession,
-  tempSessionAt,
-  visibleTempSession,
+  createTempSessionStore,
+  parseTempSessions,
+  tempSessionRows,
+  tempSessionsKey,
+  withDismissed,
+  withOpened,
 } from "../src/features/company/temp-session";
-import type { TempSession } from "../src/features/company/temp-session";
+import type { TempSessionEntry, TempSessionStorage } from "../src/features/company/temp-session";
 
-const BOARD = "/org/proj/acme/tickets";
-
-function temp(over: Partial<TempSession> = {}): TempSession {
+/** In-memory storage (vitest runs in a Node environment, no localStorage). */
+function memStorage(): TempSessionStorage & { map: Map<string, string> } {
+  const map = new Map<string, string>();
   return {
-    projectId: "proj",
-    orgId: "acme",
-    sessionId: "sess_ticket",
-    agentId: "acme_dev",
-    title: "Build the site",
-    ticket: { ticketId: "2026-09-16-site", title: "Marketplace site" },
-    returnTo: `${BOARD}?ticket=2026-09-16-site`,
-    arrived: false,
-    ...over,
+    map,
+    getItem: (k) => map.get(k) ?? null,
+    setItem: (k, v) => void map.set(k, v),
+    removeItem: (k) => void map.delete(k),
   };
 }
 
-/** The record as the dialog opens it: everything but whether it has arrived. */
-function opened(): Omit<TempSession, "arrived"> {
-  const { projectId, orgId, sessionId, agentId, title, ticket, returnTo } = temp();
-  return { projectId, orgId, sessionId, agentId, title, ticket, returnTo };
+function entry(n: number | string, over: Partial<TempSessionEntry> = {}): TempSessionEntry {
+  return { sessionId: `sess_${n}`, agentId: "acme_dev", title: `Ticket session ${n}`, ...over };
 }
 
-afterEach(() => {
-  clearTempSession();
+const ids = (list: readonly { sessionId: string }[]): string[] => list.map((e) => e.sessionId);
+
+const KEY = tempSessionsKey("admin", "proj", "acme");
+
+describe("temporary session list", () => {
+  it("opens a conversation at its own route", () => {
+    expect(chatPath("sess_a")).toBe("/chat/sess_a");
+  });
+
+  it("adds an opened session at the top", () => {
+    const one = withOpened([], entry("a"));
+    expect(one).toEqual([entry("a")]);
+    expect(ids(withOpened(one, entry("b")))).toEqual(["sess_b", "sess_a"]);
+  });
+
+  it("moves a session opened again to the top, listed once and with the title it was opened under", () => {
+    const list = [entry("c"), entry("b"), entry("a")];
+    const next = withOpened(list, entry("a", { title: "Renamed" }));
+    expect(ids(next)).toEqual(["sess_a", "sess_c", "sess_b"]);
+    expect(next[0]!.title).toBe("Renamed");
+  });
+
+  it("removes a dismissed session and keeps the rest in order", () => {
+    const list = [entry("c"), entry("b"), entry("a")];
+    expect(ids(withDismissed(list, "sess_b"))).toEqual(["sess_c", "sess_a"]);
+    // A session the list does not hold changes nothing, down to the array itself.
+    expect(withDismissed(list, "sess_gone")).toBe(list);
+  });
+
+  it(`keeps the newest ${MAX_TEMP_SESSIONS} and drops the oldest`, () => {
+    let list: readonly TempSessionEntry[] = [];
+    for (let n = 1; n <= MAX_TEMP_SESSIONS + 1; n += 1) list = withOpened(list, entry(n));
+    expect(list).toHaveLength(MAX_TEMP_SESSIONS);
+    expect(list[0]!.sessionId).toBe(`sess_${MAX_TEMP_SESSIONS + 1}`);
+    expect(ids(list)).not.toContain("sess_1");
+    // Moving one to the top of a full list drops nothing else.
+    const moved = withOpened(list, entry(5));
+    expect(moved).toHaveLength(MAX_TEMP_SESSIONS);
+    expect(moved[0]!.sessionId).toBe("sess_5");
+    expect(ids(moved)).toContain("sess_2");
+  });
+
+  it("never lists a desk session, which has its desk row", () => {
+    const list = [entry("a")];
+    expect(withOpened(list, entry("desk"), ["sess_desk", null])).toBe(list);
+    // One recorded before its desk was known is still not drawn.
+    const rows = tempSessionRows([entry("desk"), entry("a")], [null, "sess_desk"], null);
+    expect(ids(rows)).toEqual(["sess_a"]);
+  });
+
+  it("keeps every entry wherever the reader goes; only the on-screen mark moves", () => {
+    const list = [entry("b"), entry("a")];
+    const onA = tempSessionRows(list, [], "sess_a");
+    expect(onA.map((r) => [r.sessionId, r.active])).toEqual([
+      ["sess_b", false],
+      ["sess_a", true],
+    ]);
+    // Another conversation, a desk, or a page with no conversation at all.
+    for (const elsewhere of ["sess_other", "sess_desk", null]) {
+      const rows = tempSessionRows(list, ["sess_desk"], elsewhere);
+      expect(ids(rows)).toEqual(["sess_b", "sess_a"]);
+      expect(rows.every((r) => !r.active)).toBe(true);
+    }
+  });
+
+  it("removes only the row when the session on screen is dismissed", () => {
+    const list = withDismissed([entry("b"), entry("a")], "sess_a");
+    expect(tempSessionRows(list, [], "sess_a")).toEqual([{ ...entry("b"), active: false }]);
+  });
 });
 
-describe("temporary session lifecycle", () => {
-  it("is the conversation's own route", () => {
-    expect(chatPath("sess_ticket")).toBe("/chat/sess_ticket");
+describe("stored temporary session list", () => {
+  it("reads nothing from a missing, malformed or non-list value", () => {
+    expect(parseTempSessions(null)).toEqual([]);
+    expect(parseTempSessions("")).toEqual([]);
+    expect(parseTempSessions("{not json")).toEqual([]);
+    expect(parseTempSessions('{"sessionId":"sess_a"}')).toEqual([]);
   });
 
-  it("waits on the page it was opened from while the navigation is pending", () => {
-    const t = temp();
-    expect(tempSessionAt(t, BOARD)).toBe(t);
+  it("skips entries that are not ones and keeps the newest place of a repeated session", () => {
+    const raw = JSON.stringify([
+      entry("b"),
+      { sessionId: "sess_c", agentId: "acme_dev" },
+      { sessionId: "sess_d" },
+      { sessionId: "", agentId: "acme_dev", title: "No id" },
+      "sess_e",
+      null,
+      { ...entry("b"), title: "Older copy" },
+      entry("a"),
+    ]);
+    expect(parseTempSessions(raw)).toEqual([
+      entry("b"),
+      { sessionId: "sess_c", agentId: "acme_dev", title: "" },
+      entry("a"),
+    ]);
   });
 
-  it("is marked arrived on its conversation, and stays the same record once it is", () => {
-    const arrived = tempSessionAt(temp(), "/chat/sess_ticket");
-    expect(arrived).toEqual(temp({ arrived: true }));
-    expect(tempSessionAt(arrived, "/chat/sess_ticket")).toBe(arrived);
-  });
-
-  it("drops on any other location once the conversation has been reached", () => {
-    const arrived = temp({ arrived: true });
-    expect(tempSessionAt(arrived, BOARD)).toBeNull();
-    expect(tempSessionAt(arrived, "/chat/sess_other")).toBeNull();
-    expect(tempSessionAt(arrived, "/org/proj/acme/channels/default_channel")).toBeNull();
-    expect(tempSessionAt(arrived, "/org/proj/acme/overview")).toBeNull();
-  });
-
-  it("drops a pending record that ended up anywhere but its origin or its conversation", () => {
-    expect(tempSessionAt(temp(), "/chat/sess_redirected")).toBeNull();
-    expect(tempSessionAt(temp(), "/org/proj/acme/overview")).toBeNull();
-  });
-
-  it("stays null without a record", () => {
-    expect(tempSessionAt(null, "/chat/sess_ticket")).toBeNull();
-  });
-});
-
-describe("visible temporary session", () => {
-  const org = { projectId: "proj", orgId: "acme" };
-
-  it("is drawn for its own organization", () => {
-    const t = temp();
-    expect(visibleTempSession(t, org, ["sess_desk", null])).toBe(t);
-  });
-
-  it("is not drawn for another organization, or with none open", () => {
-    expect(visibleTempSession(temp(), { projectId: "proj", orgId: "other" }, [])).toBeNull();
-    expect(visibleTempSession(temp(), { projectId: "other", orgId: "acme" }, [])).toBeNull();
-    expect(visibleTempSession(temp(), null, [])).toBeNull();
-  });
-
-  it("is not drawn for a desk, which the 工位 group already lists", () => {
-    expect(visibleTempSession(temp({ sessionId: "sess_desk" }), org, ["sess_desk"])).toBeNull();
+  it("holds the cap for a list written by hand", () => {
+    const raw = JSON.stringify(Array.from({ length: MAX_TEMP_SESSIONS + 5 }, (_, i) => entry(i)));
+    expect(parseTempSessions(raw)).toHaveLength(MAX_TEMP_SESSIONS);
   });
 });
 
 describe("temporary session store", () => {
-  it("follows a ticket session from the board to its conversation and away again", () => {
-    let notified = 0;
-    const unsubscribe = subscribeTempSession(() => {
-      notified += 1;
-    });
-    openTempSession(opened());
-    expect(getTempSession()).toEqual(temp());
-    expect(notified).toBe(1);
+  it("survives a reload: a new store over the same storage reads the list back", () => {
+    const storage = memStorage();
+    const before = createTempSessionStore(() => storage);
+    before.open(KEY, entry("a"));
+    before.open(KEY, entry("b"));
+    before.open(KEY, entry("c"));
+    before.dismiss(KEY, "sess_b");
 
-    // The board re-renders before the router commits the conversation: the record holds.
-    settleTempSession(BOARD);
-    expect(getTempSession()).toEqual(temp());
-    expect(notified).toBe(1);
-
-    settleTempSession("/chat/sess_ticket");
-    expect(getTempSession()).toEqual(temp({ arrived: true }));
-    expect(notified).toBe(2);
-
-    settleTempSession("/org/proj/acme/channels/default_channel");
-    expect(getTempSession()).toBeNull();
-    expect(notified).toBe(3);
-    unsubscribe();
+    const after = createTempSessionStore(() => storage);
+    expect(after.list(KEY)).toEqual([entry("c"), entry("a")]);
   });
 
-  it("clears on request", () => {
-    openTempSession(opened());
-    clearTempSession();
-    expect(getTempSession()).toBeNull();
+  it("removes the stored key once the last entry is dismissed", () => {
+    const storage = memStorage();
+    const store = createTempSessionStore(() => storage);
+    store.open(KEY, entry("a"));
+    expect(storage.map.has(KEY)).toBe(true);
+    store.dismiss(KEY, "sess_a");
+    expect(storage.map.has(KEY)).toBe(false);
+    expect(createTempSessionStore(() => storage).list(KEY)).toEqual([]);
+  });
+
+  it("keeps one list per user, Project and organization", () => {
+    const keys = [
+      tempSessionsKey("admin", "proj", "acme"),
+      tempSessionsKey("admin", "proj", "globex"),
+      tempSessionsKey("admin", "other_proj", "acme"),
+      tempSessionsKey("dana", "proj", "acme"),
+      tempSessionsKey(null, "proj", "acme"),
+    ];
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const key of keys) expect(key.startsWith("penguin.orgTempSessions.")).toBe(true);
+
+    const storage = memStorage();
+    const store = createTempSessionStore(() => storage);
+    store.open(keys[0]!, entry("a"));
+    store.open(keys[1]!, entry("b"));
+    expect(store.list(keys[0]!)).toEqual([entry("a")]);
+    expect(store.list(keys[1]!)).toEqual([entry("b")]);
+    for (const key of keys.slice(2)) expect(store.list(key)).toEqual([]);
+    // And the same after a reload.
+    const reloaded = createTempSessionStore(() => storage);
+    expect(reloaded.list(keys[0]!)).toEqual([entry("a")]);
+    expect(reloaded.list(keys[3]!)).toEqual([]);
+  });
+
+  it("leaves a desk session out of the stored list", () => {
+    const storage = memStorage();
+    const store = createTempSessionStore(() => storage);
+    store.open(KEY, entry("a"));
+    store.open(KEY, entry("desk"), ["sess_desk"]);
+    expect(store.list(KEY)).toEqual([entry("a")]);
+  });
+
+  it("tells subscribers about a change and nothing else, and hands out the same array until one", () => {
+    const storage = memStorage();
+    const store = createTempSessionStore(() => storage);
+    let notified = 0;
+    const unsubscribe = store.subscribe(() => {
+      notified += 1;
+    });
+    const empty = store.list(KEY);
+    expect(store.list(KEY)).toBe(empty);
+
+    store.open(KEY, entry("a"));
+    expect(notified).toBe(1);
+    const one = store.list(KEY);
+    expect(one).not.toBe(empty);
+    expect(store.list(KEY)).toBe(one);
+
+    store.open(KEY, entry("desk"), ["sess_desk"]);
+    store.dismiss(KEY, "sess_gone");
+    expect(notified).toBe(1);
+    expect(store.list(KEY)).toBe(one);
+
+    store.dismiss(KEY, "sess_a");
+    expect(notified).toBe(2);
+    unsubscribe();
+    store.open(KEY, entry("b"));
+    expect(notified).toBe(2);
+  });
+
+  it("rereads a list another tab changed, so an entry removed there is not written back", () => {
+    const storage = memStorage();
+    const here = createTempSessionStore(() => storage);
+    const there = createTempSessionStore(() => storage);
+    here.open(KEY, entry("a"));
+    expect(there.list(KEY)).toEqual([entry("a")]);
+
+    here.dismiss(KEY, "sess_a");
+    let notified = 0;
+    there.subscribe(() => {
+      notified += 1;
+    });
+    there.reread(KEY);
+    expect(notified).toBe(1);
+    expect(there.list(KEY)).toEqual([]);
+    there.open(KEY, entry("b"));
+    expect(createTempSessionStore(() => storage).list(KEY)).toEqual([entry("b")]);
+
+    // A key this store never read has nothing to drop, so nobody is told.
+    const before = notified;
+    there.reread(tempSessionsKey("admin", "proj", "globex"));
+    expect(notified).toBe(before);
+  });
+
+  it("lists nothing from a storage that throws, and keeps what is opened for this tab", () => {
+    const blocked = createTempSessionStore(() => {
+      throw new Error("site data is blocked");
+    });
+    expect(blocked.list(KEY)).toEqual([]);
+    blocked.open(KEY, entry("a"));
+    expect(blocked.list(KEY)).toEqual([entry("a")]);
   });
 });

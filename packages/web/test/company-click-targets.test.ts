@@ -45,6 +45,7 @@ const MODULES = [
   "features/company/handbook-page.tsx",
   "features/company/org-chart-page.tsx",
   "features/company/org-layout.tsx",
+  "features/company/org-session-groups.tsx",
   "features/company/overview-page.tsx",
   "features/company/shared.tsx",
   "features/company/ticket-dialog.tsx",
