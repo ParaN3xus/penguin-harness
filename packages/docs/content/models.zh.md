@@ -352,7 +352,7 @@ PenguinHarness 升级可能改变内置的预置模型目录。一旦发生，Pr
 
 ### 把模型添加到 vLLM 分组
 
-把模型添加到 **vLLM** 分组。协议固定为 `openai-chat-vllm-adapter`，分组没有预置 base URL，所以要把**自定义 base URL** 设置为你的服务器地址。
+把模型添加到 **vLLM** 分组。协议固定为 `openai-chat-vllm-adapter`，分组没有预置 base URL，所以要把**自定义 base URL** 设置为你的服务器地址。同时填上 **API key**：服务器的 key，服务器不校验 key 时随便填一个占位值也行。自带 base URL 的条目不会由服务端的 `OPENAI_API_KEY` 覆盖，没有 key 的条目会被拒绝。
 
 分组自带八个预置模型，价格均为 0：
 
@@ -374,6 +374,7 @@ PenguinHarness 升级可能改变内置的预置模型目录。一旦发生，Pr
 - `client_type = "openai-chat"`
 - `base_url` 指向服务器，例如 `http://127.0.0.1:8000/v1`
 - `model_id` 填服务器实际提供的模型名称
+- `api_key`：服务器的 key，服务器不校验 key 时填任意占位值——环境里的 `OPENAI_API_KEY` 不覆盖你自己的服务器
 
 对这类服务器，协议检测会判定为 `openai-chat`；也可以通过 base URL 字段的后缀菜单手动选定。
 

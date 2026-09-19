@@ -18,7 +18,11 @@
  * collapse errors into their outcome shape, nothing is caught here.
  */
 import { AutoLLMClient } from "@prismshadow/agenthub";
-import { ModelCredentialError, endpointEnvApiKey } from "../state/model-catalog.js";
+import {
+  ModelCredentialError,
+  endpointEnvApiKey,
+  modelEnvFallback,
+} from "../state/model-catalog.js";
 
 /** One endpoint listing request: which protocol to speak, and the credential/URL to speak it with. */
 export interface ListEndpointModelsOptions {
@@ -42,8 +46,18 @@ export async function listEndpointModels(options: ListEndpointModelsOptions): Pr
   const apiKey =
     options.apiKey || endpointEnvApiKey(options.clientType, options.baseUrl, options.env);
   if (apiKey === undefined) {
+    // Two different situations, two messages: the vendor's own endpoint with its variable
+    // simply unset, and an endpoint the environment is not lent to at all.
+    const allowed = modelEnvFallback({
+      provider: "custom",
+      modelId: "",
+      clientType: options.clientType,
+      baseUrl: options.baseUrl,
+    });
     throw new ModelCredentialError(
-      `No API key for ${options.baseUrl ?? "the endpoint"}. The environment lends a key only to a vendor's own endpoint: enter the endpoint's API key.`,
+      allowed !== undefined
+        ? `No API key for ${options.baseUrl ?? "the endpoint"}: ${allowed.envKey} is not set in the server environment. Enter the API key, or set the variable.`
+        : `No API key for ${options.baseUrl ?? "the endpoint"}. The environment lends a key only to a vendor's own endpoint: enter the endpoint's API key.`,
     );
   }
   const client = new AutoLLMClient({

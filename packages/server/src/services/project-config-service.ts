@@ -47,6 +47,7 @@ import {
   projectConfigPath,
   renderProjectConfigToml,
   modelEnvFallback,
+  modelEnvPreviewKey,
   resolveModelCredential,
   userText,
 } from "@prismshadow/penguin-core";
@@ -1000,8 +1001,9 @@ export class ProjectConfigService implements ProjectConfigStore {
   /**
    * Endpoint model listing for the add-group import (see EndpointModelListRequest). All
    * parameters come from the request — a group being created has no stored entry to fall
-   * back to; an omitted key follows the same environment chain as the connectivity test
-   * (the wrapped SDK reads the protocol's own variable). Never throws: SDK construction
+   * back to; an omitted key is lent the protocol's environment variable only when the URL is
+   * that vendor's own (core's endpointEnvApiKey), and refused otherwise. Never throws: SDK
+   * construction
    * and request failures collapse into `{ ok:false, message }`, an AgentHub
    * UnsupportedOperationError additionally sets `unsupported` so the dialog can point at
    * the manual path, and a listing that outlives LIST_MODELS_TIMEOUT_MS is reported as
@@ -1099,12 +1101,21 @@ export class ProjectConfigService implements ProjectConfigStore {
         // credential is inlined on the entry: a credential block is emitted if either api_key or base_url is present.
         const apiKey = optStr(m.api_key);
         const createdAt = optStr(m.created_at);
-        // Masked env-fallback preview, for exactly the entries the fallback is allowed:
-        // presence is implied by the field, the plaintext never leaves the server, and an
-        // empty variable counts as absent — it would not authenticate either. Read from this
-        // process's env, which on the desktop already includes the imported login-shell
+        // Masked env-fallback preview, for the entries the UI may present as covered (core's
+        // modelEnvPreviewKey — the dialog's hint reads the same function): a row on a vendor
+        // endpoint, or a keyless row in a group whose defaults are the vendor's. A vLLM preset
+        // or a custom row with no base URL does fall back under the rule, but is not shown as
+        // configured. Presence is implied by the field, the plaintext never leaves the server,
+        // and an empty variable counts as absent — it would not authenticate either. Read from
+        // this process's env, which on the desktop already includes the imported login-shell
         // variables.
-        const envValue = envKey !== undefined ? (process.env[envKey] ?? "") : "";
+        const previewKey = modelEnvPreviewKey({
+          provider,
+          modelId,
+          clientType,
+          baseUrl: credBaseUrl,
+        });
+        const envValue = previewKey !== undefined ? (process.env[previewKey] ?? "") : "";
         const envKeyMasked = envValue !== "" ? maskApiKey(envValue) : undefined;
         const info: ModelInfo = {
           provider,

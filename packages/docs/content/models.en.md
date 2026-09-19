@@ -352,7 +352,7 @@ A local inference server can join a Project in two ways.
 
 ### Add the model to the vLLM group
 
-Add the model to the **vLLM** group. The protocol is fixed to `openai-chat-vllm-adapter`, and the group has no preset base URL, so set **Custom base URL** to your server.
+Add the model to the **vLLM** group. The protocol is fixed to `openai-chat-vllm-adapter`, and the group has no preset base URL, so set **Custom base URL** to your server. Set **API key** too: the server's key, or any placeholder if it checks none. A row with its own base URL is never covered by the server's `OPENAI_API_KEY`, so a keyless row is refused.
 
 The group ships eight preset models at a price of 0:
 
@@ -374,6 +374,7 @@ Add a `custom` model with:
 - `client_type = "openai-chat"`
 - `base_url` pointing at the server, for example `http://127.0.0.1:8000/v1`
 - the served model name as `model_id`
+- `api_key`: the server's key, or any placeholder if it checks none — the environment's `OPENAI_API_KEY` does not cover a server of your own
 
 Protocol detection settles on `openai-chat` for such servers, and the base URL field's suffix menu selects it by hand.
 

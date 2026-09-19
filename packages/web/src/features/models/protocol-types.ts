@@ -7,7 +7,7 @@
  * only decide what the dialog shows and what is worth sending there.
  */
 import {
-  modelEnvFallback,
+  modelEnvPreviewKey,
   providerClientType,
   providerInfo,
 } from "@prismshadow/penguin-core/model-catalog";
@@ -166,11 +166,14 @@ export function envHintClientType(provider: string, clientType: string): string 
 
 /**
  * The variable the dialog's API-key field may promise for the entry as drafted, or undefined
- * when a blank key gets no fallback at all: core's modelEnvFallback over the form's group, id,
- * protocol (resolved as envHintClientType does) and base URL. A gateway row carries its
- * preset endpoint, so it resolves to nothing — the hint that used to read "leave empty to use
- * OPENAI_API_KEY" on a TokenDance or OpenRouter row was promising the user's OpenAI key to a
- * third party.
+ * when nothing should be promised: core's modelEnvPreviewKey — the same function the server's
+ * GET /models preview reads, so the hint and the card's "read from environment variable" can
+ * never disagree — over the form's group, id, protocol (resolved as envHintClientType does)
+ * and base URL. A gateway row carries its preset endpoint, so it resolves to nothing — the
+ * hint that used to read "leave empty to use OPENAI_API_KEY" on a TokenDance or OpenRouter row
+ * was promising the user's OpenAI key to a third party; a vLLM preset or a custom row with no
+ * base URL resolves to nothing either, so the field never suggests running a self-hosted id
+ * against api.openai.com.
  */
 export function envHintKeyFor(
   provider: string,
@@ -178,12 +181,12 @@ export function envHintKeyFor(
   clientType: string,
   baseUrl: string,
 ): string | undefined {
-  return modelEnvFallback({
+  return modelEnvPreviewKey({
     provider,
     modelId: modelId.trim(),
     clientType: envHintClientType(provider, clientType),
     baseUrl,
-  })?.envKey;
+  });
 }
 
 /*

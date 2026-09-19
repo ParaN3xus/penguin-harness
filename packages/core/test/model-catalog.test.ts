@@ -29,6 +29,7 @@ import {
   PENGUIN_GO_BASE_URL,
   endpointEnvApiKey,
   modelEnvFallback,
+  modelEnvPreviewKey,
   providerEnvFallbackKey,
   resolveModelCredential,
   sameEndpoint,
@@ -1943,6 +1944,85 @@ describe("modelEnvFallback / resolveModelCredential (a vendor key from the envir
     expect(sameEndpoint("https://api.openai.com/v1", "https://api.openai.com")).toBe(false);
     expect(sameEndpoint("http://host:8000/v1", "http://host:8001/v1")).toBe(false);
     expect(sameEndpoint("not a url", "not a url")).toBe(false);
+    // The cases that make this a security check — a string-prefix "simplification" would pass
+    // each of them, and each would carry the OpenAI key somewhere else.
+    const openai = "https://api.openai.com/v1";
+    expect(sameEndpoint(openai, "https://api.openai.com.evil.example/v1")).toBe(false);
+    expect(sameEndpoint(openai, "https://api.openai.com@evil.example/v1")).toBe(false);
+    expect(sameEndpoint(openai, "http://api.openai.com/v1")).toBe(false);
+    for (const lookalike of [
+      "https://api.openai.com.evil.example/v1",
+      "https://api.openai.com@evil.example/v1",
+      "http://api.openai.com/v1",
+    ]) {
+      expect(
+        modelEnvFallback({
+          provider: "custom",
+          modelId: "x",
+          clientType: "openai-chat",
+          baseUrl: lookalike,
+        }),
+        lookalike,
+      ).toBeUndefined();
+    }
+  });
+
+  it("refuses a keyless Bedrock row with a message that names the way out, not 'not the vendor's own'", () => {
+    expect(() =>
+      resolveModelCredential(
+        { provider: "anthropic", modelId: "claude-sonnet-5", baseUrl: "bedrock://us-east-1" },
+        { ANTHROPIC_API_KEY: "sk-ant" },
+      ),
+    ).toThrow(/Bedrock endpoint.*ANTHROPIC_BASE_URL=bedrock:\/\/us-east-1/);
+    // Rule 1 keeps Bedrock reachable: no base URL on the row, the region in the environment.
+    expect(
+      resolveModelCredential(
+        { provider: "anthropic", modelId: "claude-sonnet-5" },
+        { ANTHROPIC_BASE_URL: "bedrock://us-east-1" },
+      ),
+    ).toEqual({});
+  });
+
+  it("modelEnvPreviewKey presents a fallback as covering the row only where that is not a misconfiguration", () => {
+    // The eight vLLM presets ship with no base URL: they fall back under the rule, but must not
+    // read as "key configured" — that would run a self-hosted id against api.openai.com.
+    for (const m of MODEL_CATALOG.filter((v) => v.provider === "vllm")) {
+      const shape = { provider: m.provider, modelId: m.modelId, clientType: m.clientType };
+      expect(modelEnvFallback(shape)?.envKey, m.modelId).toBe("OPENAI_API_KEY");
+      expect(modelEnvPreviewKey(shape), m.modelId).toBeUndefined();
+    }
+    // A custom row saved without a base URL: same.
+    expect(
+      modelEnvPreviewKey({ provider: "custom", modelId: "m", clientType: "openai-chat" }),
+    ).toBeUndefined();
+    // A custom row that names the vendor's endpoint itself: previewed.
+    expect(
+      modelEnvPreviewKey({
+        provider: "custom",
+        modelId: "m",
+        clientType: "openai-chat",
+        baseUrl: "https://api.openai.com/v1",
+      }),
+    ).toBe("OPENAI_API_KEY");
+    // Vendor groups and the relay: previewed, as on main.
+    expect(modelEnvPreviewKey({ provider: "anthropic", modelId: "claude-sonnet-4-6" })).toBe(
+      "ANTHROPIC_API_KEY",
+    );
+    expect(modelEnvPreviewKey(shapeOf(catalogEntryFor("deepseek", "deepseek-flash")!))).toBe(
+      "DEEPSEEK_API_KEY",
+    );
+    expect(modelEnvPreviewKey(shapeOf(catalogEntryFor("penguin-go", "gemini-3.8-flash")!))).toBe(
+      "PENGUIN_GO_API_KEY",
+    );
+    // Refused rows are never previewed.
+    expect(modelEnvPreviewKey(shapeOf(catalogEntryFor("tokendance", "glm-5.3")!))).toBeUndefined();
+    expect(
+      modelEnvPreviewKey({
+        provider: "anthropic",
+        modelId: "claude-sonnet-4-6",
+        baseUrl: "https://proxy.example/anthropic",
+      }),
+    ).toBeUndefined();
   });
 });
 

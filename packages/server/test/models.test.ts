@@ -204,8 +204,8 @@ describe("models preset & catalog enrichment", () => {
             clientType: "openai-chat",
             baseUrl: "https://openrouter.ai/api/v1",
           },
-          // Custom rows are judged by their endpoint: none → the vendor's own; a private
-          // server → nothing.
+          // Custom rows are judged by their endpoint: none → the vendor's own (a fallback, but
+          // not a preview — see modelEnvPreviewKey); a private server → nothing.
           { provider: "custom", modelId: "my-model", clientType: "openai" },
           {
             provider: "custom",
@@ -213,6 +213,10 @@ describe("models preset & catalog enrichment", () => {
             clientType: "openai",
             baseUrl: "http://127.0.0.1:8000/v1",
           },
+          // A vLLM preset as seeded: no base URL, the vLLM adapter pinned. It falls back to
+          // OPENAI_API_KEY under the rule, but showing the mask would list a self-hosted id in
+          // the chat picker as configured and send the OpenAI key to api.openai.com.
+          { provider: "vllm", modelId: "Qwen/Qwen3.8-27B", clientType: "openai-chat-vllm-adapter" },
           // Both protocols in the relay group resolve the same provider-scoped key.
           {
             provider: "penguin-go",
@@ -246,9 +250,12 @@ describe("models preset & catalog enrichment", () => {
       expect(gateway.envKey).toBeUndefined();
       expect(gateway.envKeyMasked).toBeUndefined();
       expect(pick(body, "custom", "my-model").envKey).toBe("OPENAI_API_KEY");
-      expect(pick(body, "custom", "my-model").envKeyMasked).toBe(openaiMasked);
+      expect(pick(body, "custom", "my-model").envKeyMasked).toBeUndefined();
       expect(pick(body, "custom", "my-local").envKey).toBeUndefined();
       expect(pick(body, "custom", "my-local").envKeyMasked).toBeUndefined();
+      const vllm = pick(body, "vllm", "Qwen/Qwen3.8-27B");
+      expect(vllm.envKey).toBe("OPENAI_API_KEY");
+      expect(vllm.envKeyMasked).toBeUndefined();
       const penguinMasked = "sk-p…-456";
       expect(pick(body, "penguin-go", "gemini-3.8-flash").envKey).toBe("PENGUIN_GO_API_KEY");
       expect(pick(body, "penguin-go", "gemini-3.8-flash").envKeyMasked).toBe(penguinMasked);
@@ -1024,11 +1031,14 @@ describe("model-reference rekeying and the connectivity test", () => {
       throw new Error("no request may leave the process for a refused probe");
     }) as typeof fetch;
     try {
-      // A gateway preset: the group's endpoint, no key. Both an OpenAI-protocol gateway and a
-      // Messages-protocol custom row (the Atria preset) are refused.
+      // A gateway preset: the group's endpoint, no key. Both OpenAI-protocol gateways and the
+      // Messages-protocol custom preset (Atria — the path that carried the Anthropic key in the
+      // #786 finding) are refused, and the refusal is the harness's own sentence, never the
+      // SDK's text with a vendor variable in it.
       for (const [provider, modelId] of [
         ["tokendance", "glm-5.3"],
         ["openrouter", "openai/gpt-5.5"],
+        ["custom", "Atria-Dawn-Preview"],
       ] as const) {
         expect(catalogEntryFor(provider, modelId)).toBeDefined();
         for (const speed of [false, true]) {
@@ -1038,6 +1048,7 @@ describe("model-reference rekeying and the connectivity test", () => {
           expect(body.ok).toBe(false);
           expect(body.message).toMatch(/has no API key/);
           expect(body.message).toMatch(/set the API key on the model entry/);
+          expect(body.message).not.toMatch(/OPENAI_API_KEY|ANTHROPIC_API_KEY|must-not-cross/);
         }
       }
       // A not-yet-saved custom row pointed at a private server: same refusal.
@@ -1058,8 +1069,6 @@ describe("model-reference rekeying and the connectivity test", () => {
         message: expect.stringMatching(/has no API key/) as string,
       });
       expect(requests).toBe(0);
-      // The refusal is not a 400 with the SDK's own text: the message never names a vendor variable.
-      expect(JSON.stringify(await (await api.get(url())).json())).not.toContain("must-not-cross");
     } finally {
       globalThis.fetch = realFetch;
       for (const [key, value] of [

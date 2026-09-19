@@ -7,7 +7,11 @@
  * composes.
  */
 import { describe, expect, it } from "vitest";
-import { resolveModelEnv } from "@prismshadow/penguin-core/model-catalog";
+import {
+  MODEL_CATALOG,
+  modelEnvPreviewKey,
+  resolveModelEnv,
+} from "@prismshadow/penguin-core/model-catalog";
 import { zh as ZH } from "../src/lib/strings";
 import { en as EN } from "../src/lib/strings-en";
 import { clientTypeAfterProviderChange, rowToEntry } from "../src/features/models/models-page";
@@ -232,6 +236,42 @@ describe("envHintKeyFor (the API-key field promises a variable only where the en
     expect(envHintKeyFor("anthropic", "claude-sonnet-4-6", "", "https://api.anthropic.com/")).toBe(
       "ANTHROPIC_API_KEY",
     );
+  });
+
+  it("promises nothing for a keyless vLLM preset or custom row with no base URL, and agrees with the server's preview rule", () => {
+    // The vLLM presets ship with no base URL; the server refuses them a masked preview for the
+    // same reason the field must not read "leave empty to use OPENAI_API_KEY": a self-hosted
+    // id would be run against api.openai.com. Both sides read core's modelEnvPreviewKey.
+    const cases: Array<[string, string, string, string]> = [
+      ...MODEL_CATALOG.filter((m) => m.provider === "vllm").map(
+        (m): [string, string, string, string] => [
+          m.provider,
+          m.modelId,
+          m.clientType ?? "",
+          m.baseUrl ?? "",
+        ],
+      ),
+      ["custom", "local-model", "openai-chat", ""],
+      ["custom", "gpt-5.6", "openai-chat", "https://api.openai.com/v1"],
+      ["anthropic", "claude-sonnet-4-6", "", ""],
+      ["anthropic", "claude-sonnet-4-6", "", "https://proxy.example/anthropic"],
+      ["tokendance", "glm-5.3", "openai-chat", "https://tokendance.space/gateway/v1"],
+      ["penguin-go", "gemini-3.8-flash", "gemini-3.8", "https://token.penguin.ooo/api"],
+    ];
+    for (const [provider, modelId, clientType, baseUrl] of cases) {
+      expect(envHintKeyFor(provider, modelId, clientType, baseUrl), `${provider}/${modelId}`).toBe(
+        modelEnvPreviewKey({
+          provider,
+          modelId,
+          clientType: envHintClientType(provider, clientType),
+          baseUrl,
+        }),
+      );
+    }
+    for (const m of MODEL_CATALOG.filter((v) => v.provider === "vllm")) {
+      expect(envHintKeyFor("vllm", m.modelId, "", ""), m.modelId).toBeUndefined();
+    }
+    expect(envHintKeyFor("custom", "local-model", "openai-chat", "")).toBeUndefined();
   });
 });
 

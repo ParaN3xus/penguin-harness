@@ -215,7 +215,13 @@ export interface CreateSessionOptions {
    * own config.
    */
   thinkingLevel?: ThinkingLevelName | null;
-  /** Explicit credentials; if unspecified, falls back to credentials in the Project config, then to AgentHub reading environment variables. */
+  /**
+   * Explicit credentials; if unspecified, falls back to the credentials in the Project config,
+   * then — only when the entry's requests go to the vendor's own endpoint (no base URL, or a
+   * vendor endpoint) — to the vendor's environment variable, read by AgentHub. A keyless entry
+   * pointed anywhere else (a gateway, a self-hosted server) is refused with a
+   * ModelCredentialError; see resolveModelCredential.
+   */
   apiKey?: string;
   baseUrl?: string;
   /** Internal use: this Session's depth in the subagent spawn chain (0 at the top level), used to cap spawn depth. */
@@ -227,7 +233,7 @@ export interface CreateSessionOptions {
 export interface ResumeSessionOptions {
   /** Id of the Session to resume. */
   sessionId: string;
-  /** Explicit credentials; if unspecified, falls back to credentials in the Project config, then to AgentHub reading environment variables. */
+  /** Explicit credentials; if unspecified, falls back to the Project config, then to the vendor's environment variable on the same terms as CreateSessionOptions.apiKey. */
   apiKey?: string;
   baseUrl?: string;
 }

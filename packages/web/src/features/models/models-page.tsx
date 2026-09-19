@@ -2858,10 +2858,11 @@ function ModelDialog({
     form.modelId.trim(),
     envHintClientType(form.provider, form.clientType),
   )?.envKey;
-  // The variable a blank key may actually FALL BACK to for the entry as drafted (core's
-  // modelEnvFallback, the rule the server enforces): undefined for every row whose endpoint
-  // is not the vendor's own — a gateway's preset base URL, a custom or vLLM server, a vendor
-  // row re-pointed at a proxy. The hint follows this, never routedEnvKey.
+  // The variable a blank key may be PRESENTED as covered by, for the entry as drafted (core's
+  // modelEnvPreviewKey, which the server's masked preview reads too): undefined for every row
+  // whose endpoint is not the vendor's own — a gateway's preset base URL, a custom or vLLM
+  // server, a vendor row re-pointed at a proxy — and for a keyless vLLM / custom row with no
+  // base URL. The hint and the stored-mask block below follow this, never routedEnvKey.
   const liveEnvKey = envHintKeyFor(form.provider, form.modelId, form.clientType, form.baseUrl);
   // The protocol this group pins on every entry, user-added ones included (OpenRouter,
   // vLLM); undefined for every group that leaves the protocol to auto-routing, a gateway
@@ -3241,13 +3242,18 @@ function ModelDialog({
             rule): the created-at position says where the key comes from instead, and there is
             no clear control — an environment variable cannot be cleared from here. Typing a new
             key hides this like the stored block; once saved, the stored key takes priority and
-            the display switches to the stored form. */}
-        {!form.credential?.apiKeyMasked && form.envKeyMasked !== undefined && !form.apiKeyInput && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-            <span className="font-mono">{form.envKeyMasked}</span>
-            <span className="text-gray-400">{S.models.readFromEnv}</span>
-          </div>
-        )}
+            the display switches to the stored form. The mask is the SAVED row's: once the draft
+            resolves to another variable or to none (a proxy base URL typed over a vendor row),
+            it is hidden rather than left promising a key the draft will not have. */}
+        {!form.credential?.apiKeyMasked &&
+          form.envKeyMasked !== undefined &&
+          liveEnvKey === form.envKey &&
+          !form.apiKeyInput && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+              <span className="font-mono">{form.envKeyMasked}</span>
+              <span className="text-gray-400">{S.models.readFromEnv}</span>
+            </div>
+          )}
 
         {/* 2) base URL (required for custom / user-defined groups and explicit openai protocol — see
             baseUrlRequired). The in-field suffix at the right edge shows the protocol path the
