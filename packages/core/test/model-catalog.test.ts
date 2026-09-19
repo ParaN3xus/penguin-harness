@@ -3,6 +3,7 @@
  * three-bucket pricing, lookups, and preset entry generation.
  */
 import { describe, expect, it } from "vitest";
+import { listEndpointModels } from "../src/llm/list-models.js";
 import {
   APP_URL,
   MODEL_CATALOG,
@@ -1951,5 +1952,26 @@ describe("modelEnvFallback / resolveModelCredential (a vendor key from the envir
     expect(sameEndpoint("https://api.openai.com/v1", "https://api.openai.com")).toBe(false);
     expect(sameEndpoint("http://host:8000/v1", "http://host:8001/v1")).toBe(false);
     expect(sameEndpoint("not a url", "not a url")).toBe(false);
+  });
+});
+
+describe("listEndpointModels credential gate (the add-group import)", () => {
+  it("refuses a keyless listing of a gateway or private endpoint before any client exists, whatever the environment holds", async () => {
+    const env = { OPENAI_API_KEY: "sk-openai-env", ANTHROPIC_API_KEY: "sk-anthropic-env" };
+    await expect(
+      listEndpointModels({ clientType: "openai-chat", baseUrl: "https://gw.example.com/v1", env }),
+    ).rejects.toThrow(ModelCredentialError);
+    await expect(
+      listEndpointModels({ clientType: "ant-messages", baseUrl: "http://127.0.0.1:8000", env }),
+    ).rejects.toThrow(/enter the endpoint's API key/);
+    // With the SDK's own variable unset and the endpoint the vendor's own, the refusal is ours
+    // too (no client is constructed to read an unset variable and throw its own error).
+    await expect(
+      listEndpointModels({
+        clientType: "openai-chat",
+        baseUrl: "https://api.openai.com/v1",
+        env: {},
+      }),
+    ).rejects.toThrow(ModelCredentialError);
   });
 });
