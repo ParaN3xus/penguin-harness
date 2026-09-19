@@ -9,8 +9,8 @@
  * The vitest config is kept separate in vitest.config.ts (its embedded vite 5 types conflict with this
  * package's vite 7 plugin types, hence the separate file to avoid the clash).
  *
- * `penguinUi()` points `@prismshadow/penguin-ui` (JS and CSS imports alike) at the shared UI
- * package's live source. It is imported by relative path on purpose — see its module doc.
+ * `penguinUi()` emits the licence texts of the shared UI package's bundled fonts beside the build
+ * (`fonts-licenses/`). It is imported by relative path on purpose — see its module doc.
  */
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";

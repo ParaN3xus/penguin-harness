@@ -2501,7 +2501,7 @@ export function ChatInput({
                         title={S.chat.goalBudgetSave}
                         disabled={goalBudgetDraftInvalid}
                         onClick={saveGoalBudget}
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-900 text-fg-on-emphasis transition-colors duration-150 hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-35 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-900 text-white transition-colors duration-150 hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-35 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
                       >
                         <CheckIcon size={14} />
                       </button>
@@ -2887,7 +2887,7 @@ export function ChatInput({
               className={
                 stopAction
                   ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-50 text-red-600 transition-colors duration-150 hover:bg-red-100 dark:bg-red-950/60 dark:text-red-400 dark:hover:bg-red-950"
-                  : "flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-900 text-fg-on-emphasis transition-colors duration-150 hover:bg-gray-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300 dark:disabled:bg-gray-800 dark:disabled:text-gray-600"
+                  : "flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-900 text-white transition-colors duration-150 hover:bg-gray-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300 dark:disabled:bg-gray-800 dark:disabled:text-gray-600"
               }
             >
               {stopAction ? (
