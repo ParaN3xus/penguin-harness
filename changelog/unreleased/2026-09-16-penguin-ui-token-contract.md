@@ -36,9 +36,9 @@ reflows to the 18px default.
 - The theme provider gained a stored theme id (`penguin.themeId`, default `github`), applied as
   `html[data-theme]`; no setting exposes it yet. The key is classified as a browser preference for
   the data-root sweep.
-- The Web App resolves the package from its live source through the package's `penguinUi()` Vite
-  plugin, the vitest aliases and tsconfig `paths`, and Tailwind scans the package's source.
-  `styles.css` dropped the rules the package now owns.
+- The Web App depends on the package as `workspace:*`, which pnpm links to `packages/ui`, so Vite,
+  vitest and tsc read its live source through the package's `exports`, and Tailwind scans the
+  package's source. `styles.css` dropped the rules the package now owns.
 - Call sites that spelled `var(--accent-bg)` / `var(--accent-fg)` moved to `bg-accent`,
   `border-accent`, `ring-accent` and `text-accent-fg`; the eight `text-white` labels on neutral
   fills that invert in dark moved to `text-fg-on-emphasis`; the three `bg-black/45` dialog backdrops moved to the

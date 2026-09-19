@@ -28,8 +28,8 @@
   `applyThemeAttributes()`。深色 `theme-color` 改为页面真实的深色背景 `#000000`。
 - 主题 Provider 新增一个存储的主题 id（`penguin.themeId`，缺省 `github`），以 `html[data-theme]`
   套用；尚无设置项暴露它。该键在数据根清扫中归为浏览器偏好。
-- Web App 经包内的 `penguinUi()` Vite 插件、vitest 别名与 tsconfig `paths` 直接读取包的源码，Tailwind
-  也扫描包的源码。`styles.css` 删去了改由包负责的规则。
+- Web App 以 `workspace:*` 依赖该包，pnpm 将其链接到 `packages/ui`，Vite、vitest 与 tsc 因而按包的
+  `exports` 直接读取包的源码，Tailwind 也扫描包的源码。`styles.css` 删去了改由包负责的规则。
 - 原先写 `var(--accent-bg)` / `var(--accent-fg)` 的调用处改为 `bg-accent`、`border-accent`、
   `ring-accent` 与 `text-accent-fg`；八处画在深色模式下反色的中性填充上的 `text-white` 改为
   `text-fg-on-emphasis`；三处 `bg-black/45`
