@@ -103,9 +103,9 @@ export function tempSessionRows(
 }
 
 /**
- * A stored list, entry by entry. An entry that is not one (a truncated write, a hand edit) is
- * skipped rather than failing the list; a repeated session keeps its newest place, and the cap
- * holds even for a list written by hand.
+ * A stored list. Only this module's store writes the key, always a whole list, so what is there
+ * is read as written; a value that is not JSON lists nothing (the localStorage convention of
+ * page-hints.ts).
  */
 export function parseTempSessions(raw: string | null): TempSessionEntry[] {
   if (raw === null || raw === "") return [];
@@ -115,19 +115,7 @@ export function parseTempSessions(raw: string | null): TempSessionEntry[] {
   } catch {
     return [];
   }
-  if (!Array.isArray(parsed)) return [];
-  const out: TempSessionEntry[] = [];
-  const seen = new Set<string>();
-  for (const item of parsed) {
-    if (typeof item !== "object" || item === null) continue;
-    const { sessionId, agentId, title } = item as Record<string, unknown>;
-    if (typeof sessionId !== "string" || sessionId === "" || seen.has(sessionId)) continue;
-    if (typeof agentId !== "string") continue;
-    seen.add(sessionId);
-    out.push({ sessionId, agentId, title: typeof title === "string" ? title : "" });
-    if (out.length === MAX_TEMP_SESSIONS) break;
-  }
-  return out;
+  return Array.isArray(parsed) ? (parsed as TempSessionEntry[]) : [];
 }
 
 // ---------------------------------------------------------------------------

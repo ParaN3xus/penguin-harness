@@ -111,29 +111,6 @@ describe("stored temporary session list", () => {
     expect(parseTempSessions("{not json")).toEqual([]);
     expect(parseTempSessions('{"sessionId":"sess_a"}')).toEqual([]);
   });
-
-  it("skips entries that are not ones and keeps the newest place of a repeated session", () => {
-    const raw = JSON.stringify([
-      entry("b"),
-      { sessionId: "sess_c", agentId: "acme_dev" },
-      { sessionId: "sess_d" },
-      { sessionId: "", agentId: "acme_dev", title: "No id" },
-      "sess_e",
-      null,
-      { ...entry("b"), title: "Older copy" },
-      entry("a"),
-    ]);
-    expect(parseTempSessions(raw)).toEqual([
-      entry("b"),
-      { sessionId: "sess_c", agentId: "acme_dev", title: "" },
-      entry("a"),
-    ]);
-  });
-
-  it("holds the cap for a list written by hand", () => {
-    const raw = JSON.stringify(Array.from({ length: MAX_TEMP_SESSIONS + 5 }, (_, i) => entry(i)));
-    expect(parseTempSessions(raw)).toHaveLength(MAX_TEMP_SESSIONS);
-  });
 });
 
 describe("temporary session store", () => {
