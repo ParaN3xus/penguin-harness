@@ -47,8 +47,8 @@
  * entry's stored one, and when there is neither, each probe falls back to the environment
  * variable for the protocol IT speaks (`ANTHROPIC_API_KEY` for `ant-messages`,
  * `OPENAI_API_KEY` for the two OpenAI protocols — see envApiKeyForProtocol) — but only when
- * the probed base URL is that vendor's own endpoint or the one the variable's `*_BASE_URL`
- * sibling names. A gateway or a private server gets an anonymous probe: detection still
+ * the probed base URL is that vendor's own endpoint. A gateway or a private server gets an
+ * anonymous probe: detection still
  * works with no credential at all (a protocol-shaped 401 identifies the route), and sending
  * the user's vendor key to a URL they typed is exactly what the rule forbids.
  */
@@ -111,7 +111,7 @@ export const PROTOCOL_PROBES: readonly ProbeSpec[] = [
  * `openai-responses` / `openai-chat` read `OPENAI_API_KEY`. Core's endpointEnvApiKey is the
  * same rule the saved model is held to (see modelEnvFallback), so this cannot drift from
  * what the entry will actually be allowed to read: the variable is lent only to the
- * vendor's own endpoint, or to the endpoint its `*_BASE_URL` sibling names.
+ * vendor's own endpoint.
  *
  * Server-side only: the value is placed in a request header and never returned to the
  * browser, echoed in a result, or logged.

@@ -958,8 +958,8 @@ export class ProjectConfigService implements ProjectConfigStore {
    *      PENGUIN_GO_API_KEY) resolved here for the group's rows, and otherwise the variable
    *      of whichever protocol each probe speaks, resolved inside detectModelProtocol
    *      because the protocol is the thing being determined — and only for a URL that is
-   *      the vendor's own or the one that variable's `*_BASE_URL` names (see core's
-   *      endpointEnvApiKey), never for a gateway or a private server.
+   *      the vendor's own (see core's endpointEnvApiKey), never for a gateway or a private
+   *      server.
    * Layers 2 and 3 are read server-side only and never travel back to the browser.
    * Detection still runs with no credential at all: a protocol-shaped 401/403 proves the
    * route. Never throws on probe failures — every outcome is reported per probe.
@@ -982,10 +982,11 @@ export class ProjectConfigService implements ProjectConfigStore {
       // A provider-scoped pair (the relay's) is the harness's to read, for any URL in that
       // group; a vendor pair is left to the per-probe rule in detectModelProtocol. Without a
       // relay key, anonymous probing is still safe and can identify a route from its 401.
-      const fallback = modelEnvFallback(
-        { provider: req.provider, modelId: req.modelId, clientType: savedClientType },
-        process.env,
-      );
+      const fallback = modelEnvFallback({
+        provider: req.provider,
+        modelId: req.modelId,
+        clientType: savedClientType,
+      });
       if (fallback !== undefined && !fallback.readByClient) {
         apiKey = process.env[fallback.envKey]?.trim() || undefined;
       }
@@ -1077,13 +1078,9 @@ export class ProjectConfigService implements ProjectConfigStore {
         // The env fallback the entry is actually allowed (core's modelEnvFallback): the
         // variable AgentHub's routed client reads — an explicit client_type takes priority,
         // otherwise the id auto-routes — but only while the entry's endpoint is the vendor's
-        // own (or the one that variable's `*_BASE_URL` names). A gateway, custom or vLLM
-        // row with its own endpoint gets no envKey at all: reporting a name there would
-        // promise a fallback the harness refuses.
-        const fallback = modelEnvFallback(
-          { provider, modelId, clientType, baseUrl: credBaseUrl },
-          process.env,
-        );
+        // own. A gateway, custom or vLLM row with its own endpoint gets no envKey at all:
+        // reporting a name there would promise a fallback the harness refuses.
+        const fallback = modelEnvFallback({ provider, modelId, clientType, baseUrl: credBaseUrl });
         const envKey = fallback?.envKey;
         const vision = typeof m.vision === "boolean" ? m.vision : cat?.supportsVision;
         // Output cap: TOML annotation only (user-owned; the built-in catalog never presets it).

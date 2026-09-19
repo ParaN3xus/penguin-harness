@@ -20,8 +20,8 @@ PenguinHarness 自己在构建任何客户端之前判定没有 key 的条目能
 - core 的 `resolveModelCredential` 是唯一的判定处，harness 构建的每个客户端都经过它：会话创建与恢复、
   视觉代读、连通性与测速探测、视觉探测、工具性补全与端点列举。没有 key 的条目在以下情形被允许使用其
   客户端的变量：没有 base URL（客户端缺省端点即厂商自己的端点，或用户在 key 旁一并设置的
-  `*_BASE_URL`）；base URL 是该厂商自己的端点之一（目录里 DeepSeek 与 MiniMax 条目即这样钉住）；base URL
-  与对应 `*_BASE_URL` 变量的值相同——用户有意把 key 与端点配成了对。其余一律拒绝，报「Model
+  `*_BASE_URL`）；base URL 是该厂商自己的官方端点之一（目录里 DeepSeek 与 MiniMax 条目即这样钉住）。其余
+  一律拒绝，报「Model
   `<provider>/<id>` has no API key … set the API key on the model entry」，服务端将其与 SDK 自身的凭据缺失
   错误一样归入 `model_credential_missing`。
 - 允许回退时客户端依旧拿不到 key、自己读取变量，与此前完全一致——厂商条目没有任何损失，包括没有
@@ -31,9 +31,8 @@ PenguinHarness 自己在构建任何客户端之前判定没有 key 的条目能
 - 模型接口只对规则允许回退的条目报告 `envKey` 与掩码预览 `envKeyMasked`，卡片的「已配置 key」与弹窗
   提示因此与拒绝一致。弹窗按草稿中的行——分组、id、协议与 base URL——实时解析提示；分组级「手动设置
   密钥」弹窗只为厂商分组与 Penguin Go 点名变量。
-- 协议检测与新增分组的端点列举按同一口径把协议变量借给裸端点：厂商自己的 URL，或其 `*_BASE_URL`
-  所指的地址。网关或私有服务器一律匿名探测（协议格式的 401 照样能识别路由），没有可用 key 的列举在
-  构建客户端之前即被拒绝。
+- 协议检测与新增分组的端点列举按同一口径把协议变量借给裸端点：只借给厂商自己的 URL。网关或私有服务器
+  一律匿名探测（协议格式的 401 照样能识别路由），没有可用 key 的列举在构建客户端之前即被拒绝。
 - `custom` 分组的预置模型 Atria Dawn Preview 此前读取 `ANTHROPIC_API_KEY`，现在与其他 custom 条目一样
   需要自己的 key。
 
@@ -46,8 +45,9 @@ PenguinHarness 自己在构建任何客户端之前判定没有 key 的条目能
 受影响：环境里的 `OPENAI_API_KEY=dummy` 不再覆盖它。
 
 需要做的事：把 key 放到条目上——**模型配置 → API key**、组头的**手动设置密钥**，或 `penguin config
-model add … --api-key <key>`。磁盘上的数据形态不变、不运行任何迁移；已带 key 的条目不受影响。唯一无需
-行内 key 仍可工作的配置，是有意为之的环境配对：`OPENAI_BASE_URL`（或其他厂商的 `*_BASE_URL`）设为与条目
-base URL 完全相同的值，并与对应的 `*_API_KEY` 并存。
+model add … --api-key <key>`。此前靠环境里的 `OPENAI_API_KEY` + `OPENAI_BASE_URL` 运行、而条目又自带
+base URL 的自托管或自定义服务器正是这种情形：环境变量里的 key 只用于官方端点，这把 key 要写到条目上。
+**没有** base URL 的条目不受影响，仍按 AgentHub 自己的环境配对（`*_API_KEY` 与 `*_BASE_URL`）工作。磁盘
+上的数据形态不变、不运行任何迁移；已带 key 的条目不受影响。
 
 本批次没有兼容代码，因此不设 `backward-compatibility` 条目。

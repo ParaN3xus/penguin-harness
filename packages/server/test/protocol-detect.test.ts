@@ -468,22 +468,17 @@ describe("envApiKeyForProtocol", () => {
     expect(envApiKeyForProtocol("ant-messages", ANTHROPIC, env)).toBe("sk-anthropic");
   });
 
-  it("lends nothing to a URL that is neither the vendor's own nor the one its *_BASE_URL names", () => {
+  it("lends nothing to a URL that is not the vendor's own, even one OPENAI_BASE_URL names", () => {
     const env = { OPENAI_API_KEY: "sk-openai", ANTHROPIC_API_KEY: "sk-anthropic" };
     // A gateway, a private server: the user's vendor key must not be sent there.
     expect(envApiKeyForProtocol("openai-chat", "https://gw.example.com/v1", env)).toBeUndefined();
     expect(envApiKeyForProtocol("ant-messages", "http://127.0.0.1:8000", env)).toBeUndefined();
-    // The endpoint the environment itself names is the user's own pairing.
+    // Environment keys are for official endpoints only: naming the URL in OPENAI_BASE_URL
+    // does not make it one.
     expect(
       envApiKeyForProtocol("openai-chat", "https://gw.example.com/v1", {
         ...env,
         OPENAI_BASE_URL: "https://gw.example.com/v1/",
-      }),
-    ).toBe("sk-openai");
-    expect(
-      envApiKeyForProtocol("ant-messages", "https://gw.example.com", {
-        ...env,
-        OPENAI_BASE_URL: "https://gw.example.com",
       }),
     ).toBeUndefined();
   });
@@ -500,11 +495,17 @@ describe("envApiKeyForProtocol", () => {
 describe("detectModelProtocol env fallback", () => {
   const BASE = "https://gw.example.com/v1";
 
-  it("probes a URL the environment does not name anonymously, whatever vendor keys are set", async () => {
+  it("probes a URL that is not a vendor's own anonymously, whatever vendor keys are set", async () => {
     const seen: SeenCall[] = [];
     await detectModelProtocol({
       baseUrl: BASE,
-      env: { OPENAI_API_KEY: "sk-openai", ANTHROPIC_API_KEY: "sk-anthropic" },
+      // OPENAI_BASE_URL naming the URL changes nothing: environment keys are for official
+      // endpoints only.
+      env: {
+        OPENAI_API_KEY: "sk-openai",
+        OPENAI_BASE_URL: BASE,
+        ANTHROPIC_API_KEY: "sk-anthropic",
+      },
       fetchImpl: fakeFetch({}, seen), // every path 404s, so both candidates run all three probes
     });
     expect(seen).toHaveLength(6);
@@ -514,26 +515,21 @@ describe("detectModelProtocol env fallback", () => {
     }
   });
 
-  it("authenticates each probe from the env var for the protocol THAT probe speaks, once the environment names the URL", async () => {
+  it("authenticates each probe of a vendor's own URL from the env var for the protocol THAT probe speaks", async () => {
     const seen: SeenCall[] = [];
     await detectModelProtocol({
-      baseUrl: BASE,
-      env: {
-        OPENAI_API_KEY: "sk-openai",
-        OPENAI_BASE_URL: BASE,
-        ANTHROPIC_API_KEY: "sk-anthropic",
-        ANTHROPIC_BASE_URL: BASE,
-      },
+      baseUrl: "https://api.openai.com/v1",
+      env: { OPENAI_API_KEY: "sk-openai", ANTHROPIC_API_KEY: "sk-anthropic" },
       fetchImpl: fakeFetch({}, seen), // every path 404s, so both candidates run all three probes
     });
     expect(seen).toHaveLength(6);
     const [responses, messages, chat] = seen as [SeenCall, SeenCall, SeenCall];
     expect(responses.headers.authorization).toBe("Bearer sk-openai");
     expect(chat.headers.authorization).toBe("Bearer sk-openai");
-    // ant-messages carries the Anthropic key through both header conventions.
-    expect(messages.headers.authorization).toBe("Bearer sk-anthropic");
-    expect(messages.headers["x-api-key"]).toBe("sk-anthropic");
-    // The neighbouring /v1-less candidate is another URL: the environment named only BASE.
+    // OpenAI's host is not Anthropic's endpoint: the Messages probe stays anonymous there.
+    expect(messages.headers.authorization).toBeUndefined();
+    expect(messages.headers["x-api-key"]).toBeUndefined();
+    // The neighbouring /v1-less candidate is not the official endpoint either.
     const [responses2, messages2, chat2] = seen.slice(3) as [SeenCall, SeenCall, SeenCall];
     expect(responses2.headers.authorization).toBeUndefined();
     expect(messages2.headers["x-api-key"]).toBeUndefined();
@@ -550,12 +546,7 @@ describe("detectModelProtocol env fallback", () => {
     await detectModelProtocol({
       baseUrl: BASE,
       apiKey: "sk-typed",
-      env: {
-        OPENAI_API_KEY: "sk-openai",
-        OPENAI_BASE_URL: BASE,
-        ANTHROPIC_API_KEY: "sk-anthropic",
-        ANTHROPIC_BASE_URL: BASE,
-      },
+      env: { OPENAI_API_KEY: "sk-openai", ANTHROPIC_API_KEY: "sk-anthropic" },
       fetchImpl: fakeFetch({}, seen),
     });
     for (const call of seen) expect(call.headers.authorization).toBe("Bearer sk-typed");
@@ -565,8 +556,8 @@ describe("detectModelProtocol env fallback", () => {
   it("falls back per protocol, so a half-configured environment still authenticates its own probe", async () => {
     const seen: SeenCall[] = [];
     await detectModelProtocol({
-      baseUrl: BASE,
-      env: { ANTHROPIC_API_KEY: "sk-anthropic", ANTHROPIC_BASE_URL: BASE },
+      baseUrl: "https://api.anthropic.com",
+      env: { ANTHROPIC_API_KEY: "sk-anthropic" },
       fetchImpl: fakeFetch({}, seen),
     });
     const [responses, messages, chat] = seen as [SeenCall, SeenCall, SeenCall];
@@ -577,13 +568,8 @@ describe("detectModelProtocol env fallback", () => {
 
   it("never echoes an env-sourced key into the reported probes", async () => {
     const res = await detectModelProtocol({
-      baseUrl: BASE,
-      env: {
-        OPENAI_API_KEY: "sk-openai",
-        OPENAI_BASE_URL: BASE,
-        ANTHROPIC_API_KEY: "sk-anthropic",
-        ANTHROPIC_BASE_URL: BASE,
-      },
+      baseUrl: "https://api.openai.com/v1",
+      env: { OPENAI_API_KEY: "sk-openai", ANTHROPIC_API_KEY: "sk-anthropic" },
       fetchImpl: fakeFetch({ "/v1/responses": { status: 401, body: OPENAI_ERROR } }),
     });
     expect(res.detected).toBe("openai-responses");
@@ -673,7 +659,7 @@ describe("POST /api/projects/:p/models/detect", () => {
     }
   });
 
-  it("the paired reference falls back to the stored key (probe before the frontend ever sees a plaintext key); clearApiKey suppresses that fallback and leaves only the env var, which a private URL is not lent", async () => {
+  it("the paired reference falls back to the stored key (probe before the frontend ever sees a plaintext key); clearApiKey suppresses that fallback, and a private URL is not lent the env var", async () => {
     const seen: Array<{ path: string; auth?: string; xApiKey?: string }> = [];
     const server = antOnlyServer(seen);
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -703,9 +689,9 @@ describe("POST /api/projects/:p/models/detect", () => {
       expect(messagesProbe?.xApiKey).toBe("sk-stored-secret");
 
       // clearApiKey drops the STORED key. What backs the probe then is whatever the saved
-      // model itself would run on, i.e. the protocol's env var where the URL is allowed it
-      // — so this asserts all three halves, with the environment pinned (the real one must
-      // never reach a probe, and the suite must not depend on what the developer exports).
+      // model itself would run on — and a private server is allowed no env var — so this
+      // asserts both halves, with the environment pinned (the real one must never reach a
+      // probe, and the suite must not depend on what the developer exports).
       const savedAnthropic = process.env.ANTHROPIC_API_KEY;
       const savedOpenai = process.env.OPENAI_API_KEY;
       const savedAnthropicBase = process.env.ANTHROPIC_BASE_URL;
@@ -729,10 +715,12 @@ describe("POST /api/projects/:p/models/detect", () => {
         expect(keyless?.xApiKey).toBeUndefined();
         expect(keyless?.auth).toBeUndefined();
 
-        // Same request with the env var present: the stored key stays suppressed, and the
-        // local server is not Anthropic's endpoint — so the Anthropic key is NOT lent to it
-        // and the probe stays anonymous.
+        // Same request with the env var present — and even with ANTHROPIC_BASE_URL naming
+        // this very server: the stored key stays suppressed, and the local server is not
+        // Anthropic's endpoint, so the Anthropic key is NOT lent to it and the probe stays
+        // anonymous. Environment keys are for official endpoints only.
         process.env.ANTHROPIC_API_KEY = "sk-env-anthropic";
+        process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${port}`;
         seen.length = 0;
         const withheld = await api.post(detectUrl(), {
           baseUrl: `http://127.0.0.1:${port}`,
@@ -741,25 +729,12 @@ describe("POST /api/projects/:p/models/detect", () => {
           clearApiKey: true,
         });
         expect(withheld.status).toBe(200);
+        expect(((await withheld.json()) as ModelProtocolDetectResponse).detected).toBe(
+          "ant-messages",
+        );
         const withheldProbe = seen.find((c) => c.path === "/v1/messages");
         expect(withheldProbe?.xApiKey).toBeUndefined();
         expect(withheldProbe?.auth).toBeUndefined();
-
-        // Once the environment itself names this endpoint (ANTHROPIC_BASE_URL), the user has
-        // paired key and URL deliberately, and the environment — not "sk-stored-secret" — is
-        // what authenticates the probe.
-        process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${port}`;
-        seen.length = 0;
-        const viaEnv = await api.post(detectUrl(), {
-          baseUrl: `http://127.0.0.1:${port}`,
-          provider: "custom",
-          modelId: "stored-key-model",
-          clearApiKey: true,
-        });
-        expect(viaEnv.status).toBe(200);
-        const envProbe = seen.find((c) => c.path === "/v1/messages");
-        expect(envProbe?.xApiKey).toBe("sk-env-anthropic");
-        expect(envProbe?.auth).toBe("Bearer sk-env-anthropic");
       } finally {
         if (savedAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY;
         else process.env.ANTHROPIC_API_KEY = savedAnthropic;

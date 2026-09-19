@@ -64,7 +64,7 @@ An unparseable value stops the server at startup instead of falling back silentl
 
 ### Provider credential variables
 
-When a model entry has no inline `api_key`, it falls back to the provider's environment variable **only when its requests go to that provider**: the entry has no `base_url`, or its `base_url` is the vendor's own endpoint, or its `base_url` equals the matching `*_BASE_URL` value. A `*_BASE_URL` value is used only when the entry does not inline `base_url`. Every other entry — the gateway groups' preset endpoints, custom, vLLM and user-created groups with their own endpoints — needs its own `api_key`, and PenguinHarness refuses to build a client for it otherwise; see [Set API keys](/models#set-api-keys).
+When a model entry has no inline `api_key`, it falls back to the provider's environment variable **only when its requests go to that provider's official endpoint**: the entry has no `base_url`, or its `base_url` is the vendor's own endpoint. A `*_BASE_URL` value is used only when the entry does not inline `base_url`; an entry with its own `base_url` is never covered by the environment, even when `OPENAI_BASE_URL` names the same server. Every other entry — the gateway groups' preset endpoints, custom, vLLM and user-created groups with their own endpoints — needs its own `api_key`, and PenguinHarness refuses to build a client for it otherwise; see [Set API keys](/models#set-api-keys).
 
 | Provider | API key | Base URL |
 | --- | --- | --- |

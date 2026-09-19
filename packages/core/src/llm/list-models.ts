@@ -11,8 +11,8 @@
  *
  * Credential semantics mirror the connectivity test: an omitted `apiKey` falls back to the
  * protocol's environment variable (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`) **only when the
- * base URL is that vendor's own endpoint or the one the pair's `*_BASE_URL` names** (see
- * endpointEnvApiKey) — the wrapped SDK would otherwise read the variable itself and send the
+ * base URL is that vendor's own endpoint** (see endpointEnvApiKey) — the wrapped SDK would
+ * otherwise read the variable itself and send the
  * user's vendor key to whatever endpoint was typed, so with no usable key the listing is
  * refused before a client exists. Other failures surface as the SDK's own errors — callers
  * collapse errors into their outcome shape, nothing is caught here.
@@ -43,7 +43,7 @@ export async function listEndpointModels(options: ListEndpointModelsOptions): Pr
     options.apiKey || endpointEnvApiKey(options.clientType, options.baseUrl, options.env);
   if (apiKey === undefined) {
     throw new ModelCredentialError(
-      `No API key for ${options.baseUrl ?? "the endpoint"}. The environment lends a key only to a vendor's own endpoint or to the one its *_BASE_URL variable names: enter the endpoint's API key.`,
+      `No API key for ${options.baseUrl ?? "the endpoint"}. The environment lends a key only to a vendor's own endpoint: enter the endpoint's API key.`,
     );
   }
   const client = new AutoLLMClient({

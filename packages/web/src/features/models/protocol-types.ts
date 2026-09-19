@@ -170,8 +170,7 @@ export function envHintClientType(provider: string, clientType: string): string 
  * protocol (resolved as envHintClientType does) and base URL. A gateway row carries its
  * preset endpoint, so it resolves to nothing — the hint that used to read "leave empty to use
  * OPENAI_API_KEY" on a TokenDance or OpenRouter row was promising the user's OpenAI key to a
- * third party. The browser cannot see the server environment, so the `*_BASE_URL`-named
- * clause is skipped here: a missing hint is harmless, a false one is the bug.
+ * third party.
  */
 export function envHintKeyFor(
   provider: string,

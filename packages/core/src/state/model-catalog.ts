@@ -2516,8 +2516,7 @@ export function resolveProviderModelEnv(
  * defaults the vendor-specific clients (deepseek_v4, glm5_3, kimi_k3, minimax_m3) carry, plus
  * the second official host where a vendor runs two (Z.AI's mainland bigmodel.cn, Moonshot's
  * international .ai, MiniMax's mainland minimaxi.com). A key taken from the environment is
- * sent only to one of these, or to the endpoint the environment itself names — see
- * modelEnvFallback.
+ * sent only to one of these — see modelEnvFallback.
  */
 export const VENDOR_ENDPOINTS: Readonly<Record<string, readonly string[]>> = {
   OPENAI_API_KEY: ["https://api.openai.com/v1"],
@@ -2578,25 +2577,22 @@ export interface ModelEnvFallback extends ModelEnvInfo {
  * rule here is about the **destination**, not the group's label: an environment key may go
  * only where the environment put it.
  *
- * - No base URL on the entry: the routed client talks to the vendor's own endpoint (or to the
- *   `*_BASE_URL` the user set beside the key) — allowed, the client reads the pair itself.
- * - A base URL that is one of that vendor's own endpoints (VENDOR_ENDPOINTS; the catalog pins
- *   the DeepSeek and MiniMax rows this way) — allowed.
- * - A base URL equal to the value of the pair's `*_BASE_URL` variable — allowed: the user
- *   paired the key with this endpoint in the environment, deliberately (`env` must be passed
- *   for this clause; without it the clause is skipped, which is what the browser can judge).
+ * - No base URL on the entry: the routed client talks to its own default endpoint, or to the
+ *   `*_BASE_URL` the user set beside the key — that pairing is AgentHub's own and is left to
+ *   it entirely; the client reads the pair itself.
+ * - A base URL that is one of that vendor's own official endpoints (VENDOR_ENDPOINTS; the
+ *   catalog pins the DeepSeek and MiniMax rows this way) — allowed.
  * - Anything else — every gateway group's preset endpoint, custom / user-defined / vLLM rows
- *   with their own endpoints, a vendor row re-pointed at a proxy — refused.
+ *   with their own endpoints, a vendor row re-pointed at a proxy — refused. A row's own base
+ *   URL equal to the `*_BASE_URL` variable's value earns no exception either (per the user:
+ *   environment keys are for official endpoints only): put the key on the row.
  * - A group with a provider-scoped pair (Penguin Go, whose key no AgentHub client reads) is
  *   allowed that pair for every one of its rows, regardless of base URL; the harness reads it.
  *
- * Pure apart from the optional `env`, so the server (with `process.env`) and the models page
- * (without) answer the same question for the preview, the dialog hint and the refusal.
+ * Pure, so the server and the models page answer the same question for the preview, the
+ * dialog hint and the refusal.
  */
-export function modelEnvFallback(
-  entry: ModelCredentialShape,
-  env?: Readonly<Record<string, string | undefined>>,
-): ModelEnvFallback | undefined {
+export function modelEnvFallback(entry: ModelCredentialShape): ModelEnvFallback | undefined {
   const clientType = entry.clientType?.trim() || undefined;
   const clientPair = resolveModelEnv(entry.modelId, clientType);
   const groupPair = resolveProviderModelEnv(entry.provider, entry.modelId, clientType);
@@ -2609,8 +2605,6 @@ export function modelEnvFallback(
   if ((VENDOR_ENDPOINTS[clientPair.envKey] ?? []).some((own) => sameEndpoint(own, baseUrl))) {
     return { ...clientPair, readByClient: true };
   }
-  const named = env?.[clientPair.envBaseUrlKey];
-  if (named && sameEndpoint(named, baseUrl)) return { ...clientPair, readByClient: true };
   return undefined;
 }
 
@@ -2678,7 +2672,7 @@ export function resolveModelCredential(
   const ref = `${entry.provider}/${entry.modelId}`;
   const baseUrl = entry.baseUrl || undefined;
   const apiKey = entry.apiKey || undefined;
-  const fallback = modelEnvFallback(entry, env);
+  const fallback = modelEnvFallback(entry);
   if (fallback !== undefined && !fallback.readByClient && !baseUrl?.trim()) {
     throw new ModelCredentialError(
       `Model ${ref} has no base URL. Its API key belongs to the ${providerInfo(entry.provider)?.label ?? entry.provider} endpoint and cannot be sent to the vendor's default endpoint: set the base URL on the model entry.`,
@@ -2703,15 +2697,15 @@ export function resolveModelCredential(
 /**
  * The key the environment lends a bare endpoint spoken to on a generic protocol client —
  * the add-group listing and the protocol probes, which have a base URL and a protocol but no
- * entry yet. Same rule as modelEnvFallback: only a vendor's own endpoint, or the one the
- * pair's `*_BASE_URL` names, gets the vendor's key; a gateway or a private server gets none.
+ * entry yet. Same rule as modelEnvFallback: only a vendor's own endpoint gets the vendor's
+ * key; a gateway or a private server gets none.
  */
 export function endpointEnvApiKey(
   clientType: string,
   baseUrl: string | undefined,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): string | undefined {
-  const fallback = modelEnvFallback({ provider: "custom", modelId: "", clientType, baseUrl }, env);
+  const fallback = modelEnvFallback({ provider: "custom", modelId: "", clientType, baseUrl });
   if (fallback === undefined || !fallback.readByClient) return undefined;
   return env[fallback.envKey]?.trim() || undefined;
 }

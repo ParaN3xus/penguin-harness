@@ -24,9 +24,8 @@ group's name: an environment key goes only where the environment put it.
   connectivity and speed probes, the vision probe, the utility completion and the endpoint
   listing. A keyless entry is allowed the routed client's variable when it has no base URL (the
   client's default endpoint is the vendor's own, or the `*_BASE_URL` the user set beside the key),
-  when its base URL is one of that vendor's own endpoints (the catalog pins the DeepSeek and
-  MiniMax rows this way), or when its base URL equals the value of the matching `*_BASE_URL`
-  variable — the user paired key and endpoint deliberately. Anything else is refused with "Model
+  or when its base URL is one of that vendor's own official endpoints (the catalog pins the
+  DeepSeek and MiniMax rows this way). Anything else is refused with "Model
   `<provider>/<id>` has no API key … set the API key on the model entry", which the server files
   under `model_credential_missing` like the SDKs' own missing-credential errors.
 - Where the fallback is allowed the client is still handed no key and reads the variable itself,
@@ -41,7 +40,7 @@ group's name: an environment key goes only where the environment put it.
   URL — and the group-level "Set key" dialog names a variable only for vendor groups and Penguin
   Go.
 - Protocol detection and the add-group listing lend a bare endpoint the protocol's variable on
-  the same terms: the vendor's own URL, or the one its `*_BASE_URL` names. A gateway or a private
+  the same terms: the vendor's own URL only. A gateway or a private
   server is probed anonymously (a protocol-shaped 401 still identifies the route), and a listing
   with no usable key is refused before a client exists.
 - The `custom` group's Atria Dawn Preview preset, which used to read `ANTHROPIC_API_KEY`, now
@@ -58,9 +57,11 @@ server that accepts any bearer token is affected too: `OPENAI_API_KEY=dummy` in 
 longer covers it.
 
 What to do: put the key on the row — **Model settings → API key**, the group header's **Set key**,
-or `penguin config model add … --api-key <key>`. Nothing on disk changes shape and no migration
-runs; entries that already carry a key are untouched. The one configuration that keeps working
-without a row key is a deliberate environment pairing: `OPENAI_BASE_URL` (or another vendor's
-`*_BASE_URL`) set to exactly the row's base URL beside the matching `*_API_KEY`.
+or `penguin config model add … --api-key <key>`. A self-hosted or custom server that used to run on
+`OPENAI_API_KEY` + `OPENAI_BASE_URL` in the environment while the row carried its own base URL is
+exactly this case: environment keys are for official endpoints only, so that key goes on the row.
+A row with **no** base URL is untouched and still follows AgentHub's own env pairing (`*_API_KEY`
+with `*_BASE_URL`). Nothing on disk changes shape and no migration runs; entries that already carry
+a key are untouched.
 
 There is no compatibility code, so there is no `backward-compatibility` entry for this batch.
