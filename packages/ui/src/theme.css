@@ -55,7 +55,6 @@
   --color-fg: var(--ui-fg);
   --color-fg-muted: var(--ui-fg-muted);
   --color-fg-subtle: var(--ui-fg-subtle);
-  --color-fg-on-emphasis: var(--ui-fg-on-emphasis);
   --color-link: var(--ui-fg-link);
   --color-link-hover: var(--ui-fg-link-hover);
 

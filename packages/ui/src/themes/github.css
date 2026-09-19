@@ -53,7 +53,6 @@
     --ui-fg: var(--color-gray-900);
     --ui-fg-muted: var(--color-gray-500);
     --ui-fg-subtle: var(--color-gray-400);
-    --ui-fg-on-emphasis: #ffffff;
     --ui-fg-link: #0b57d0; /* brand-700 */
     --ui-fg-link-hover: #1a73e8; /* brand-600 */
 
