@@ -1885,14 +1885,11 @@ describe("modelEnvFallback / resolveModelCredential (a vendor key from the envir
     );
     // A vendor row re-pointed at a proxy: refused.
     expect(
-      modelEnvFallback(
-        {
-          provider: "anthropic",
-          modelId: "claude-sonnet-4-6",
-          baseUrl: "https://proxy.example/anthropic",
-        },
-        VENDOR_ENV,
-      ),
+      modelEnvFallback({
+        provider: "anthropic",
+        modelId: "claude-sonnet-4-6",
+        baseUrl: "https://proxy.example/anthropic",
+      }),
     ).toBeUndefined();
     // An id nothing routes has no client and so no variable.
     expect(modelEnvFallback({ provider: "custom", modelId: "opaque" })).toBeUndefined();
