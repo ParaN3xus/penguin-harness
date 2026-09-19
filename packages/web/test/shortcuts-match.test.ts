@@ -5,12 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { parseChord } from "../src/lib/shortcuts/chord";
-import {
-  isShortcut,
-  matchShortcut,
-  relocateChord,
-  relocateDefaults,
-} from "../src/lib/shortcuts/match";
+import { isShortcut, matchShortcut, relocateChord } from "../src/lib/shortcuts/match";
 import { SHORTCUT_COMMANDS, defaultChord } from "../src/lib/shortcuts/registry";
 import type { Chord, CommandId, KeyLike, Keymap, Platform } from "../src/lib/shortcuts/types";
 
@@ -132,14 +127,24 @@ describe("layout relocation", () => {
     expect(relocateChord(parseChord("Mod+KeyP")!, new Map()).code).toBe("KeyP");
   });
 
-  it("relocates a whole default map and preserves unbound entries", () => {
-    const moved = relocateDefaults(defaults("linux"), azerty);
-    expect(moved.get("terminal.close")?.code).toBe("KeyZ");
-    expect(moved.get("terminal.toggle")?.code).toBe("Backquote");
-    const withUnbound = relocateDefaults(
-      new Map<CommandId, Chord | null>([["editor.save", null]]),
-      azerty,
-    );
-    expect(withUnbound.get("editor.save")).toBeNull();
+  it("looks past the letter keys: US-Dvorak types s on Semicolon and w on Comma", () => {
+    const dvorak = new Map<string, string>([
+      ["KeyS", "o"],
+      ["Semicolon", "s"],
+      ["KeyW", ","],
+      ["Comma", "w"],
+      ["KeyP", "r"],
+      ["KeyR", "p"],
+      ["KeyB", "x"],
+      ["KeyN", "b"],
+      ["Backquote", "`"],
+    ]);
+    expect(relocateChord(parseChord("Mod+KeyS")!, dvorak).code).toBe("Semicolon");
+    expect(relocateChord(parseChord("Mod+KeyW")!, dvorak).code).toBe("Comma");
+    expect(relocateChord(parseChord("Mod+KeyP")!, dvorak).code).toBe("KeyR");
+    expect(relocateChord(parseChord("Mod+KeyB")!, dvorak).code).toBe("KeyN");
+    expect(relocateChord(parseChord("Ctrl+Backquote")!, dvorak).code).toBe("Backquote");
+    // A key that types no character (an F key) has nothing to relocate by.
+    expect(relocateChord(parseChord("F5")!, dvorak).code).toBe("F5");
   });
 });

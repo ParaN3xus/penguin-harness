@@ -57,17 +57,32 @@ const PUNCTUATION: Record<string, string> = {
   IntlBackslash: "\\",
 };
 
-/** The text for the non-modifier key; the code itself when nothing better is known. */
+/**
+ * The character a code types on the US layout, lower-case, or null for a key that types none
+ * (Escape, F5, the arrows). What layout relocation looks for on another layout.
+ */
+export function usCharacter(code: string): string | null {
+  const letter = /^Key([A-Z])$/.exec(code)?.[1];
+  if (letter !== undefined) return letter.toLowerCase();
+  const digit = /^Digit([0-9])$/.exec(code)?.[1];
+  if (digit !== undefined) return digit;
+  return PUNCTUATION[code] ?? null;
+}
+
+/**
+ * The text for the non-modifier key: what the key types on the current layout when the browser
+ * exposes one (a relocated `Semicolon` on Dvorak reads "S"), else its US character or name; the
+ * code itself when nothing better is known.
+ */
 export function keyLabel(
   code: string,
   platform: Platform,
   layout?: ReadonlyMap<string, string>,
 ): string {
+  const typed = layout?.get(code);
+  if (typed !== undefined && typed.length === 1 && typed.trim() !== "") return typed.toUpperCase();
   const letter = /^Key([A-Z])$/.exec(code)?.[1];
-  if (letter !== undefined) {
-    const typed = layout?.get(code);
-    return typed !== undefined && typed.length === 1 ? typed.toUpperCase() : letter;
-  }
+  if (letter !== undefined) return letter;
   const digit = /^Digit([0-9])$/.exec(code)?.[1];
   if (digit !== undefined) return digit;
   const numpad = /^Numpad([0-9])$/.exec(code)?.[1];

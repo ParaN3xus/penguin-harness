@@ -71,6 +71,11 @@ describe("key text", () => {
     expect(keyLabel("KeyZ", "linux", azerty)).toBe("W");
     expect(keyLabel("KeyZ", "linux")).toBe("Z");
     expect(formatChord(chord("Mod+KeyZ"), "mac", azerty)).toBe("⌘W");
+    // Dvorak relocates the save chord onto the semicolon position, which then reads S.
+    expect(keyLabel("Semicolon", "linux", new Map([["Semicolon", "s"]]))).toBe("S");
+    expect(formatChord(chord("Mod+Semicolon"), "windows", new Map([["Semicolon", "s"]]))).toBe(
+      "Ctrl+S",
+    );
     // A dead key or a multi-character entry is not a label; the US letter stands.
     expect(keyLabel("KeyZ", "linux", new Map([["KeyZ", ""]]))).toBe("Z");
   });

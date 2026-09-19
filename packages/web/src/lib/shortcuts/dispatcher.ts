@@ -48,31 +48,20 @@ export function runCommand(id: CommandId): boolean {
   return false;
 }
 
-export interface KeydownTarget {
-  addEventListener(type: "keydown", listener: (event: KeyboardEvent) => void): void;
-  removeEventListener(type: "keydown", listener: (event: KeyboardEvent) => void): void;
-}
-
-const installed = new WeakSet<KeydownTarget>();
-
-function onKeyDown(event: KeyboardEvent): void {
+/**
+ * The window's keydown listener. A held chord auto-repeats: a repeat of a command that has a
+ * handler is kept from the browser's own action (Print, Downloads, address-bar search) but does
+ * not run the command again, so a held ⌘B toggles the sidebar once.
+ */
+export function handleShortcutKeydown(event: KeyboardEvent): void {
   if (event.defaultPrevented) return;
   const id = matchShortcut(event, keymap(), ["global"], currentPlatform());
   if (id === null) return;
+  if (event.repeat) {
+    if (hasCommandHandler(id)) event.preventDefault();
+    return;
+  }
   if (runCommand(id)) event.preventDefault();
 }
 
-/** Idempotent per target; returns the uninstall function. */
-export function installShortcutDispatcher(target: KeydownTarget): () => void {
-  if (!installed.has(target)) {
-    installed.add(target);
-    target.addEventListener("keydown", onKeyDown);
-  }
-  return () => {
-    if (!installed.has(target)) return;
-    installed.delete(target);
-    target.removeEventListener("keydown", onKeyDown);
-  };
-}
-
-if (typeof window !== "undefined") installShortcutDispatcher(window);
+if (typeof window !== "undefined") window.addEventListener("keydown", handleShortcutKeydown);

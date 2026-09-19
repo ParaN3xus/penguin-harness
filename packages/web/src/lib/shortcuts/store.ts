@@ -224,7 +224,7 @@ interface NavigatorKeyboard {
 }
 
 if (typeof window !== "undefined") {
-  // Another tab (or the settings dialog in this one, through the mirror) changed the overrides.
+  // Another tab wrote the mirror (the event never fires in the writing tab; writeStored notifies that one itself).
   window.addEventListener("storage", (event) => noteExternalChange(event.key));
   // Chromium and Electron expose the layout; Firefox and Safari do not and keep US positions.
   const keyboard = (navigator as NavigatorKeyboard).keyboard;
