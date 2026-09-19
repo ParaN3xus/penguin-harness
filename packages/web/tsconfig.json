@@ -6,10 +6,7 @@
     "jsx": "react-jsx",
     "useDefineForClassFields": true,
     "paths": {
-      "@prismshadow/penguin-server/api": ["../server/src/api/types.ts"],
-      "@prismshadow/penguin-ui": ["../ui/src/index.ts"],
-      "@prismshadow/penguin-ui/vite": ["../ui/src/vite-plugin.ts"],
-      "@prismshadow/penguin-ui/*": ["../ui/src/*"]
+      "@prismshadow/penguin-server/api": ["../server/src/api/types.ts"]
     }
   },
   "include": ["src", "test", "vite.config.ts", "vitest.config.ts"]

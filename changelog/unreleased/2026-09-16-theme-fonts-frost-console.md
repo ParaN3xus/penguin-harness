@@ -48,8 +48,10 @@ looks as before, apart from a font credit at the foot of the account menu.
 
 ## Themes
 
-- `themes/modern.css` and `themes/geek.css` define every token in light and dark, plus the gray and
-  white re-pointing that carries the app's existing palette classes onto each theme's neutrals.
+- `themes/modern.css` and `themes/geek.css` define every token, plus the gray and white re-pointing
+  that carries the app's existing palette classes onto each theme's neutrals. As in
+  `themes/github.css`, the base rule holds every token with its light value and the dark rule only
+  what dark changes.
 - Frost: a warm off-white canvas with white cards, pill-shaped controls with boxes on a 4–20 px
   radius scale, one green accent, regular-weight headings, untinted tight shadows, and frosted glass
   (a 16 px blur) only on menus, popovers, the modal card, the floating composer and a sticky header.
@@ -59,5 +61,5 @@ looks as before, apart from a font credit at the foot of the account menu.
   signals, mono only for code and data, and depth drawn with lines; the modal card carries a
   line-emphasis border instead of a shadow.
 - Both themes share one type scale, with heading steps of 1.25 and nothing below .75rem, and state
-  transitions of 120–200 ms. Both carry the `done` and `info` tones, and every tone reads at 4.5:1 as
+  transitions of 120–200 ms. Their controls' padding-block is Primer's (0.25, 0.375 and 0.625rem). Both carry the `done` and `info` tones, and every tone reads at 4.5:1 as
   text on its own tint and at 3:1 as a mark on every surface.

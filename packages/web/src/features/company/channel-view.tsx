@@ -574,7 +574,7 @@ export function ChannelView() {
           ) : (
             <span
               aria-hidden
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-900 text-xs font-bold text-fg-on-emphasis dark:bg-gray-200 dark:text-gray-900"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-900 text-xs font-bold text-white dark:bg-gray-200 dark:text-gray-900"
             >
               {senderLabel.slice(0, 1).toUpperCase()}
             </span>
