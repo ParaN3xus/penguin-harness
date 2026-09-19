@@ -434,7 +434,6 @@ export function AppLayout() {
   // only exists in the expanded sidebar: with the rail showing, the command expands the sidebar
   // with the field already open (the pinned Sidebar mounts fresh on every expand and takes the
   // flag as its initial state); otherwise it declines and the sidebar's own handler takes it.
-  const company = useCompany();
   const inCompany = company.workMode === "company";
   const newChat = useNewChat();
   const [openSearchOnExpand, setOpenSearchOnExpand] = useState(false);
