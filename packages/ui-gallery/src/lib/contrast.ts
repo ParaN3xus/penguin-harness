@@ -16,7 +16,13 @@ export function contrastTargets(name: string): string[] {
   return [];
 }
 
-/** Charts are graphics (3:1); every other ink is text (4.5:1). */
-export function contrastFloor(name: string): number {
+/**
+ * The floor an ink is judged by: charts are graphics (3:1), and every other ink is text (4.5:1)
+ * except the subtle ink, placeholder and disabled text that WCAG exempts. The contrast suite
+ * (packages/ui/test/contrast.test.ts) sets no floor for it either, so its ratios are shown here,
+ * never judged: null.
+ */
+export function contrastFloor(name: string): number | null {
+  if (name === "--ui-fg-subtle") return null;
   return name.startsWith("--ui-chart") ? 3 : 4.5;
 }

@@ -43,6 +43,9 @@ function watchPackageSource(): Plugin {
 export default defineConfig({
   base: process.env.BASE_PATH ?? "/",
   plugins: [react(), tailwindcss(), penguinUi(), watchPackageSource()],
+  // Never inline a font, as in the web app: a small slice would otherwise sit in the stylesheet as
+  // a data: URI, whatever theme is shown.
+  build: { assetsInlineLimit: (file) => (file.endsWith(".woff2") ? false : undefined) },
   // Fixed PenguinHarness dev port; the allocation table lives in core's internal/ports.ts.
   server: { port: 7372, strictPort: true },
   preview: { port: 7372, strictPort: true },

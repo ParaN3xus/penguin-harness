@@ -143,6 +143,7 @@ function useMeasuredTokens(root: () => Element | null, key: string): string[] | 
 
 function Ratios({ name, values }: { name: string; values: TokenValues }) {
   const targets = contrastTargets(name);
+  const floor = contrastFloor(name);
   const canvas = values["--ui-canvas"] || "#ffffff";
   const chips = targets.flatMap((target) => {
     const bgValue = values[target];
@@ -150,7 +151,8 @@ function Ratios({ name, values }: { name: string; values: TokenValues }) {
     const fg = bg && values[name] ? paintColor(values[name] ?? "", toHex(bg)) : null;
     if (!bg || !fg) return [];
     const ratio = contrastRatio(composite(fg, bg), bg);
-    return [{ target, ratio, pass: ratio >= contrastFloor(name) }];
+    // No floor: the ratio is shown and never marked failing.
+    return [{ target, ratio, pass: floor === null ? undefined : ratio >= floor }];
   });
   if (chips.length === 0) return null;
   return (
