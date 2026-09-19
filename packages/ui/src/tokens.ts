@@ -15,9 +15,12 @@
  * Adding, renaming or removing a name is a contract change: every theme file changes in the
  * same commit, and so does the bridge in `theme.css` when the name has a utility alias.
  *
- * Heights are shared: control padding-block, line-heights and the type scale carry the same
- * values in every theme, so switching themes never reflows a layout vertically. All type and
- * density lengths are rem, so the 16 / 18 / 20 px root tiers keep scaling them.
+ * Heights are shared: the padding-block of controls, rows and menu rows carries the same values in
+ * every theme, and so will the line-heights and the type scale once Primer adopts the shared scale
+ * in W1a. Until then Primer keeps the app's rem line-heights (a small control is 29px at the 18px
+ * root, 31.25px in Frost and Console); from W1a switching themes never reflows a layout
+ * vertically. All type and density lengths are rem, so the 16 / 18 / 20 px root tiers keep
+ * scaling them.
  */
 
 /** Stable, lowercase theme ids. Display names (Primer / Frost / Console) are UI copy, not ids. */
