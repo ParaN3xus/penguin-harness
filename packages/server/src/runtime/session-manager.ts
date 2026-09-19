@@ -144,8 +144,8 @@ function compactUnavailable(why: Exclude<CompactAvailability, "ok">): HttpError 
  * context to close but no compaction configured (`compaction_not_configured`), the target
  * cannot be constructed (`model_unavailable` — a missing credential foremost, worded like the
  * loader's own message for it), and a summary already held for the next context that the
- * target's window cannot take (`model_unavailable` as well: the target exists and is
- * configured, it cannot be switched to; core's message names both numbers). Anything else core
+ * target's window cannot take (`summary_too_large`; core's message names both numbers, the
+ * remedy is a target with a larger window). Anything else core
  * throws is not a refusal but a failure — an Agent State that no longer parses, a bootstrap
  * that broke — and is rethrown so it reaches the 500 path and its logging rather than being
  * dressed up as a target problem.
@@ -167,7 +167,7 @@ function switchRefusal(err: unknown, ref: ModelRefDto): HttpError {
           : err.message,
       );
     case "summary_too_large":
-      return new HttpError(409, "model_unavailable", err.message);
+      return new HttpError(409, "summary_too_large", err.message);
   }
 }
 
@@ -1368,10 +1368,10 @@ export class SessionManager {
    * model it is on, then opens its next context on `ref` — core `Session.switchModel`. Gated
    * like a compaction (open, not deleting, idle) and refused before any event with a code per
    * reason: `same_model`, `model_not_configured` (the target is not in the Project config),
-   * `model_unavailable` (the target cannot be switched to: its client cannot be constructed —
-   * no credential —, a runtime with no switch seam, or a held summary its window cannot take)
-   * and `compaction_not_configured` (see `switchRefusal`; any other error core throws before
-   * its first event is a failure and answers 500). Two ways out:
+   * `model_unavailable` (its client cannot be constructed — no credential, or a runtime with
+   * no switch seam), `compaction_not_configured` and `summary_too_large` (a summary already
+   * held does not fit the target's window; see `switchRefusal` — any other error core throws
+   * before its first event is a failure and answers 500). Two ways out:
    *
    * - `switched: false` — a driven run like a compaction: status `compacting`, idle when it
    *   ends. The stream is an ordinary manual compaction pair when the context had something to

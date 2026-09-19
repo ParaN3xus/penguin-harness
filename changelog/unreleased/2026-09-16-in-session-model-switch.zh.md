@@ -20,7 +20,7 @@
 
 ## Server
 
-- 新增 `POST /api/sessions/:sessionId/switch-model`（`{ provider, modelId }`）：答 202 并像 `/compact` 一样流式推送（状态 `compacting`）；Session 从未运行过时答 200 并带回更新后的 Session。拒绝一律 409：`task_in_progress`、`compacting`、`same_model`、`model_not_configured`、`model_unavailable`（目标无法构造，或已持有的摘要放不进其窗口）、`compaction_not_configured`；core 在首个事件前抛出的其他异常答 500。
+- 新增 `POST /api/sessions/:sessionId/switch-model`（`{ provider, modelId }`）：答 202 并像 `/compact` 一样流式推送（状态 `compacting`）；Session 从未运行过时答 200 并带回更新后的 Session。拒绝一律 409：`task_in_progress`、`compacting`、`same_model`、`model_not_configured`、`model_unavailable`、`compaction_not_configured`、`summary_too_large`（已持有的摘要放不进目标窗口）；core 在首个事件前抛出的其他异常答 500。
 - Session 行的 `provider` / `model_id` 改为当前模型：新上下文的 `session_meta` 经过输出流时更新，并在加载 Session 时按其实际模型校正。切换所用的压缩请求计入旧模型，此后的请求计入新模型。fork 取所截分片的模型，Trace 索引取 Session 最新分片的模型。
 
 ## Web

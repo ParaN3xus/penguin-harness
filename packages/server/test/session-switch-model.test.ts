@@ -307,7 +307,7 @@ describe("POST /switch-model", () => {
     expect(row().modelId).toBe(A.modelId);
   });
 
-  it("409 model_unavailable with core's own numbers: a summary already held does not fit the target's window", async () => {
+  it("409 summary_too_large with core's own numbers: a summary already held does not fit the target's window", async () => {
     // A Session just compacted has a summary in hand; core refuses before any event when the
     // target cannot take it (there is no pair to end `fatal`). The message names both sizes.
     const message =
@@ -321,7 +321,7 @@ describe("POST /switch-model", () => {
     const res = await api.post(url, B);
     expect(res.status).toBe(409);
     const body = (await res.json()) as { error: { code: string; message: string } };
-    expect(body.error.code).toBe("model_unavailable");
+    expect(body.error.code).toBe("summary_too_large");
     expect(body.error.message).toBe(message);
     expect(t.deps.manager.statusOf(SID)).toBe("idle");
     expect(row().modelId).toBe(A.modelId);

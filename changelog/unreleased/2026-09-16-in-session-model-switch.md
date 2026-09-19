@@ -20,7 +20,7 @@ A Session could run on only one model: the model reference was fixed when the Se
 
 ## Server
 
-- `POST /api/sessions/:sessionId/switch-model` with `{ provider, modelId }`. It answers 202 and streams like `/compact` (status `compacting`), or 200 with the updated Session when the Session had never run. Refusals are 409 `task_in_progress`, `compacting`, `same_model`, `model_not_configured`, `model_unavailable` (the target cannot be constructed, or a held summary does not fit its window) and `compaction_not_configured`; any other error core throws before its first event answers 500.
+- `POST /api/sessions/:sessionId/switch-model` with `{ provider, modelId }`. It answers 202 and streams like `/compact` (status `compacting`), or 200 with the updated Session when the Session had never run. Refusals are 409 `task_in_progress`, `compacting`, `same_model`, `model_not_configured`, `model_unavailable`, `compaction_not_configured` and `summary_too_large` (a held summary does not fit the target's window); any other error core throws before its first event answers 500.
 - The Session row's `provider` / `model_id` became the current model: they move as the new context's `session_meta` passes through the stream and are reconciled from the loaded Session. The switch's compaction request is billed to the old model and later requests to the new one. A fork takes its model from the shard it cuts, and the trace index reads a Session's model from its latest shard.
 
 ## Web
