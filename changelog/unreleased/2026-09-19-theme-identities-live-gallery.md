@@ -3,6 +3,7 @@
 - **Date:** 2026-09-19
 - **Type:** process
 - **Scope:** `ui`, `ui-gallery`
+- **PR:** [#795](https://github.com/Prism-Shadow/penguin-harness/pull/795)
 
 [中文版](2026-09-19-theme-identities-live-gallery.zh.md)
 
