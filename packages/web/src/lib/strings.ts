@@ -1811,9 +1811,14 @@ export const zh = {
     /** Body when the transcript is empty: there is no context to compact, so the switch is immediate. */
     modelSwitchInSessionDirectBody: (to: string): string =>
       `当前上下文没有内容，将直接切换到「${to}」。`,
+    /** Body when the transcript ends in a completed compaction with nothing since: the switch runs no compaction and continues from the summary already held. */
+    modelSwitchInSessionCompactedBody: (to: string): string =>
+      `上下文刚压缩过、此后没有新的对话，不会再次压缩：本对话将带着该摘要以「${to}」继续。`,
     /** Toast once the server accepted a compacting switch: the row in the conversation carries it from here. */
     modelSwitchInSessionStarted: (from: string, to: string): string =>
       `正在用「${from}」压缩上下文，完成后切换到「${to}」。`,
+    /** Toast once the server accepted a switch that compacts nothing (the context was just compacted): the model-change marker in the conversation carries it from here. */
+    modelSwitchInSessionSwitching: (to: string): string => `正在切换到「${to}」。`,
     /** Toast when the switch completed inside the request (the Session had never run). */
     modelSwitchInSessionApplied: (to: string): string => `已切换到「${to}」。`,
     workspaceUseThis: "使用此目录",
@@ -4195,7 +4200,8 @@ Benchmark：
       compaction_not_configured: "该 Agent 没有配置上下文压缩。",
       same_model: "本会话已在使用该模型。",
       model_not_configured: "所选模型不在本 Project 的模型配置中。",
-      model_unavailable: "所选模型暂不可用（例如还没有 API key），请先在「模型」页配置。",
+      model_unavailable:
+        "暂时无法切换到所选模型：可能还没有 API key（请先在「模型」页配置），或上下文摘要放不进它的窗口。",
       nothing_to_compact: "当前上下文还没有可压缩的内容（尚未完成一轮对话）。",
       already_compacted: "刚刚压缩过，之后还没有新的对话，无需重复压缩。",
       version_conflict: "快照版本不高于当前版本。",

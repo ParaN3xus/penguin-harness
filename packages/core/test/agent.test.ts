@@ -30,6 +30,7 @@ import {
   DEFAULT_PROJECT_ID,
   installSkill,
   loadProjectConfig,
+  ModelSwitchRefusedError,
   saveProjectConfig,
   setVaultEntry,
   userText,
@@ -1255,9 +1256,15 @@ describe("Session.switchModel on a real Agent (the composition layer's half)", (
     await fs.mkdir(ws, { recursive: true });
     const session = await agent.createSession({ workspaceDir: ws });
     try {
-      await expect(
-        drain(session.switchModel({ provider: "custom", modelId: "nobody-configured-this" })),
-      ).rejects.toThrow(/is not in the Project config/);
+      // A typed refusal, so a host maps it to its own code without reading the message.
+      const refusal = await drain(
+        session.switchModel({ provider: "custom", modelId: "nobody-configured-this" }),
+      ).catch((e: unknown) => e);
+      expect(refusal).toBeInstanceOf(ModelSwitchRefusedError);
+      expect(refusal).toMatchObject({
+        reason: "model_not_configured",
+        message: expect.stringMatching(/is not in the Project config/) as unknown,
+      });
       expect(session.modelId).toBe("deepseek-flash");
       expect(await agent.latestSessionId()).toBeNull();
     } finally {

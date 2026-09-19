@@ -38,6 +38,7 @@ import {
   findLatestTraceFile,
   isHookInput,
   isSessionMeta,
+  ModelSwitchRefusedError,
   parseUserSteeringText,
   tracesDir,
   userText,
@@ -133,31 +134,38 @@ function compactUnavailable(why: Exclude<CompactAvailability, "ok">): HttpError 
 }
 
 /**
- * Core's refusal of a model switch, thrown before its first event (see `Session.switchModel`),
- * under the code the HTTP contract names for it (see `SessionSwitchModelRequest`). Core throws
- * plain Errors, so they are told apart by their message: the target is not in the Project
- * config on disk (`model_not_configured` — a race with the manager's own check), the Session
- * has a context to close but no compaction configured (`compaction_not_configured`), and
- * everything else is a target that cannot be constructed (`model_unavailable`) — a missing
- * credential foremost, worded like the loader's own message for it.
+ * Core's refusal of a model switch, thrown before its first event as a typed
+ * `ModelSwitchRefusedError` (see `Session.switchModel`), under the code the HTTP contract names
+ * for its reason (see `SessionSwitchModelRequest`): the target is not in the Project config on
+ * disk (`model_not_configured` — a race with the manager's own check), the Session has a
+ * context to close but no compaction configured (`compaction_not_configured`), the target
+ * cannot be constructed (`model_unavailable` — a missing credential foremost, worded like the
+ * loader's own message for it), and a summary already held for the next context that the
+ * target's window cannot take (`model_unavailable` as well: the target exists and is
+ * configured, it cannot be switched to; core's message names both numbers). Anything else core
+ * throws is not a refusal but a failure — an Agent State that no longer parses, a bootstrap
+ * that broke — and is rethrown so it reaches the 500 path and its logging rather than being
+ * dressed up as a target problem.
  */
 function switchRefusal(err: unknown, ref: ModelRefDto): HttpError {
   if (err instanceof HttpError) return err;
-  const message = err instanceof Error ? err.message : String(err);
-  if (/not in the Project config/i.test(message)) {
-    return new HttpError(409, "model_not_configured", message);
+  if (!(err instanceof ModelSwitchRefusedError)) throw err;
+  switch (err.reason) {
+    case "model_not_configured":
+      return new HttpError(409, "model_not_configured", err.message);
+    case "compaction_not_configured":
+      return new HttpError(409, "compaction_not_configured", err.message);
+    case "model_unavailable":
+      return new HttpError(
+        409,
+        "model_unavailable",
+        isMissingCredential(err)
+          ? `Model ${ref.modelId} has no API key yet. Configure it on the Models page first.`
+          : err.message,
+      );
+    case "summary_too_large":
+      return new HttpError(409, "model_unavailable", err.message);
   }
-  if (/compaction is not configured/i.test(message)) {
-    return new HttpError(409, "compaction_not_configured", message);
-  }
-  if (isMissingCredential(err)) {
-    return new HttpError(
-      409,
-      "model_unavailable",
-      `Model ${ref.modelId} has no API key yet. Configure it on the Models page first.`,
-    );
-  }
-  return new HttpError(409, "model_unavailable", message);
 }
 
 /** The model a runtime Session reports itself on, or null for one that reports none (test fakes). */
@@ -1348,8 +1356,10 @@ export class SessionManager {
    * model it is on, then opens its next context on `ref` — core `Session.switchModel`. Gated
    * like a compaction (open, not deleting, idle) and refused before any event with a code per
    * reason: `same_model`, `model_not_configured` (the target is not in the Project config),
-   * `model_unavailable` (its client cannot be constructed — no credential, or a runtime with
-   * no switch seam) and `compaction_not_configured` (see `switchRefusal`). Two ways out:
+   * `model_unavailable` (the target cannot be switched to: its client cannot be constructed —
+   * no credential —, a runtime with no switch seam, or a held summary its window cannot take)
+   * and `compaction_not_configured` (see `switchRefusal`; any other error core throws before
+   * its first event is a failure and answers 500). Two ways out:
    *
    * - `switched: false` — a driven run like a compaction: status `compacting`, idle when it
    *   ends. The stream is an ordinary manual compaction pair when the context had something to
@@ -1390,9 +1400,11 @@ export class SessionManager {
       }
       await this.assertModelConfigured(entry.projectId, ref);
       if (!entry.session.switchModel) {
-        throw switchRefusal(
-          new Error("Switching the model is not available for this Session."),
-          ref,
+        // A runtime without the switch seam: the target exists, it cannot be switched to here.
+        throw new HttpError(
+          409,
+          "model_unavailable",
+          "Switching the model is not available for this Session.",
         );
       }
       const ac = new AbortController();

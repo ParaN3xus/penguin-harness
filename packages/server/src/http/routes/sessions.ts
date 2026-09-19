@@ -1306,8 +1306,17 @@ export function sessionsRoutes(deps: SessionsRouteDeps): Hono<AppEnv> {
     if (!outcome.switched) {
       return c.json({ sessionId: outcome.sessionId } satisfies TaskCreateResponse, 202);
     }
-    // Re-read after the switch: the manager moved the row to the new pair inside the call.
-    const fresh = deps.sessionsRepo.findById(outcome.sessionId) ?? row;
+    // Re-read after the switch: the manager moved the row to the new pair inside the call. A
+    // row gone meanwhile (deleted during the request) is a 404, not the pre-switch row — that
+    // one names a model the runtime no longer runs on.
+    const fresh = deps.sessionsRepo.findById(outcome.sessionId);
+    if (!fresh) {
+      throw new HttpError(
+        404,
+        "session_not_found",
+        "Session does not exist or you do not have access.",
+      );
+    }
     const hasTrace = await deps.sessionService.hasTrace(fresh);
     return c.json({
       session: await deps.sessionService.toInfo(fresh, hasTrace),

@@ -62,7 +62,11 @@ import { vetoForToolCall, withCommandPolicy } from "./internal/command-policy.js
 import type { CommandPolicySource } from "./internal/command-policy.js";
 import { generateTitleWithLLM } from "./internal/session-title.js";
 import type { SessionTitleResult } from "./internal/session-title.js";
-import { compactAvailability, ContextEngine } from "./engine/context-engine.js";
+import {
+  compactAvailability,
+  ContextEngine,
+  ModelSwitchRefusedError,
+} from "./engine/context-engine.js";
 import type {
   CompactAvailability,
   CompactionSettings,
@@ -824,7 +828,10 @@ export class Session {
    * the actual conversation), then proceeds like a live one; the engine's three shapes are
    * described at `ContextEngine.switchModel`. A compaction that fails or is aborted leaves the
    * Session on its current model; a summary the target's window cannot hold ends `fatal` the
-   * same way. Not the `/model` handoff, which opens a NEW Session on another model.
+   * same way, or — when it is one already held from an earlier compaction — refuses the switch
+   * before any event. Every refusal is a {@link ModelSwitchRefusedError} naming its reason;
+   * anything else thrown is a failure. Not the `/model` handoff, which opens a NEW Session on
+   * another model.
    *
    * Hosts that hand out models — the Web App's picker, the CLI's `/switch-model` — call this;
    * children spawned after the switch inherit the new model.
@@ -833,7 +840,10 @@ export class Session {
     const previous: ModelRef = { provider: this.provider, model_id: this.modelId };
     const next: ModelRef = { provider: opts.provider, model_id: opts.modelId };
     if (!this.modelSwitch) {
-      throw new Error("Switching the model is not available for this Session.");
+      throw new ModelSwitchRefusedError(
+        "model_unavailable",
+        "Switching the model is not available for this Session.",
+      );
     }
     const target = await this.modelSwitch.validate(next);
     if (sameModelRef(previous, next)) return { status: "completed", previous, next };
@@ -849,7 +859,8 @@ export class Session {
       return { status: "completed", previous, next };
     }
     if (this.compactability() === "unsupported") {
-      throw new Error(
+      throw new ModelSwitchRefusedError(
+        "compaction_not_configured",
         "Context compaction is not configured for this Session, so its model cannot be switched.",
       );
     }
@@ -868,6 +879,14 @@ export class Session {
     const room = await this.summaryRoom(target.contextWindow);
     const switchTarget: ModelSwitchTarget = { ref: next, ...(room ? { summaryRoom: room } : {}) };
     const status = yield* this.engine!.switchModel(switchTarget, opts.signal);
+    // Input an aborted bootstrap left with the Session was folded for the model that was
+    // running then; a context opened on a model without vision takes it folded, like the
+    // engine folds its own carry-over. (The folded form is a record the old file does not
+    // hold, so the next run writes it into the new context's file; the original stays where
+    // the abort wrote it.)
+    if (status === "completed" && !this.modelHasVision && this.carryOverInput.length > 0) {
+      this.carryOverInput = await this.foldImages(this.carryOverInput);
+    }
     return { status, previous, next };
   }
 

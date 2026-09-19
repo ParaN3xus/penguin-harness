@@ -87,6 +87,7 @@ import type {
 } from "./omnimessage/index.js";
 import { SUBAGENT_NAME } from "./environment/tools/run-subagent.js";
 import { INPUT_SUBAGENT_NAME } from "./environment/tools/input-subagent.js";
+import { ModelSwitchRefusedError } from "./engine/context-engine.js";
 import type {
   CompactionSettings,
   OpenContextOptions,
@@ -577,14 +578,15 @@ export class Agent {
    * The entry a model switch opens the next context on, resolved against the Project config
    * **as it is on disk** rather than this Agent object's load-time snapshot: the user picks
    * from the models configured now, a long-lived Agent must not answer from the ones
-   * configured when it loaded. Throws when the pair names no entry — the switch is refused
-   * before anything is sent or recorded.
+   * configured when it loaded. Throws the switch's typed refusal when the pair names no entry
+   * — the switch is refused before anything is sent or recorded.
    */
   private async modelEntryFromDisk(ref: ModelRef): Promise<ModelEntry> {
     const projectConfig = await loadProjectConfig(this.state.root, this.state.projectId);
     const entry = getModel(projectConfig, ref);
     if (!entry) {
-      throw new Error(
+      throw new ModelSwitchRefusedError(
+        "model_not_configured",
         `Model is not in the Project config: ${formatModelRef(ref)}. Use \`penguin config model list\` to see the configured models, or \`penguin config model add\` to add one.`,
       );
     }
@@ -1371,7 +1373,16 @@ export class Agent {
     const modelSwitch: ModelSwitchSupport = {
       validate: async (ref) => {
         const entry = await this.modelEntryFromDisk(ref);
-        createBareLLM(entry);
+        try {
+          createBareLLM(entry);
+        } catch (err) {
+          // A configured target whose client cannot be built — a missing credential foremost:
+          // a refusal with the loader's own wording, not a failure of the switch.
+          throw new ModelSwitchRefusedError(
+            "model_unavailable",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
         return { contextWindow: entry.context_window };
       },
       reassembleInitialContext: async (ref) =>

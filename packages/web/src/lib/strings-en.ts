@@ -1817,8 +1817,11 @@ export const en: Strings = {
       `The context is compacted on the current model "${from}" first, and this conversation then continues on "${to}". If the compaction fails, it stays on "${from}".`,
     modelSwitchInSessionDirectBody: (to: string): string =>
       `This conversation has no context yet, so it switches to "${to}" right away.`,
+    modelSwitchInSessionCompactedBody: (to: string): string =>
+      `The context was compacted a moment ago and nothing has been said since, so nothing is compacted again: this conversation continues on "${to}" from that summary.`,
     modelSwitchInSessionStarted: (from: string, to: string): string =>
       `Compacting the context on "${from}" — the conversation moves to "${to}" when it finishes.`,
+    modelSwitchInSessionSwitching: (to: string): string => `Switching to "${to}".`,
     modelSwitchInSessionApplied: (to: string): string => `Switched to "${to}".`,
     workspaceUseThis: "Use this dir",
     workspaceUp: "Parent dir",
@@ -4233,7 +4236,7 @@ Scenarios:
       same_model: "This conversation is already on that model.",
       model_not_configured: "That model is not in this Project's model configuration.",
       model_unavailable:
-        "That model cannot be used yet (it may have no API key) — configure it on the Models page first.",
+        "That model cannot be switched to yet: it may have no API key (configure it on the Models page first), or the context summary does not fit its window.",
       nothing_to_compact:
         "There is nothing to compact in the current context yet (no completed conversation turn).",
       already_compacted:

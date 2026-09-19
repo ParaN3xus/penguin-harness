@@ -105,7 +105,13 @@ import { buildOutline } from "./outline-model";
 import { GoalStatusBanner } from "./goal-banner";
 import { handoffMessage, modelSwitchMessage } from "./agent-handoff";
 import { modelLabel } from "./model-select";
-import { modelSwitchOutcome, sessionModelPick, sessionRowStale } from "./model-switch";
+import {
+  modelSwitchOutcome,
+  sessionModelPick,
+  sessionRowStale,
+  switchContextShape,
+} from "./model-switch";
+import type { SwitchContextShape } from "./model-switch";
 import { hasConfiguredKey, promotedPricing, sameModelRef } from "../models/model-grouping";
 import { providerInfo } from "@prismshadow/penguin-core/model-catalog";
 import { WorkspaceBrowser } from "./workspace-browser";
@@ -344,11 +350,12 @@ export function ChatPage() {
   // (needsThinkingSwitchConfirm / thinkingSwitchAfterCompaction).
   const [thinkingSwitch, setThinkingSwitch] = useState<StagedThinkingSwitch | null>(null);
   // A pick in the session toolbar's model picker, waiting on its confirm dialog (null = no
-  // dialog). `direct` = the transcript is empty, so the dialog says the switch is immediate
-  // rather than compacting first. See onPickSessionModel / confirmModelSwitch.
+  // dialog). `shape` is what the switch will do to the context — compact it first, switch an
+  // empty conversation at once, or continue from a summary already held — so the dialog and
+  // the toast promise only that. See onPickSessionModel / confirmModelSwitch.
   const [modelSwitchAsk, setModelSwitchAsk] = useState<{
     to: ModelRefDto;
-    direct: boolean;
+    shape: SwitchContextShape;
   } | null>(null);
   // The dialog stays open (its buttons busy) until the switch request answers, so a double
   // click cannot post the switch twice.
@@ -1533,7 +1540,9 @@ export function ChatPage() {
 
   // Session toolbar model picker: switches THIS conversation's model (the `/model` handoff opens
   // a new conversation instead). Re-picking the current model does nothing; any other pick asks
-  // first, because the switch compacts the context on the current model before moving on.
+  // first, worded for what the switch will do: compact the context on the current model before
+  // moving on, or — right after a compaction, when there is nothing to compact — continue on
+  // the picked model from the summary already held.
   const onPickSessionModel = useCallback(
     (ref: ModelRefDto) => {
       if (!selected) return;
@@ -1541,19 +1550,21 @@ export function ChatPage() {
         current: { provider: selected.provider, modelId: selected.modelId },
         picked: ref,
         status: stream.taskState,
-        // Read at pick time: the model's items mutate in place.
-        transcriptEmpty: stream.prefixItems.length === 0 && stream.model.items.length === 0,
+        // Read at pick time: the model's items mutate in place. The live tail decides, behind
+        // whatever window was backfilled above it.
+        shape: switchContextShape([...stream.prefixItems, ...stream.model.items]),
       });
-      if (pick.act === "confirm") setModelSwitchAsk({ to: ref, direct: pick.direct });
+      if (pick.act === "confirm") setModelSwitchAsk({ to: ref, shape: pick.shape });
     },
     [selected, stream.taskState, stream.prefixItems, stream.model],
   );
 
-  // The dialog's "compact and switch". 202 = the switch is streaming: the compaction row carries
-  // it from here, and the effect below refetches the Session once the new context's session_meta
-  // names the new model. 200 = the Session never ran and switched inside the request: its row is
-  // applied at once. A refusal (409 busy / same model / not configured / unavailable / compaction
-  // not configured) is a toast.
+  // The dialog's confirm. 202 = the switch is streaming: the compaction row (or, right after a
+  // compaction, the model-change marker alone) carries it from here, and the effect below
+  // refetches the Session once the new context's session_meta names the new model. 200 = the
+  // Session never ran and switched inside the request: its row is applied at once. A refusal
+  // (409 busy / same model / not configured / unavailable / compaction not configured) is a
+  // toast.
   const confirmModelSwitch = useCallback(async () => {
     const ask = modelSwitchAsk;
     if (!selected || ask === null || modelSwitchPosting) return;
@@ -1571,7 +1582,13 @@ export function ChatPage() {
         toastSuccess(S.chat.modelSwitchInSessionApplied(to));
         return;
       }
-      toastInfo(S.chat.modelSwitchInSessionStarted(from, to));
+      // Only a switch that compacts may say so; one that continues from a held summary runs
+      // no compaction and must not promise one.
+      toastInfo(
+        ask.shape === "compact"
+          ? S.chat.modelSwitchInSessionStarted(from, to)
+          : S.chat.modelSwitchInSessionSwitching(to),
+      );
       // The switch shares get-or-resume-or-heal with /compact: follow a self-healed id.
       await syncHealedSessionId(selected.sessionId, outcome.sessionId);
     } catch (e) {
@@ -1593,21 +1610,31 @@ export function ChatPage() {
   // for the current model, and nothing on the stream updates it. When the running context's
   // session_meta names another model than the row on hand — a switch completed, on this tab or
   // another one watching the Session, or the row was held from before a switch — the row is
-  // refetched once the Session is idle again. Once per Session and model pair, so a server row
-  // that still disagrees is not refetched in a loop. Runs per stream version because the model
-  // mutates in place.
-  const staleRowFetchRef = useRef<string | null>(null);
+  // refetched once the Session is idle again. Once per Session and model pair — recorded only
+  // when the fetch succeeded, so a server row that still disagrees is not refetched in a loop,
+  // while a failed fetch (one transient error) is retried at the next change and surfaced,
+  // rather than leaving the badge, the context ring and the price on the old model until a
+  // reload. Runs per stream version because the model mutates in place; one fetch in flight
+  // per pair.
+  const staleRowFetchedRef = useRef<string | null>(null);
+  const staleRowFetchingRef = useRef<string | null>(null);
   useEffect(() => {
     const contextModel = stream.model.contextModel;
     if (selectedSessionId === null || stream.loading || stream.taskState !== "idle") return;
     if (contextModel === null || !sessionRowStale(contextModel, activeModelRef)) return;
     const key = `${selectedSessionId}:${contextModel.provider}/${contextModel.modelId}`;
-    if (staleRowFetchRef.current === key) return;
-    staleRowFetchRef.current = key;
+    if (staleRowFetchedRef.current === key || staleRowFetchingRef.current === key) return;
+    staleRowFetchingRef.current = key;
     void api
       .getSession(selectedSessionId)
-      .then((res) => applySessionRow(res.session))
-      .catch(() => undefined);
+      .then((res) => {
+        staleRowFetchedRef.current = key;
+        applySessionRow(res.session);
+      })
+      .catch((e: unknown) => toastError(apiErrorText(e)))
+      .finally(() => {
+        if (staleRowFetchingRef.current === key) staleRowFetchingRef.current = null;
+      });
     // `version` is the model's change signal; the model ref is rebuilt per render from the row.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -2455,18 +2482,20 @@ export function ChatPage() {
 
       {/* In-conversation model switch confirmation (the session toolbar's model picker), two
           choices only: compact and switch, or cancel. There is no "switch anyway" — a switch
-          always compacts on the current model first, and a failed compaction keeps it. An empty
-          transcript has nothing to compact: the body says the switch is immediate and the confirm reads "switch". The
-          session can start running while the dialog is up (a queued follow-up, a schedule): the
-          confirm is then disabled and the body says why, exactly like the thinking dialog. */}
+          always compacts on the current model first, and a failed compaction keeps it. The two
+          shapes with nothing to compact read "switch" instead: an empty transcript (the switch
+          is immediate) and a transcript ending in a completed compaction (no compaction runs;
+          the conversation continues from the summary already held). The session can start
+          running while the dialog is up (a queued follow-up, a schedule): the confirm is then
+          disabled and the body says why, exactly like the thinking dialog. */}
       <ConfirmModal
         open={modelSwitchAsk !== null}
         title={S.chat.modelSwitchInSessionTitle}
         tone="primary"
         confirmLabel={
-          modelSwitchAsk?.direct
-            ? S.chat.modelSwitchInSessionDirectConfirm
-            : S.chat.modelSwitchInSessionConfirm
+          modelSwitchAsk?.shape === "compact"
+            ? S.chat.modelSwitchInSessionConfirm
+            : S.chat.modelSwitchInSessionDirectConfirm
         }
         confirmDisabled={stream.taskState !== "idle"}
         busy={modelSwitchPosting}
@@ -2478,12 +2507,14 @@ export function ChatPage() {
         <p className="text-sm text-gray-600 dark:text-gray-300">
           {modelSwitchAsk === null || selected === null
             ? null
-            : modelSwitchAsk.direct
+            : modelSwitchAsk.shape === "empty"
               ? S.chat.modelSwitchInSessionDirectBody(modelDisplay(modelSwitchAsk.to))
-              : S.chat.modelSwitchInSessionBody(
-                  modelDisplay({ provider: selected.provider, modelId: selected.modelId }),
-                  modelDisplay(modelSwitchAsk.to),
-                )}
+              : modelSwitchAsk.shape === "compacted"
+                ? S.chat.modelSwitchInSessionCompactedBody(modelDisplay(modelSwitchAsk.to))
+                : S.chat.modelSwitchInSessionBody(
+                    modelDisplay({ provider: selected.provider, modelId: selected.modelId }),
+                    modelDisplay(modelSwitchAsk.to),
+                  )}
         </p>
         {stream.taskState !== "idle" && (
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">

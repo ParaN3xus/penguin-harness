@@ -782,7 +782,7 @@ export interface Messages {
   switchModelSame(model: string): string;
   /** 409 `model_not_configured`: the target is not in the Project config; names the `penguin config model` commands to list and add models. */
   switchModelNotConfigured(model: string, listCommand: string, addCommand: string): string;
-  /** 409 `model_unavailable`: the target is configured but cannot be constructed (e.g. no credential); `detail` is the server's message, verbatim (may be empty). */
+  /** 409 `model_unavailable`: the target is configured but cannot be switched to — it cannot be constructed (e.g. no credential), or the summary held for the next context does not fit its window; `detail` is the server's message, verbatim (may be empty). */
   switchModelUnavailable(model: string, detail: string): string;
   /** 409 `compaction_not_configured`: a switch always compacts first, and this Session has no compaction. */
   switchModelNoCompaction(): string;

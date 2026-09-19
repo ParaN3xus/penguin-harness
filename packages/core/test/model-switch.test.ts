@@ -44,6 +44,7 @@ import type {
   LLMOutcome,
 } from "../src/interfaces/index.js";
 import type { CompactionSettings, OpenContextOptions } from "../src/engine/context-engine.js";
+import { ModelSwitchRefusedError } from "../src/engine/context-engine.js";
 import { Session } from "../src/session.js";
 import type { ModelSwitchSupport, SessionConfig } from "../src/session.js";
 import type { ModelRef } from "../src/state/project-config.js";
@@ -165,6 +166,19 @@ const payloadTypes = (msgs: OmniMessage[]): (string | undefined)[] =>
   );
 
 const textOf = (m: OmniMessage): string => (m.payload as TextPayload).text;
+
+/** The user-side texts of `msgs`, in order — what a replayed history sends as the user's side. */
+const userTexts = (msgs: OmniMessage[]): string[] =>
+  msgs
+    .filter((m) => {
+      const p = m.payload as { type?: string; role?: string };
+      return p.type === "text" && p.role === "user";
+    })
+    .map(textOf);
+
+/** Each message's payload type (`image_url` is what a text-only model must never receive). */
+const payloadTypeList = (msgs: OmniMessage[]): string[] =>
+  msgs.map((m) => (m.payload as { type: string }).type);
 
 /** The model a `session_meta` record names, as a reference. */
 const modelOf = (m: OmniMessage): ModelRef => {
@@ -541,7 +555,7 @@ describe("in-session model switch", () => {
     expect(llmB.calls[0]!.map(textOf)).toEqual(["task one", "task two"]);
   });
 
-  it("a just-compacted context the user already wrote on is discarded the same way: the summary written there rides in memory, and stays on disk in the closed file", async () => {
+  it("a just-compacted context the user already wrote on is discarded the same way: the summary written there rides in memory and heads the new file, the aborted prompt rides in memory only", async () => {
     const llmA = new ScriptedLLM(
       [
         { messages: [assistantText("answer one"), usage(150, 150)] },
@@ -584,21 +598,30 @@ describe("in-session model switch", () => {
     expectEndsWithMetaOn(all, MODEL_B);
     expect(llmA2.calls).toHaveLength(0);
 
-    // The closed file keeps the summary for a reader; the new file holds meta and tools only.
+    // The closed file keeps the summary for a reader. The new file holds meta, tools — and the
+    // summary again: it is the one record of the conversation before the compaction, and a
+    // resume of this file must not replay a history without it. The aborted prompt is not
+    // written (carry-over may hold synthetic messages; the user re-sends it).
     const closed = await readTrace(openPath);
     expect(payloadTypes(closed).slice(-2)).toEqual(["compaction_begin", "compaction_end"]);
     expect(textOf(closed[2]!)).toBe(SUMMARY_TEXT);
     const opened = await readTrace(h.trace.currentPath());
     expect(h.trace.currentPath()).not.toBe(openPath);
-    expect(payloadTypes(opened)).toEqual(["session_meta", "tool_list_ready"]);
-    expect(resumeTrace(opened).carryOver).toEqual([]);
+    expect(payloadTypes(opened)).toEqual(["session_meta", "tool_list_ready", "text"]);
+    expect(textOf(opened[2]!)).toBe(SUMMARY_TEXT);
+    expect(resumeTrace(opened).carryOver.map(textOf)).toEqual([SUMMARY_TEXT]);
 
     await collect(h.session.run([userText("task three")], { approve: allowAll }));
-    // In-process the aborted input is carried as-is (it never reached a request).
+    // In-process the aborted input is carried as-is (it never reached a request), the summary
+    // once — the file's copy is not re-sent.
     expect(llmB.calls[0]!.map(textOf)).toEqual([SUMMARY_TEXT, "task two", "task three"]);
+    expect(userTexts(resumeTrace(await readTrace(h.trace.currentPath())).history)).toEqual([
+      SUMMARY_TEXT,
+      "task three",
+    ]);
   });
 
-  it("switching twice before typing: the second switch takes the discard path on the eagerly opened file, and the summary still rides", async () => {
+  it("switching twice before typing: the second switch takes the discard path on the eagerly opened file, and the summary rides in memory and heads the third file", async () => {
     const llmA = new ScriptedLLM(
       [
         { messages: [assistantText("answer one"), usage(50, 50)] },
@@ -646,12 +669,253 @@ describe("in-session model switch", () => {
       "compaction_begin",
       "compaction_end",
     ]);
+    // C's file opens with the summary B's context had opened with — the only record of the
+    // conversation on A — so a resume of it lands on C with the summary pending, as a resume
+    // of B's file would have.
     const opened = await readTrace(h.trace.currentPath());
-    expect(payloadTypes(opened)).toEqual(["session_meta", "tool_list_ready"]);
+    expect(payloadTypes(opened)).toEqual(["session_meta", "tool_list_ready", "text"]);
     expect(modelOf(opened[0]!)).toEqual(MODEL_C);
+    expect(textOf(opened[2]!)).toBe(SUMMARY_TEXT);
+    expect(resumeTrace(opened).carryOver.map(textOf)).toEqual([SUMMARY_TEXT]);
 
     await collect(h.session.run([userText("task two")], { approve: allowAll }));
+    // Live, the summary is sent once; on disk it is written once — the run does not re-write it.
     expect(llmC.calls[0]!.map(textOf)).toEqual([SUMMARY_TEXT, "task two"]);
+    const latest = await readTrace(h.trace.currentPath());
+    expect(payloadTypes(latest).slice(0, 4)).toEqual([
+      "session_meta",
+      "tool_list_ready",
+      "text",
+      "text",
+    ]);
+    // Any later restart replays C's history from this file, the summary at its head.
+    expect(userTexts(resumeTrace(latest).history)).toEqual([SUMMARY_TEXT, "task two"]);
+  });
+
+  it("a failed first request on the new model, then another switch: the summary the failed context opened with heads the next file, while the model gets the [turn_aborted] flatten", async () => {
+    const llmA = new ScriptedLLM(
+      [
+        { messages: [assistantText("answer one"), usage(50, 50)] },
+        { messages: [assistantText(SUMMARY_REPLY), usage(60, 110)] },
+      ],
+      "A",
+    );
+    const llmB = new ScriptedLLM(
+      [{ messages: [], outcome: { status: "fatal", errorMessage: "B rejected the request" } }],
+      "B",
+    );
+    const llmC = new ScriptedLLM(
+      [{ messages: [assistantText("answer three"), usage(20, 130)] }],
+      "C",
+    );
+    const h = harness(traces, {
+      llmA,
+      llms: { [MODEL_B.model_id]: [llmB], [MODEL_C.model_id]: [llmC] },
+    });
+    sessions.push(h.session);
+
+    await collect(h.session.run([userText("task one")], { approve: allowAll }));
+    await collect(switchTo(h.session, MODEL_B));
+    // B's first request fails outright: no completed turn, the summary and the prompt become a
+    // `[turn_aborted]` flatten in the carry-over, where nothing marks the summary any more.
+    await collect(h.session.run([userText("task two")], { approve: allowAll }));
+    expect(llmB.calls[0]!.map(textOf)).toEqual([SUMMARY_TEXT, "task two"]);
+    expect(h.session.compactability()).toBe("just_compacted");
+
+    const { all, result } = await collectWithReturn(switchTo(h.session, MODEL_C));
+    expect(result.status).toBe("completed");
+    expect(compactionEvents(all).map((e) => [e.reason, e.mode])).toEqual([
+      ["manual", "discard"],
+      ["manual", "discard"],
+    ]);
+    expectEndsWithMetaOn(all, MODEL_C);
+
+    const opened = await readTrace(h.trace.currentPath());
+    expect(payloadTypes(opened)).toEqual(["session_meta", "tool_list_ready", "text"]);
+    expect(modelOf(opened[0]!)).toEqual(MODEL_C);
+    expect(textOf(opened[2]!)).toBe(SUMMARY_TEXT);
+
+    await collect(h.session.run([userText("task three")], { approve: allowAll }));
+    // The live request carries the flatten (the summary inside it) — request assembly after a
+    // failed request is unchanged — and the file carries the summary as a plain record.
+    const live = llmC.calls[0]!.map(textOf);
+    expect(live).toHaveLength(2);
+    expect(live[0]).toMatch(/^\[turn_aborted\]/);
+    expect(live[0]).toContain(SUMMARY_TEXT);
+    expect(live[1]).toBe("task three");
+    expect(userTexts(resumeTrace(await readTrace(h.trace.currentPath())).history)).toEqual([
+      SUMMARY_TEXT,
+      "task three",
+    ]);
+  });
+
+  it("compact, a failed request on the new context, then a switch: the summary heads the target's file the same way", async () => {
+    const llmA = new ScriptedLLM(
+      [
+        { messages: [assistantText("answer one"), usage(50, 50)] },
+        { messages: [assistantText(SUMMARY_REPLY), usage(60, 110)] },
+      ],
+      "A",
+    );
+    // The context the compaction opened, still on A: its first request fails.
+    const llmA2 = new ScriptedLLM(
+      [{ messages: [], outcome: { status: "fatal", errorMessage: "A rejected the request" } }],
+      "A2",
+    );
+    const llmB = new ScriptedLLM([{ messages: [assistantText("answer"), usage(20, 130)] }], "B");
+    const h = harness(traces, {
+      llmA,
+      llms: { [MODEL_A.model_id]: [llmA2], [MODEL_B.model_id]: [llmB] },
+    });
+    sessions.push(h.session);
+
+    await collect(h.session.run([userText("task one")], { approve: allowAll }));
+    await collect(h.session.compact());
+    await collect(h.session.run([userText("task two")], { approve: allowAll }));
+    expect(llmA2.calls[0]!.map(textOf)).toEqual([SUMMARY_TEXT, "task two"]);
+    const failedPath = h.trace.currentPath();
+
+    const { all, result } = await collectWithReturn(switchTo(h.session, MODEL_B));
+    expect(result.status).toBe("completed");
+    expect(compactionEvents(all).map((e) => [e.reason, e.mode])).toEqual([
+      ["manual", "discard"],
+      ["manual", "discard"],
+    ]);
+    expectEndsWithMetaOn(all, MODEL_B);
+    expect(payloadTypes(await readTrace(failedPath)).slice(-2)).toEqual([
+      "compaction_begin",
+      "compaction_end",
+    ]);
+
+    const opened = await readTrace(h.trace.currentPath());
+    expect(payloadTypes(opened)).toEqual(["session_meta", "tool_list_ready", "text"]);
+    expect(modelOf(opened[0]!)).toEqual(MODEL_B);
+    expect(textOf(opened[2]!)).toBe(SUMMARY_TEXT);
+    expect(resumeTrace(opened).carryOver.map(textOf)).toEqual([SUMMARY_TEXT]);
+
+    await collect(h.session.run([userText("task three")], { approve: allowAll }));
+    expect(userTexts(resumeTrace(await readTrace(h.trace.currentPath())).history)).toEqual([
+      SUMMARY_TEXT,
+      "task three",
+    ]);
+  });
+
+  it("a held summary the target's window cannot take refuses a just-compacted switch before any event, and a roomier target then takes it", async () => {
+    const longSummary = `[summary]${"x".repeat(12000)}[/summary]`;
+    const llmA = new ScriptedLLM(
+      [
+        { messages: [assistantText("answer one"), usage(50, 50)] },
+        { messages: [assistantText(longSummary), usage(3100, 3150)] },
+      ],
+      "A",
+    );
+    const llmB = new ScriptedLLM([], "B");
+    const llmC = new ScriptedLLM([{ messages: [assistantText("answer"), usage(20, 3170)] }], "C");
+    const h = harness(traces, {
+      llmA,
+      llms: { [MODEL_B.model_id]: [llmB], [MODEL_C.model_id]: [llmC] },
+      // B: 4096 − prefix − 2048 headroom leaves ~2k for a ~3k summary. C: room to spare.
+      windows: { [MODEL_B.model_id]: 4096, [MODEL_C.model_id]: 200000 },
+    });
+    sessions.push(h.session);
+    await collect(h.session.run([userText("task one")], { approve: allowAll }));
+    await collect(h.session.compact());
+    expect(h.session.compactability()).toBe("just_compacted");
+    const writtenBefore = h.written.length;
+
+    // No pair can end `fatal` here — nothing is compacted — so the switch is refused the way
+    // target validation refuses: typed, before any event, the Session untouched.
+    const refusal = await collect(switchTo(h.session, MODEL_B)).catch((e: unknown) => e);
+    expect(refusal).toBeInstanceOf(ModelSwitchRefusedError);
+    expect((refusal as ModelSwitchRefusedError).reason).toBe("summary_too_large");
+    expect((refusal as Error).message).toMatch(/about 30\d\d tokens/);
+    expect((refusal as Error).message).toMatch(/4096 tokens/);
+    expect((refusal as Error).message).toMatch(/stays on its current model/);
+    expect(h.written).toHaveLength(writtenBefore);
+    expect(h.opens).toEqual([]);
+    expect(h.session.modelId).toBe(MODEL_A.model_id);
+    expect(await h.files()).toEqual([`${SESSION_ID}_001.jsonl`]);
+    expect(h.session.compactability()).toBe("just_compacted");
+
+    // The summary is still held: a target with room takes it at the head of its file.
+    const { all, result } = await collectWithReturn(switchTo(h.session, MODEL_C));
+    expect(result.status).toBe("completed");
+    expect(compactionEvents(all)).toEqual([]);
+    expectEndsWithMetaOn(all, MODEL_C);
+    const opened = await readTrace(h.trace.currentPath());
+    expect(payloadTypes(opened)).toEqual(["session_meta", "tool_list_ready", "text"]);
+    expect(textOf(opened[2]!)).toContain("x".repeat(12000));
+    expect(h.session.modelId).toBe(MODEL_C.model_id);
+  });
+
+  it("a Prompt with an image, stopped before its bootstrap on a vision model, reaches a text-only model folded into a path line", async () => {
+    const llmA = new ScriptedLLM([], "A");
+    const llmB = new ScriptedLLM([{ messages: [assistantText("answer"), usage(20, 20)] }], "B");
+    const h = harness(traces, {
+      llmA,
+      llms: { [MODEL_B.model_id]: [llmB] },
+      vision: { [MODEL_B.model_id]: false },
+    });
+    sessions.push(h.session);
+
+    // Stopped during the first connect: the Session itself holds the input, as sent, for a
+    // model that viewed images.
+    const controller = new AbortController();
+    controller.abort();
+    await collect(
+      h.session.run([userText("look"), imageUrlMessage("https://images.invalid/pic.png")], {
+        signal: controller.signal,
+      }),
+    );
+    await collect(switchTo(h.session, MODEL_B));
+    expect(h.session.modelId).toBe(MODEL_B.model_id);
+
+    await collect(h.session.run([userText("task two")], { approve: allowAll }));
+    const first = llmB.calls[0]!;
+    expect(payloadTypeList(first)).toEqual(["text", "text"]);
+    expect(textOf(first[0]!)).toContain("look");
+    expect(textOf(first[0]!)).toContain("[attached image: https://images.invalid/pic.png]");
+    expect(textOf(first[1]!)).toBe("task two");
+  });
+
+  it("a Prompt with an image the engine held as-is (stopped before its request) reaches a text-only model folded as well", async () => {
+    // A's first request fails, so the context is open with no completed turn and the engine
+    // exists; the next run is stopped before its request goes out and its input — image
+    // included — is held unchanged as the engine's carry-over.
+    const llmA = new ScriptedLLM(
+      [{ messages: [], outcome: { status: "fatal", errorMessage: "A is down" } }],
+      "A",
+    );
+    const llmB = new ScriptedLLM([{ messages: [assistantText("answer"), usage(20, 20)] }], "B");
+    const h = harness(traces, {
+      llmA,
+      llms: { [MODEL_B.model_id]: [llmB] },
+      vision: { [MODEL_B.model_id]: false },
+    });
+    sessions.push(h.session);
+
+    await collect(h.session.run([userText("task one")], { approve: allowAll }));
+    expect(llmA.calls).toHaveLength(1);
+    const controller = new AbortController();
+    controller.abort();
+    await collect(
+      h.session.run([userText("look"), imageUrlMessage("https://images.invalid/pic.png")], {
+        signal: controller.signal,
+      }),
+    );
+    expect(llmA.calls).toHaveLength(1);
+
+    const { all } = await collectWithReturn(switchTo(h.session, MODEL_B));
+    expect(compactionEvents(all).map((e) => e.mode)).toEqual(["discard", "discard"]);
+
+    await collect(h.session.run([userText("task two")], { approve: allowAll }));
+    const first = llmB.calls[0]!;
+    expect(payloadTypeList(first)).not.toContain("image_url");
+    const texts = first.map(textOf);
+    expect(texts.some((t) => t.includes("[attached image: https://images.invalid/pic.png]"))).toBe(
+      true,
+    );
+    expect(texts.at(-1)).toBe("task two");
   });
 
   it("a Session that never ran is re-assembled on the target: no events, nothing written, and its first run opens on it", async () => {
@@ -920,9 +1184,12 @@ describe("in-session model switch", () => {
     sessions.push(session);
     await collect(session.run([userText("task one")], { approve: allowAll }));
 
-    await expect(collect(switchTo(session, MODEL_B))).rejects.toThrow(
-      /Context compaction is not configured/,
-    );
+    const refusal = await collect(switchTo(session, MODEL_B)).catch((e: unknown) => e);
+    expect(refusal).toBeInstanceOf(ModelSwitchRefusedError);
+    expect(refusal).toMatchObject({
+      reason: "compaction_not_configured",
+      message: expect.stringMatching(/Context compaction is not configured/) as unknown,
+    });
     expect(session.modelId).toBe(MODEL_A.model_id);
   });
 
@@ -935,8 +1202,11 @@ describe("in-session model switch", () => {
       modelHasVision: true,
     });
     sessions.push(session);
-    await expect(collect(switchTo(session, MODEL_B))).rejects.toThrow(
-      /Switching the model is not available/,
-    );
+    const refusal = await collect(switchTo(session, MODEL_B)).catch((e: unknown) => e);
+    expect(refusal).toBeInstanceOf(ModelSwitchRefusedError);
+    expect(refusal).toMatchObject({
+      reason: "model_unavailable",
+      message: expect.stringMatching(/Switching the model is not available/) as unknown,
+    });
   });
 });

@@ -14,6 +14,7 @@ import {
   sessionModelPick,
   sessionModelPickerDisabled,
   sessionRowStale,
+  switchContextShape,
 } from "../src/features/chat/model-switch";
 
 // S is a live binding shared across the suite: always hand it back the default.
@@ -30,38 +31,61 @@ describe("sessionModelPickerDisabled", () => {
   });
 });
 
+describe("switchContextShape", () => {
+  const user = { kind: "user" };
+  const done = { kind: "compaction", running: false, status: "completed" };
+  const failed = { kind: "compaction", running: false, status: "fatal" };
+  const running = { kind: "compaction", running: true };
+  const marker = { kind: "model_change" };
+
+  it("is empty for no items, and compacts when there is conversation since the last compaction", () => {
+    expect(switchContextShape([])).toBe("empty");
+    expect(switchContextShape([user])).toBe("compact");
+    expect(switchContextShape([done, user])).toBe("compact");
+  });
+
+  it("continues from the held summary when the transcript ends in a completed compaction — a failed retry or a model-change marker after it changes nothing", () => {
+    expect(switchContextShape([user, done])).toBe("compacted");
+    expect(switchContextShape([user, done, failed])).toBe("compacted");
+    expect(switchContextShape([user, done, marker])).toBe("compacted");
+    expect(switchContextShape([done, marker])).toBe("compacted");
+  });
+
+  it("still compacts when the trailing compaction did not complete: the old context is in effect", () => {
+    expect(switchContextShape([user, failed])).toBe("compact");
+    expect(switchContextShape([user, running])).toBe("compact");
+  });
+});
+
 describe("sessionModelPick", () => {
   it("does nothing for the model the conversation is already on", () => {
     expect(
-      sessionModelPick({ current: A, picked: { ...A }, status: "idle", transcriptEmpty: false }),
+      sessionModelPick({ current: A, picked: { ...A }, status: "idle", shape: "compact" }),
     ).toEqual({ act: "none" });
   });
 
   it("does nothing while busy, even for another model", () => {
     for (const status of ["running", "compacting"] as const) {
-      expect(sessionModelPick({ current: A, picked: B, status, transcriptEmpty: false })).toEqual({
+      expect(sessionModelPick({ current: A, picked: B, status, shape: "compact" })).toEqual({
         act: "none",
       });
     }
   });
 
-  it("asks first, and says the switch is direct only for an empty transcript", () => {
-    expect(
-      sessionModelPick({ current: A, picked: B, status: "idle", transcriptEmpty: false }),
-    ).toEqual({ act: "confirm", direct: false });
-    expect(
-      sessionModelPick({ current: A, picked: B, status: "idle", transcriptEmpty: true }),
-    ).toEqual({
-      act: "confirm",
-      direct: true,
-    });
+  it("asks first, carrying the transcript's shape so the dialog promises only what the switch does", () => {
+    for (const shape of ["compact", "empty", "compacted"] as const) {
+      expect(sessionModelPick({ current: A, picked: B, status: "idle", shape })).toEqual({
+        act: "confirm",
+        shape,
+      });
+    }
     // Same provider, another model id is still another model.
     expect(
       sessionModelPick({
         current: A,
         picked: { provider: A.provider, modelId: "a-2" },
         status: "idle",
-        transcriptEmpty: false,
+        shape: "compact",
       }).act,
     ).toBe("confirm");
   });
@@ -117,6 +141,21 @@ describe("/model copy", () => {
     expect(zh.chat.modelSwitchInSessionConfirm).toBe("压缩并切换");
     expect(zh.chat.modelSwitchInSessionDirectBody("B")).toContain("直接切换到「B」");
     expect(en.chat.modelSwitchInSessionBody("A", "B")).toContain('"B"');
+  });
+
+  it("right after a compaction, neither the dialog nor the toast promises a compaction", () => {
+    // The server runs no compaction for a just-compacted Session (design: no second pair), so
+    // the copy for that shape must not say "compact".
+    expect(zh.chat.modelSwitchInSessionCompactedBody("B")).toContain("不会再次压缩");
+    expect(zh.chat.modelSwitchInSessionCompactedBody("B")).toContain("「B」");
+    expect(en.chat.modelSwitchInSessionCompactedBody("B")).toMatch(/nothing is compacted again/);
+    expect(en.chat.modelSwitchInSessionCompactedBody("B")).toContain('"B"');
+    expect(zh.chat.modelSwitchInSessionSwitching("B")).toBe("正在切换到「B」。");
+    expect(en.chat.modelSwitchInSessionSwitching("B")).not.toMatch(/compact/i);
+    expect(zh.chat.modelSwitchInSessionDirectConfirm).toBe("切换");
+    expect(en.chat.modelSwitchInSessionDirectConfirm).toBe("Switch");
+    // The compacting toast is the one that may say so.
+    expect(en.chat.modelSwitchInSessionStarted("A", "B")).toMatch(/Compacting/);
   });
 
   it("the model-change marker names both model ids in both locales", () => {

@@ -17,6 +17,7 @@ import {
   assistantText,
   compactionBegin,
   compactionEnd,
+  ModelSwitchRefusedError,
   requestBegin,
   requestEnd,
   sessionMeta,
@@ -57,8 +58,8 @@ function counts(total: number): TokenCounts {
 
 /** How the fake's `switchModel` behaves once core would have validated the target. */
 type SwitchBehaviour =
-  /** Core threw before its first event (a pre-event refusal). */
-  | { kind: "throw"; message: string }
+  /** Core threw before its first event: a typed refusal, or — a failure — anything else. */
+  | { kind: "throw"; error: Error }
   /** A Session that never ran: re-assembled on the target, nothing streamed. */
   | { kind: "inline" }
   /** The compaction pair streams; `status` is how it ends. `gate` parks the compaction until it settles (or the signal fires). */
@@ -100,7 +101,7 @@ function switchFake(model: ModelRefDto, behaviour: SwitchBehaviour): SwitchFake 
       fake.signals.push(opts.signal);
       const previous: ModelRef = { provider: fake.provider, model_id: fake.modelId };
       const next: ModelRef = { provider: opts.provider, model_id: opts.modelId };
-      if (behaviour.kind === "throw") throw new Error(behaviour.message);
+      if (behaviour.kind === "throw") throw behaviour.error;
       if (behaviour.kind === "inline") {
         fake.provider = opts.provider;
         fake.modelId = opts.modelId;
@@ -280,12 +281,18 @@ describe("POST /switch-model", () => {
     adopt(
       switchFake(A, {
         kind: "throw",
-        message: "Missing credentials for provider custom (api_key).",
+        error: new ModelSwitchRefusedError(
+          "model_unavailable",
+          "Missing credentials for provider custom (api_key).",
+        ),
       }),
     );
     const res = await api.post(url, B);
     expect(res.status).toBe(409);
-    expect(await errorCode(res)).toBe("model_unavailable");
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("model_unavailable");
+    // The loader's wording is replaced by the remedy the Web App can act on.
+    expect(body.error.message).toContain("no API key");
     expect(t.deps.manager.statusOf(SID)).toBe("idle");
     expect(row().modelId).toBe(A.modelId);
 
@@ -300,17 +307,60 @@ describe("POST /switch-model", () => {
     expect(row().modelId).toBe(A.modelId);
   });
 
+  it("409 model_unavailable with core's own numbers: a summary already held does not fit the target's window", async () => {
+    // A Session just compacted has a summary in hand; core refuses before any event when the
+    // target cannot take it (there is no pair to end `fatal`). The message names both sizes.
+    const message =
+      "The summary held for the next context (about 15000 tokens) does not fit the context window of the model switched to (8000 tokens, about 5000 left after its prompt and tools); the Session stays on its current model.";
+    adopt(
+      switchFake(A, {
+        kind: "throw",
+        error: new ModelSwitchRefusedError("summary_too_large", message),
+      }),
+    );
+    const res = await api.post(url, B);
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("model_unavailable");
+    expect(body.error.message).toBe(message);
+    expect(t.deps.manager.statusOf(SID)).toBe("idle");
+    expect(row().modelId).toBe(A.modelId);
+  });
+
   it("409 compaction_not_configured: the Session has a context to close but no compaction to close it with", async () => {
     adopt(
       switchFake(A, {
         kind: "throw",
-        message:
-          "Context compaction is not configured for this Session, so its model cannot be switched.",
+        error: new ModelSwitchRefusedError("compaction_not_configured", "no compaction here"),
       }),
     );
     const res = await api.post(url, B);
     expect(res.status).toBe(409);
     expect(await errorCode(res)).toBe("compaction_not_configured");
+    expect(row().modelId).toBe(A.modelId);
+  });
+
+  it("anything else core throws before its first event is a failure, not a refusal: 500, and the row stays", async () => {
+    // An Agent State that no longer parses, a bootstrap that broke — mapped to a 409 they would
+    // tell the user to configure the model, which is not what happened.
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (line: string) => void errors.push(String(line));
+    try {
+      adopt(
+        switchFake(A, {
+          kind: "throw",
+          error: new Error("system_config.yaml: unexpected token at line 3"),
+        }),
+      );
+      const res = await api.post(url, B);
+      expect(res.status).toBe(500);
+      expect(await errorCode(res)).toBe("internal");
+    } finally {
+      console.error = original;
+    }
+    expect(errors.some((l) => l.includes("system_config.yaml: unexpected token"))).toBe(true);
+    expect(t.deps.manager.statusOf(SID)).toBe("idle");
     expect(row().modelId).toBe(A.modelId);
   });
 

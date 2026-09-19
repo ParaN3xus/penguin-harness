@@ -163,11 +163,40 @@ export interface ModelSwitchTarget {
    * How much of the target's context window the summary may take, in approximate tokens: the
    * window minus the next context's request prefix (prompt and tools) and a fixed headroom,
    * with the window itself alongside for the diagnostic. Absent when the target's window is
-   * unknown. A summary that does not fit ends the switch `fatal` — the Session stays on the
-   * model it was on — rather than opening a context whose very first request the provider
-   * would reject.
+   * unknown. A summary that does not fit never opens a context whose very first request the
+   * provider would reject: one the switch's own compaction produced ends the switch `fatal`,
+   * one already held from an earlier compaction refuses the switch before any event (see
+   * {@link ModelSwitchRefusedError}) — either way the Session stays on the model it was on.
    */
   summaryRoom?: { tokens: number; contextWindow: number };
+}
+
+/** Why a model switch was refused before its first event (see {@link ModelSwitchRefusedError}). */
+export type ModelSwitchRefusal =
+  /** The target pair names no entry in the Project config on disk. */
+  | "model_not_configured"
+  /** The target is configured but cannot be switched to: its client cannot be constructed (a missing credential foremost), or this Session has no switch support. */
+  | "model_unavailable"
+  /** The Session has a context to close but no compaction configured to close it with. */
+  | "compaction_not_configured"
+  /** The summary held for the next context does not fit the target's window (see {@link ModelSwitchTarget.summaryRoom}). */
+  | "summary_too_large";
+
+/**
+ * A model switch refused before anything was sent or recorded: the Session stays on its model
+ * with its state untouched, and no event was produced. Thrown by `Session.switchModel` (and the
+ * engine underneath it) for exactly the refusals `reason` enumerates, so a host can map each to
+ * its own code — the server's 409s — and treat every other error a switch throws as the
+ * failure it is, instead of reading its message.
+ */
+export class ModelSwitchRefusedError extends Error {
+  constructor(
+    readonly reason: ModelSwitchRefusal,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ModelSwitchRefusedError";
+  }
 }
 
 /** Result of one compaction run: a StopReason terminal state (completed / aborted / retryable — abandoned, made up at the next trigger / fatal — needs a config change first); carries the summary message when summarize succeeds. */
@@ -535,6 +564,16 @@ export class ContextEngine {
   private lastSessionTokens: TokenCounts = emptyTokenCounts();
   /** Summary produced by a Task-boundary compaction: used as the prefix of the next `run` input (merged with the next user Prompt). */
   private pendingSummary: OmniMessage | null = null;
+  /**
+   * The summary the running context opened with, from the moment it is written as the
+   * context's first input until the context's first completed turn (null otherwise, and for a
+   * context rebuilt from a Trace, whose carry-over holds the summary without this identity). A
+   * model switch that discards a context with no completed turn writes it at the head of the
+   * next file, so the Trace keeps the one record of the conversation before the compaction
+   * while the carry-over — where nothing marks it as the summary any more — rides in memory
+   * as it is (see `switchModel`).
+   */
+  private contextSummary: OmniMessage | null = null;
   /** Bootstrap records still owed to the Trace (written after the first run's input); see ContextEngineDeps.bootstrapRecords. */
   private pendingBootstrapRecords: OmniMessage[] | null = null;
   /**
@@ -774,7 +813,10 @@ export class ContextEngine {
     // messages, and resumption replay best-effort reconstructs from original messages.
     // Exception: the compaction summary, which is the new
     // context's first input record, is written as usual.
-    if (summary) await this.write(summary);
+    if (summary) {
+      await this.write(summary);
+      this.contextSummary = summary;
+    }
     for (const msg of newMessages) await this.write(msg);
     // First run only: the connect pair, then the toolset record, follow the input into the
     // Trace (see ContextEngineDeps.bootstrapRecords for the ordering rationale).
@@ -1136,7 +1178,15 @@ export class ContextEngine {
    *   summarize, so a **discard** pair closes it; its text carry-over rides to the new model in
    *   memory only — carry-over may hold synthetic messages, which are never persisted — and its
    *   tool outputs are dropped like `compact()` drops them (they pair with calls only the old
-   *   context had).
+   *   context had). The one record the carry-over may hold that IS worth the Trace is the
+   *   summary the context opened with (a switch right after a switch, or after a failed first
+   *   request): it is written again at the head of the new file, so a resume of that file
+   *   still replays the conversation before the compaction (see `contextSummary`).
+   *
+   * Whatever the shape, a context opened on a model without vision takes the carry-over with
+   * its images folded (the same fold a Prompt gets), since the input was held for a model that
+   * viewed them. A held summary the target's window cannot take refuses the switch before any
+   * event (`summary_too_large`), the way target validation refuses.
    *
    * A completed switch yields the new context's `session_meta` last, so the stream carries the
    * record that names the model the Session now runs on. Returns the switch's terminal status:
@@ -1147,7 +1197,8 @@ export class ContextEngine {
     signal?: AbortSignal,
   ): AsyncGenerator<OmniMessage, StopReason> {
     if (!this.compaction || !this.deps.openNextContext) {
-      throw new Error(
+      throw new ModelSwitchRefusedError(
+        "compaction_not_configured",
         "Context compaction is not configured for this Session, so its model cannot be switched.",
       );
     }
@@ -1168,9 +1219,13 @@ export class ContextEngine {
     }
     if (this.pendingTraceRotation) {
       // Closed by a completed compaction, nothing written since: no pair — the closing pair is
-      // on the closed file. The pending rotation is performed now, on the target. First-run
-      // records still owed (a Session resumed into this closed context and switched before
-      // running) describe the context being left, which never gets a file: dropped.
+      // on the closed file. The held summary goes to the target unchanged, so it has to fit the
+      // target's window exactly as one the switch would have produced (checked before anything
+      // happens: there is no pair to carry a `fatal` end here). The pending rotation is then
+      // performed on the target. First-run records still owed (a Session resumed into this
+      // closed context and switched before running) describe the context being left, which
+      // never gets a file: dropped.
+      if (this.pendingSummary) this.assertSummaryFits(this.pendingSummary, target);
       this.pendingBootstrapRecords = null;
       yield* this.startNewContext(next);
       yield* this.openContextFile();
@@ -1181,9 +1236,31 @@ export class ContextEngine {
     this.pendingCarryOver = this.pendingCarryOver.filter(
       (m) => (m.payload as { type?: string }).type !== "tool_call_output",
     );
+    // Captured before the rotation resets it: the summary this context opened with, if no turn
+    // completed since, travels to the next file as its first input.
+    const carried = this.contextSummary;
     yield* this.discardContext("manual", next);
-    yield* this.openContextFile();
+    yield* this.openContextFile(carried);
     return "completed";
+  }
+
+  /**
+   * Refuses a switch whose held summary the target's window cannot take (see
+   * {@link ModelSwitchTarget.summaryRoom}) — the same estimate the summarize path applies to
+   * the summary it produces, applied to one already in hand. Nothing is guarded when the
+   * target's window is unknown.
+   */
+  private assertSummaryFits(summary: OmniMessage, target: ModelSwitchTarget): void {
+    const room = target.summaryRoom;
+    if (room === undefined) return;
+    const summaryTokens = approximateTokens((summary.payload as TextPayload).text);
+    if (summaryTokens <= room.tokens) return;
+    throw new ModelSwitchRefusedError(
+      "summary_too_large",
+      `The summary held for the next context (about ${summaryTokens} tokens) does not fit the ` +
+        `context window of the model switched to (${room.contextWindow} tokens, about ` +
+        `${Math.max(room.tokens, 0)} left after its prompt and tools); the Session stays on its current model.`,
+    );
   }
 
   /**
@@ -1192,19 +1269,42 @@ export class ContextEngine {
    * the model it runs on) is the durable record of the switch. In summarize mode the held
    * summary is written as the context's first input here and moves to the head of the
    * carry-over, which the next run sends first and never re-writes — the same state a resume of
-   * this file rebuilds. The meta is yielded so the stream carries the record that names the new
-   * model. On the stream it comes after the opener's records (yielded live while the context
-   * opened), in the file before them; consumers read both as state rather than as a sequence, so
-   * the order between them carries nothing.
+   * this file rebuilds. On the discard path `carried` is the summary the discarded context had
+   * opened with: written here as well, so the file keeps it, while the carry-over — which
+   * already holds it, possibly inside a `[turn_aborted]` flatten — is left as it is. Either way
+   * the written summary becomes this context's `contextSummary`. The carry-over is folded first
+   * for a context opened on a model without vision. The meta is yielded so the stream carries
+   * the record that names the new model. On the stream it comes after the opener's records
+   * (yielded live while the context opened), in the file before them; consumers read both as
+   * state rather than as a sequence, so the order between them carries nothing.
    */
-  private async *openContextFile(): AsyncGenerator<OmniMessage> {
+  private async *openContextFile(carried: OmniMessage | null = null): AsyncGenerator<OmniMessage> {
     await this.rotateIfPending();
+    await this.foldCarryOverForContext();
     if (this.pendingSummary) {
       await this.write(this.pendingSummary);
+      this.contextSummary = this.pendingSummary;
       this.pendingCarryOver = [this.pendingSummary, ...this.pendingCarryOver];
       this.pendingSummary = null;
+    } else if (carried) {
+      await this.write(carried);
+      this.contextSummary = carried;
     }
     if (this.contextMeta) yield this.contextMeta;
+  }
+
+  /**
+   * Folds the carry-over's images into path lines when the running context's model has no
+   * vision — the fold a Prompt and a steering input get (see ContextEngineDeps.foldInputImages).
+   * Carry-over is assembled for the model that was running when it was held; a model switch
+   * can hand it to one that refuses images, and the fold is what gives that model the
+   * `[attached image: …]` path its file tools can still open. A no-op without images, on a
+   * vision model, or without a fold.
+   */
+  private async foldCarryOverForContext(): Promise<void> {
+    const fold = this.deps.foldInputImages;
+    if (this.modelHasVision || !fold || !this.pendingCarryOver.some(isImageMessage)) return;
+    this.pendingCarryOver = await fold(this.pendingCarryOver);
   }
 
   /**
@@ -1379,7 +1479,12 @@ export class ContextEngine {
           // written, so the stream and the Trace carry the Session series rather than the
           // LLM's per-request stand-in — and increment the Session turn count (counted per
           // LLM Request, across Tasks; used for compaction threshold checks).
-          if (this.observeTokenUsage(msg)) this.sessionTurns += 1;
+          if (this.observeTokenUsage(msg)) {
+            this.sessionTurns += 1;
+            // The context has a completed turn: its opening summary is history now, and a
+            // switch away from it summarizes rather than carries (see `contextSummary`).
+            this.contextSummary = null;
+          }
           queue.push(msg);
           await this.write(msg);
           // Collect complete thinking/text segments (including partial segments finalized on
@@ -2136,6 +2241,9 @@ export class ContextEngine {
     if (opened.modelHasVision !== undefined) this.modelHasVision = opened.modelHasVision;
     this.sessionTurns = 0;
     this.lastRequestTotal = 0;
+    // Nothing has been written to the opened context yet; its summary, if any, is still
+    // pending (or carried by a switch) and is remembered again when it is written.
+    this.contextSummary = null;
     // Lets compactability() distinguish "just compacted" from "hasn't chatted yet" — both have
     // sessionTurns === 0, but they mean two completely different things to the user (being told
     // "no completed conversation turns yet" right after compacting is as good as saying nothing).

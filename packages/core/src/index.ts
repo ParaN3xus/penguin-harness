@@ -37,12 +37,17 @@ export * from "./hooks/index.js";
 export * from "./plugins/index.js";
 
 // Runtime entry points
-export { ContextEngine, reconnectDelayMs } from "./engine/context-engine.js";
+export {
+  ContextEngine,
+  ModelSwitchRefusedError,
+  reconnectDelayMs,
+} from "./engine/context-engine.js";
 export type {
   CompactAvailability,
   CompactionSettings,
   ContextEngineDeps,
   EngineInitialState,
+  ModelSwitchRefusal,
   ModelSwitchTarget,
   OpenContextOptions,
   OpenedContext,

@@ -20,6 +20,7 @@ import type {
   TaskCreateResponse,
 } from "@prismshadow/penguin-server/api";
 import { sameModelRef } from "../models/model-grouping";
+import type { ThinkingSwitchItem } from "./thinking-level";
 
 /**
  * Whether the picker is disabled: a switch compacts, and the server neither starts nor queues a
@@ -30,24 +31,53 @@ export function sessionModelPickerDisabled(status: SessionStatus): boolean {
 }
 
 /**
+ * What the switch will do to the context, read off the loaded transcript — the dialog and the
+ * toast promise exactly that and no more:
+ * - `"compact"` — there is conversation since the last compaction: the switch compacts it on
+ *   the current model first, and the stream carries that compaction;
+ * - `"empty"` — nothing at all yet: the switch is immediate (the server answers 200);
+ * - `"compacted"` — the transcript ends in a completed compaction with nothing said since: the
+ *   server runs no compaction and streams no summarize pair, the conversation continues on the
+ *   target from the summary already held (a switch right after a switch closes the untouched
+ *   context with a discard pair — housekeeping, not a compaction of anything).
+ */
+export type SwitchContextShape = "compact" | "empty" | "compacted";
+
+/**
+ * Walks the trailing run of compaction rows and model-change markers the way the thinking
+ * switch's guard does (see `prefixCacheAtRisk`): a completed compaction anywhere in that run
+ * means the context in effect is the summary; a failed one after it changed nothing.
+ */
+export function switchContextShape(items: ReadonlyArray<ThinkingSwitchItem>): SwitchContextShape {
+  if (items.length === 0) return "empty";
+  let last = items.length - 1;
+  let compacted = false;
+  while (last >= 0 && ["compaction", "model_change"].includes(items[last]!.kind)) {
+    const c = items[last]!;
+    if (!c.running && c.status === "completed") compacted = true;
+    last--;
+  }
+  return compacted ? "compacted" : "compact";
+}
+
+/**
  * What a pick asks of the page:
  * - `"none"` — the current model (nothing to switch), or a pick that raced a Task starting
  *   (the picker is disabled then, and the server would refuse it anyway);
- * - `"confirm"` — open the confirm dialog. `direct` is true when the transcript is empty: there
- *   is nothing to compact, so the dialog says the switch is immediate.
+ * - `"confirm"` — open the confirm dialog, worded for `shape` (see {@link SwitchContextShape}).
  */
-export type SessionModelPick = { act: "none" } | { act: "confirm"; direct: boolean };
+export type SessionModelPick = { act: "none" } | { act: "confirm"; shape: SwitchContextShape };
 
 export function sessionModelPick(opts: {
   current: ModelRefDto | null;
   picked: ModelRefDto;
   status: SessionStatus;
-  /** No transcript items at all (the live tail and any backfilled window alike). */
-  transcriptEmpty: boolean;
+  /** The loaded transcript's shape (the live tail behind any backfilled window), see `switchContextShape`. */
+  shape: SwitchContextShape;
 }): SessionModelPick {
   if (sameModelRef(opts.picked, opts.current)) return { act: "none" };
   if (sessionModelPickerDisabled(opts.status)) return { act: "none" };
-  return { act: "confirm", direct: opts.transcriptEmpty };
+  return { act: "confirm", shape: opts.shape };
 }
 
 /**

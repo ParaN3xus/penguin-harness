@@ -1749,8 +1749,10 @@ export interface GoalResponse {
  * model. A Session just compacted and not written on since streams no pair — only the opener
  * records and the `session_meta`. Refusals are 409 with a code per reason:
  * `task_in_progress` / `compacting` (busy), `same_model`, `model_not_configured` (the target is
- * not in the Project config), `model_unavailable` (the target cannot be constructed, e.g. no
- * credential), `compaction_not_configured`. A Session that never ran has no context to compact:
+ * not in the Project config), `model_unavailable` (the target is configured but cannot be
+ * switched to: it cannot be constructed, e.g. no credential, or — for a Session just compacted
+ * — the summary held for the next context does not fit its window; the message says which),
+ * `compaction_not_configured`. A Session that never ran has no context to compact:
  * its switch completes inside the request, which then answers 200 with a
  * {@link SessionResponse} carrying the updated model instead of 202 — nothing is streamed for it.
  */
