@@ -782,13 +782,26 @@ function TicketDialog({
                       <li key={s.sessionId} className="flex items-center gap-2 px-2 py-1.5 text-sm">
                         <PrincipalChip principal={agentPrincipal(s.agentId)} names={names} />
                         <span className="flex min-w-0 flex-1">
-                          <TitleButton
-                            title={S.company.tickets.openSession}
-                            className="truncate text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
-                            onClick={() => openSession(s)}
-                          >
-                            {s.title ?? s.sessionId}
-                          </TitleButton>
+                          {s.agentId === "" ? (
+                            // The ticket still names a session whose row is gone (its Agent
+                            // was deleted, say): the server answers it with no Agent, and
+                            // there is nothing to open, so it is plain text and never
+                            // becomes a Temporary entry.
+                            <span
+                              className="truncate text-gray-400 dark:text-gray-500"
+                              title={s.sessionId}
+                            >
+                              {s.title ?? s.sessionId}
+                            </span>
+                          ) : (
+                            <TitleButton
+                              title={S.company.tickets.openSession}
+                              className="truncate text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
+                              onClick={() => openSession(s)}
+                            >
+                              {s.title ?? s.sessionId}
+                            </TitleButton>
+                          )}
                         </span>
                         {s.lastActiveAt !== undefined && (
                           <span className="shrink-0 font-mono text-[11px] tabular-nums text-gray-400 dark:text-gray-500">
