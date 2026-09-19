@@ -809,11 +809,18 @@ describe("in-session model switch", () => {
       ],
       "A",
     );
+    // The compaction opens a fresh context on A (never asked anything: the switch away from it
+    // sends no request); the refused target B gets no context; C takes the summary.
+    const llmA2 = new ScriptedLLM([], "A2");
     const llmB = new ScriptedLLM([], "B");
     const llmC = new ScriptedLLM([{ messages: [assistantText("answer"), usage(20, 3170)] }], "C");
     const h = harness(traces, {
       llmA,
-      llms: { [MODEL_B.model_id]: [llmB], [MODEL_C.model_id]: [llmC] },
+      llms: {
+        [MODEL_A.model_id]: [llmA2],
+        [MODEL_B.model_id]: [llmB],
+        [MODEL_C.model_id]: [llmC],
+      },
       // B: 4096 − prefix − 2048 headroom leaves ~2k for a ~3k summary. C: room to spare.
       windows: { [MODEL_B.model_id]: 4096, [MODEL_C.model_id]: 200000 },
     });
@@ -832,7 +839,8 @@ describe("in-session model switch", () => {
     expect((refusal as Error).message).toMatch(/4096 tokens/);
     expect((refusal as Error).message).toMatch(/stays on its current model/);
     expect(h.written).toHaveLength(writtenBefore);
-    expect(h.opens).toEqual([]);
+    // The compaction's own open (on A, no target) is the only one; B was never opened.
+    expect(h.opens).toEqual([undefined]);
     expect(h.session.modelId).toBe(MODEL_A.model_id);
     expect(await h.files()).toEqual([`${SESSION_ID}_001.jsonl`]);
     expect(h.session.compactability()).toBe("just_compacted");
