@@ -22,6 +22,10 @@ folder capsule, and the organization's status sits beside its name as a text cap
   into it. The caret stepped over the name, and a click or a selection that ended inside it moved
   to its edge. Ctrl+Z after that Backspace or Delete brought the mention back whole, and an input
   method's composition that reached into a name removed it when the composition ended.
+- A copy, a cut or a drag of text holding picked mentions carried them along: pasted or dropped
+  into a channel composer, each came back as a mention, while other apps received the names as
+  plain text. A mention came back only when its name was still what that channel shows for its
+  id, so `@Name` text from anywhere else stayed plain.
 - A mention glued to the text around it (`x@Ada`, `@Ada.md`) went out with a space that sets its
   token apart, so it was still delivered, and so was an `@id` typed right after it (`@张三@ceo`).
   Employees who share a name stay apart, and a typed or pasted `@id` works as before.
@@ -35,13 +39,17 @@ folder capsule, and the organization's status sits beside its name as a text cap
   a click that copies the path exactly as written, the glyph turning into a check. The stored text
   did not change.
 - A path is `<app_data_dir>/…`, or an absolute path that passes through the Project's
-  `organizations/` or `agents/` directory. In prose it is made of ASCII file-name characters, so it
-  stops at a space, CJK text or punctuation, and a trailing full stop stays outside it. A path that
-  runs on through a non-ASCII segment (`…/workspace/调研报告.md`) and this server's own routes
-  (`/api/projects/…/organizations/…`) stay text. An inline code span holding one path and nothing
+  `organizations/` or `agents/` directory, with `/`, `\` or both as separators, so the paths a
+  Windows server writes (`C:\Users\…\.penguin\data\…`) count too. In prose it is made of ASCII
+  file-name characters, so it stops at a space, CJK text or punctuation, and a trailing full stop
+  stays outside it. A path that runs on through a non-ASCII segment (`…/workspace/调研报告.md`)
+  or in from one (`C:\Users\张三\…`), and this server's own routes
+  (`/api/projects/…/organizations/…`), stay text. An inline code span holding one path and nothing
   else becomes a capsule verbatim; fenced blocks, commands in code spans and link labels stay as
-  written. A trailing `/`, or a last segment without an extension, reads as a folder; a last
+  written. A trailing separator, or a last segment without an extension, reads as a folder; a last
   segment with an extension, as a file.
+- In the Markdown fields a path written with backslashes was copied as the source writes it,
+  although Markdown reads a backslash before punctuation as an escape and drops it from the text.
 
 ## Organization status
 
