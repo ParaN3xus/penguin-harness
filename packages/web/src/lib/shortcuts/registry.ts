@@ -23,7 +23,6 @@ export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
     scope: "global",
     group: "general",
     defaults: { default: "Mod+KeyK" },
-    rebindable: true,
   },
   {
     id: "chat.new",
@@ -31,28 +30,24 @@ export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
     group: "general",
     // ChatGPT's new-chat chord; plain Mod+N is the browser's new window everywhere.
     defaults: { default: "Mod+Shift+KeyO" },
-    rebindable: true,
   },
   {
     id: "sidebar.toggle",
     scope: "global",
     group: "panels",
     defaults: { default: "Mod+KeyB" },
-    rebindable: true,
   },
   {
     id: "dock.toggleRight",
     scope: "global",
     group: "panels",
     defaults: { default: "Mod+Alt+KeyB" },
-    rebindable: true,
   },
   {
     id: "dock.toggleBottom",
     scope: "global",
     group: "panels",
     defaults: { default: "Mod+KeyJ" },
-    rebindable: true,
   },
   {
     id: "terminal.toggle",
@@ -67,7 +62,6 @@ export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
     group: "terminal",
     // VS Code's new-terminal chord, literal Control for the same reason as the toggle.
     defaults: { default: "Ctrl+Shift+Backquote" },
-    rebindable: true,
   },
   {
     id: "terminal.close",
