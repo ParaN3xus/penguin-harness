@@ -35,6 +35,7 @@ import {
   deslopHits,
   isClassShaped,
   matchesPolicyPath,
+  modeDeclarations,
   parseClassToken,
   scanSourceRoots,
   unscannedRoots,
@@ -157,7 +158,7 @@ describe("theme values the rules reach", () => {
     it(title, () => {
       const problems: string[] = [];
       for (const mode of THEME_MODES) {
-        const values = analysis.modes[mode];
+        const values = modeDeclarations(analysis, mode);
         for (const level of [1, 2, 3, 4, 5, 6]) {
           const transform = values.get(`--ui-h${level}-transform`);
           if (level >= 2 && level <= 5 && transform !== undefined && transform !== "none") {

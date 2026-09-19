@@ -1,8 +1,9 @@
 /**
  * Vite config: the component gallery (React SPA + Tailwind CSS 4), a local dev tool.
  *
- * `penguinUi()` aliases `@prismshadow/penguin-ui` to the live `packages/ui/src` — imported by
- * relative path, see its doc comment for why. Port 7372 is fixed and strict: screenshot runs and
+ * `@prismshadow/penguin-ui` resolves to the live `packages/ui/src` through the workspace link;
+ * `penguinUi()` emits the bundled fonts' licence texts beside a build (imported by relative path,
+ * see its doc comment). Port 7372 is fixed and strict: screenshot runs and
  * quoted feedback links name it, so a silently shifted port would point them at the wrong server.
  * BASE_PATH lets a static build be served under a subpath (the docs site's precedent).
  *

@@ -1,6 +1,6 @@
 /**
- * The token contract (src/tokens.ts): every theme × mode defines every name, and nothing else is
- * a token.
+ * The token contract (src/tokens.ts): every theme × mode defines every name — the base rule plus
+ * that mode's own, the dark rule declaring only what dark changes — and nothing else is a token.
  *
  * Components read tokens by name and never ask which theme is active, so a name one theme leaves
  * out does not fail loudly anywhere — the property is simply unset, the utility that reads it
@@ -22,6 +22,7 @@ import {
   analyzeFile,
   analyzeThemeFile,
   contractProblems,
+  darkRepeats,
   matchesPolicyPath,
   scanSourceRoots,
   stripCssComments,
@@ -90,13 +91,24 @@ describe("theme files", () => {
       });
 
       for (const mode of THEME_MODES) {
-        it(`defines every contract name in ${mode} mode, and nothing outside the contract`, () => {
+        const rules = mode === "light" ? "the base rule" : "the base rule plus the dark rule";
+        it(`defines every contract name in ${mode} mode (${rules}), and nothing outside the contract`, () => {
           expect(
             contractProblems(analysis, mode),
-            `${theme.file} (${mode}) must declare exactly the names in tokens.ts`,
+            `${theme.file} (${mode}: ${rules}) must declare exactly the names in tokens.ts`,
           ).toEqual([]);
         });
       }
+
+      it("declares in its dark rule only what dark changes", () => {
+        // `:root.dark` also matches the base rule, so a dark declaration equal to the base one is a
+        // second copy of that value: the mode-independent groups (shape, type, density, motion,
+        // icons) live once, in the base rule (user decision, 2026-09-18).
+        expect(
+          darkRepeats(analysis),
+          `${theme.file}: the dark rule repeats these base values — drop them from it`,
+        ).toEqual([]);
+      });
     });
   }
 });
