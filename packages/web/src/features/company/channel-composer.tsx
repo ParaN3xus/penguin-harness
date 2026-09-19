@@ -346,6 +346,7 @@ export function ChannelComposer({
                   seg.mention ? (
                     <span
                       key={i}
+                      data-mention=""
                       className="rounded-sm bg-gray-200 ring-2 ring-gray-200 dark:bg-gray-700 dark:ring-gray-700"
                     >
                       {seg.text}
