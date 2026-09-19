@@ -96,15 +96,24 @@ describe("chordOf", () => {
     expect(chordOf(key({ code: "KeyW", key: "w", metaKey: true }), "linux")).toBeNull();
   });
 
-  it("is null for a modifier-only press, an auto-repeat and an IME composition", () => {
+  it("is null for a modifier-only press and an IME composition", () => {
     expect(
       chordOf(key({ code: "ControlLeft", key: "Control", ctrlKey: true }), "linux"),
     ).toBeNull();
     expect(chordOf(key({ code: "MetaLeft", key: "Meta", metaKey: true }), "mac")).toBeNull();
-    expect(chordOf(key({ code: "KeyW", key: "w", metaKey: true, repeat: true }), "mac")).toBeNull();
     expect(
       chordOf(key({ code: "KeyW", key: "w", ctrlKey: true, isComposing: true }), "linux"),
     ).toBeNull();
+  });
+
+  it("still reads an auto-repeat as the chord, so the caller can prevent the browser's action for it", () => {
+    expect(chordOf(key({ code: "KeyW", key: "w", metaKey: true, repeat: true }), "mac")).toEqual({
+      code: "KeyW",
+      mod: true,
+      ctrl: false,
+      alt: false,
+      shift: false,
+    });
   });
 
   it("reads the physical key, so an IME, Option and Shift do not change the chord", () => {

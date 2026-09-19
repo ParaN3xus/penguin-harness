@@ -7,7 +7,7 @@
  * key the page left alone) at the cost of shadowing that menu action.
  */
 import { chordEquals, normalizeChord, parseChord } from "./chord";
-import type { Chord, Platform } from "./types";
+import type { Chord, HostKind, Platform } from "./types";
 
 /** Chord strings are written in the registry grammar; `Ctrl+` is the literal Control key (macOS only differs). */
 const BROWSER_ALL = [
@@ -57,14 +57,25 @@ const BROWSER_BY_PLATFORM: Record<Platform, readonly string[]> = {
   ],
 };
 
-/** Taken on `before-input-event`, so the page never sees them (Windows/Linux only). */
+/**
+ * Keys the shell takes on `before-input-event`, before the page sees them. None today: the
+ * shell (packages/desktop/src/main.ts) binds nothing there, so F10 and F12 reach the page and
+ * DevTools is the View menu's accelerator below. The table stays so a shell that does start
+ * taking keys has one place to say so.
+ */
 const SHELL_BY_PLATFORM: Record<Platform, readonly string[]> = {
-  windows: ["F10", "F12", "Ctrl+Shift+KeyI"],
-  linux: ["F10", "F12", "Ctrl+Shift+KeyI"],
+  windows: [],
+  linux: [],
   mac: [],
 };
 
-/** Electron's role accelerators in the shell's menu template (packages/desktop/src/menu.ts). */
+/**
+ * Electron's role accelerators in the shell's menu template (packages/desktop/src/menu.ts:
+ * mac app menu, `editMenu`, `viewMenu`, `windowMenu`, plus `quit` in the Windows/Linux File
+ * menu), read from Electron 43.2's lib/browser/api/menu-item-roles.ts. `zoomIn` is
+ * `CommandOrControl+Plus`, which Electron's accelerator parser turns into Shift+= (the plus is a
+ * shifted character); `quit` has no accelerator on Windows; `redo` is Control+Y on Windows only.
+ */
 const MENU_BY_PLATFORM: Record<Platform, readonly string[]> = {
   mac: [
     "Mod+KeyZ", // undo
@@ -72,12 +83,13 @@ const MENU_BY_PLATFORM: Record<Platform, readonly string[]> = {
     "Mod+KeyX", // cut
     "Mod+KeyC", // copy
     "Mod+KeyV", // paste
+    "Mod+Alt+Shift+KeyV", // paste and match style
     "Mod+KeyA", // select all
     "Mod+KeyR", // reload
     "Mod+Shift+KeyR", // force reload
     "Mod+Alt+KeyI", // toggle DevTools
     "Mod+Digit0", // actual size
-    "Mod+Equal", // zoom in
+    "Mod+Shift+Equal", // zoom in
     "Mod+Minus", // zoom out
     "Mod+Ctrl+KeyF", // toggle full screen
     "Mod+KeyM", // minimize
@@ -96,16 +108,15 @@ const MENU_BY_PLATFORM: Record<Platform, readonly string[]> = {
     "Ctrl+Shift+KeyR", // force reload
     "Ctrl+Shift+KeyI", // toggle DevTools
     "Ctrl+Digit0", // actual size
-    "Ctrl+Equal", // zoom in
+    "Ctrl+Shift+Equal", // zoom in
     "Ctrl+Minus", // zoom out
     "F11", // toggle full screen
     "Ctrl+KeyM", // minimize
     "Ctrl+KeyW", // close (hides the window to the tray)
-    "Ctrl+KeyQ", // quit
   ],
   linux: [
     "Ctrl+KeyZ", // undo
-    "Ctrl+KeyY", // redo
+    "Ctrl+Shift+KeyZ", // redo
     "Ctrl+KeyX", // cut
     "Ctrl+KeyC", // copy
     "Ctrl+KeyV", // paste
@@ -114,7 +125,7 @@ const MENU_BY_PLATFORM: Record<Platform, readonly string[]> = {
     "Ctrl+Shift+KeyR", // force reload
     "Ctrl+Shift+KeyI", // toggle DevTools
     "Ctrl+Digit0", // actual size
-    "Ctrl+Equal", // zoom in
+    "Ctrl+Shift+Equal", // zoom in
     "Ctrl+Minus", // zoom out
     "F11", // toggle full screen
     "Ctrl+KeyM", // minimize
@@ -155,4 +166,13 @@ export function desktopReserved(chord: Chord, platform: Platform): "shell" | "me
   if (inTable(chord, table("shell", SHELL_BY_PLATFORM[platform], platform))) return "shell";
   if (inTable(chord, table("menu", MENU_BY_PLATFORM[platform], platform))) return "menu";
   return null;
+}
+
+/**
+ * Whether a chord is worth showing as the way to run a command on this host. A browser tab
+ * never receives a chord the browser reserves (⌘W closes the tab itself), so a tooltip naming it
+ * there would promise a key that does the opposite; the desktop app receives every chord.
+ */
+export function shownOnHost(chord: Chord, platform: Platform, host: HostKind): boolean {
+  return host !== "browser" || !browserReserved(chord, platform);
 }

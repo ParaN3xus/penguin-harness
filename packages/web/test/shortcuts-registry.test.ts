@@ -12,7 +12,6 @@ import {
   SHORTCUT_GROUPS,
   commandById,
   defaultChord,
-  isCommandId,
 } from "../src/lib/shortcuts/registry";
 import { browserReserved } from "../src/lib/shortcuts/reserved";
 import { S } from "../src/lib/strings";
@@ -86,8 +85,6 @@ describe("registry defaults", () => {
 
   it("looks commands up by id and refuses unknown ones", () => {
     expect(commandById("terminal.close").scope).toBe("terminal");
-    expect(isCommandId("terminal.close")).toBe(true);
-    expect(isCommandId("terminal.explode")).toBe(false);
     expect(() => commandById("terminal.explode" as CommandId)).toThrow(/unknown shortcut command/);
   });
 });

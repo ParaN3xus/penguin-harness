@@ -74,7 +74,6 @@ export const en: Strings = {
     adminOnly: "Only an admin can install on a machine.",
   },
 
-  /** Server-side terminal (the in-app dock and the standalone /terminal page). */
   /** Keyboard shortcuts: the registry's command and group labels (lib/shortcuts/registry.ts). */
   shortcuts: {
     commands: {
@@ -119,6 +118,7 @@ export const en: Strings = {
     saveFailed: "Shortcuts could not be saved to the account",
   },
 
+  /** Server-side terminal (the in-app dock and the standalone /terminal page). */
   terminal: {
     title: "Terminal",
     newShell: "New terminal",

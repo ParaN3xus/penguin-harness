@@ -242,8 +242,9 @@ export function HandbookPage() {
 
   const onEditorKey = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (isShortcut(e.nativeEvent, keymap(), "editor.save", currentPlatform())) {
+      // A held chord repeats: every repeat is kept from the browser (Save Page), one save runs.
       e.preventDefault();
-      void save();
+      if (!e.repeat) void save();
     }
   };
   const saveShortcut = useShortcutLabel("editor.save");

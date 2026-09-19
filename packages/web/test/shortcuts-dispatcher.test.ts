@@ -1,45 +1,36 @@
 /**
  * The global dispatcher (src/lib/shortcuts/dispatcher.ts): handler order, the declined-command
- * path, and the window listener over a fake target — it runs the bound global command, prevents
- * the default only when handled, and leaves an already-prevented event alone.
+ * path, and the window listener fed a fake event — it runs the bound global command, prevents the
+ * default only when handled, keeps a repeat from the browser without re-running, and leaves an
+ * already-prevented event alone.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  handleShortcutKeydown,
   hasCommandHandler,
-  installShortcutDispatcher,
   onCommand,
   runCommand,
-  type KeydownTarget,
 } from "../src/lib/shortcuts/dispatcher";
 import { setPlatformForTests } from "../src/lib/shortcuts/platform";
 import { configureKeybindingsStoreForTests } from "../src/lib/shortcuts/store";
 
-class FakeTarget implements KeydownTarget {
-  listeners: Array<(event: KeyboardEvent) => void> = [];
-  addEventListener(_type: "keydown", listener: (event: KeyboardEvent) => void): void {
-    this.listeners.push(listener);
-  }
-  removeEventListener(_type: "keydown", listener: (event: KeyboardEvent) => void): void {
-    this.listeners = this.listeners.filter((l) => l !== listener);
-  }
-  fire(init: Partial<KeyboardEvent> & { code: string }): { defaultPrevented: boolean } {
-    const state = { defaultPrevented: false, ...init };
-    const event = {
-      key: "",
-      ctrlKey: false,
-      metaKey: false,
-      altKey: false,
-      shiftKey: false,
-      repeat: false,
-      isComposing: false,
-      ...state,
-      preventDefault: () => {
-        state.defaultPrevented = true;
-      },
-    } as unknown as KeyboardEvent;
-    for (const listener of this.listeners) listener(event);
-    return state;
-  }
+function fire(init: Partial<KeyboardEvent> & { code: string }): { defaultPrevented: boolean } {
+  const state = { defaultPrevented: false, ...init };
+  const event = {
+    key: "",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    repeat: false,
+    isComposing: false,
+    ...state,
+    preventDefault: () => {
+      state.defaultPrevented = true;
+    },
+  } as unknown as KeyboardEvent;
+  handleShortcutKeydown(event);
+  return state;
 }
 
 const unregisters: Array<() => void> = [];
@@ -86,42 +77,38 @@ describe("command handlers", () => {
 
 describe("the window listener", () => {
   it("runs the bound global command and prevents the default", () => {
-    const target = new FakeTarget();
-    const uninstall = installShortcutDispatcher(target);
     let toggled = 0;
     unregisters.push(onCommand("terminal.toggle", () => void toggled++));
-    const event = target.fire({ code: "Backquote", key: "`", ctrlKey: true });
+    const event = fire({ code: "Backquote", key: "`", ctrlKey: true });
     expect(toggled).toBe(1);
     expect(event.defaultPrevented).toBe(true);
-    uninstall();
-    target.fire({ code: "Backquote", key: "`", ctrlKey: true });
+  });
+
+  it("keeps a repeat from the browser without running the command again", () => {
+    let toggled = 0;
+    unregisters.push(onCommand("terminal.toggle", () => void toggled++));
+    fire({ code: "Backquote", key: "`", ctrlKey: true });
+    const repeat = fire({ code: "Backquote", key: "`", ctrlKey: true, repeat: true });
     expect(toggled).toBe(1);
+    expect(repeat.defaultPrevented).toBe(true);
+    // A repeat of a chord nothing answers is left to the browser, like its first press.
+    expect(fire({ code: "KeyP", key: "p", ctrlKey: true, repeat: true }).defaultPrevented).toBe(
+      false,
+    );
   });
 
   it("leaves a chord with no handler, a focus-scoped chord and an already-prevented event to their defaults", () => {
-    const target = new FakeTarget();
-    const uninstall = installShortcutDispatcher(target);
     // palette.toggle is bound to Ctrl+P but nothing answers it yet.
-    expect(target.fire({ code: "KeyP", key: "p", ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(fire({ code: "KeyP", key: "p", ctrlKey: true }).defaultPrevented).toBe(false);
     // editor.save is editor-scoped: the editor's own handler decides it, never the window.
     let saved = 0;
     unregisters.push(onCommand("editor.save", () => void saved++));
-    expect(target.fire({ code: "KeyS", key: "s", ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(fire({ code: "KeyS", key: "s", ctrlKey: true }).defaultPrevented).toBe(false);
     expect(saved).toBe(0);
     // A surface that handled the key already.
     let toggled = 0;
     unregisters.push(onCommand("terminal.toggle", () => void toggled++));
-    target.fire({ code: "Backquote", key: "`", ctrlKey: true, defaultPrevented: true });
+    fire({ code: "Backquote", key: "`", ctrlKey: true, defaultPrevented: true });
     expect(toggled).toBe(0);
-    uninstall();
-  });
-
-  it("installs once per target", () => {
-    const target = new FakeTarget();
-    const first = installShortcutDispatcher(target);
-    installShortcutDispatcher(target);
-    expect(target.listeners).toHaveLength(1);
-    first();
-    expect(target.listeners).toHaveLength(0);
   });
 });

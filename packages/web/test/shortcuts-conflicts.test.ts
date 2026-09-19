@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parseChord } from "../src/lib/shortcuts/chord";
 import { conflictsOf, findConflicts } from "../src/lib/shortcuts/conflicts";
 import { SHORTCUT_COMMANDS } from "../src/lib/shortcuts/registry";
-import { browserReserved, desktopReserved } from "../src/lib/shortcuts/reserved";
+import { browserReserved, desktopReserved, shownOnHost } from "../src/lib/shortcuts/reserved";
 import type { Chord, CommandId, Platform } from "../src/lib/shortcuts/types";
 
 const chord = (text: string, platform: Platform = "linux"): Chord => {
@@ -100,23 +100,42 @@ describe("browserReserved", () => {
 });
 
 describe("desktopReserved", () => {
-  it("marks the shell's before-input-event keys on Windows and Linux only", () => {
-    expect(desktopReserved(chord("F12"), "windows")).toBe("shell");
-    expect(desktopReserved(chord("F10"), "linux")).toBe("shell");
-    expect(desktopReserved(chord("Ctrl+Shift+KeyI"), "linux")).toBe("shell");
+  it("takes no key before the page: the shell binds nothing on before-input-event today", () => {
+    expect(desktopReserved(chord("F12"), "windows")).toBeNull();
+    expect(desktopReserved(chord("F10"), "linux")).toBeNull();
     expect(desktopReserved(chord("F12", "mac"), "mac")).toBeNull();
   });
 
-  it("marks the menu role accelerators of each platform", () => {
+  it("marks the menu role accelerators of each platform, as Electron 43.2 defines them", () => {
     expect(desktopReserved(chord("Mod+KeyR", "mac"), "mac")).toBe("menu");
     expect(desktopReserved(chord("Mod+Alt+KeyI", "mac"), "mac")).toBe("menu");
     expect(desktopReserved(chord("Mod+Ctrl+KeyF", "mac"), "mac")).toBe("menu");
+    expect(desktopReserved(chord("Mod+Alt+Shift+KeyV", "mac"), "mac")).toBe("menu");
     expect(desktopReserved(chord("Mod+KeyR"), "windows")).toBe("menu");
+    expect(desktopReserved(chord("Ctrl+Shift+KeyI"), "windows")).toBe("menu");
     expect(desktopReserved(chord("Mod+KeyW"), "linux")).toBe("menu");
     expect(desktopReserved(chord("F11"), "linux")).toBe("menu");
-    // Ctrl+Shift+I is taken by the shell first; the menu never sees it.
-    expect(desktopReserved(chord("Ctrl+Shift+KeyI"), "windows")).toBe("shell");
+    // Zoom in is CommandOrControl+Plus, which Electron reads as Shift+=.
+    expect(desktopReserved(chord("Mod+Shift+Equal"), "windows")).toBe("menu");
+    expect(desktopReserved(chord("Mod+Equal"), "windows")).toBeNull();
+    // Redo: Control+Y on Windows only; Linux and macOS use Shift+Mod+Z.
+    expect(desktopReserved(chord("Mod+KeyY"), "windows")).toBe("menu");
+    expect(desktopReserved(chord("Mod+KeyY"), "linux")).toBeNull();
+    expect(desktopReserved(chord("Mod+Shift+KeyZ"), "linux")).toBe("menu");
+    // Quit has no accelerator on Windows.
+    expect(desktopReserved(chord("Mod+KeyQ"), "windows")).toBeNull();
+    expect(desktopReserved(chord("Mod+KeyQ"), "linux")).toBe("menu");
     expect(desktopReserved(chord("Mod+KeyW", "mac"), "mac")).toBeNull();
     expect(desktopReserved(chord("Mod+KeyS"), "linux")).toBeNull();
+  });
+});
+
+describe("shownOnHost", () => {
+  it("hides a browser-reserved chord in a browser and shows everything in the desktop app", () => {
+    expect(shownOnHost(chord("Mod+KeyW", "mac"), "mac", "browser")).toBe(false);
+    expect(shownOnHost(chord("Mod+KeyW"), "linux", "browser")).toBe(false);
+    expect(shownOnHost(chord("Mod+KeyW", "mac"), "mac", "desktop")).toBe(true);
+    expect(shownOnHost(chord("Ctrl+Backquote"), "linux", "browser")).toBe(true);
+    expect(shownOnHost(chord("Mod+KeyS", "mac"), "mac", "browser")).toBe(true);
   });
 });

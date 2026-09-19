@@ -71,8 +71,6 @@ export interface ShortcutCommand {
     windows?: string | null;
     linux?: string | null;
   };
-  /** False renders the settings row read-only. Every entry today is true. */
-  rebindable: boolean;
 }
 
 /** id → chord (null = unbound), fully resolved for the current platform. */

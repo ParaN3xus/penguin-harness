@@ -19,10 +19,10 @@ import { TerminalOpcode, decodeFrame, encodeFrame, encodeResize } from "./termin
 import { LinkClickTracker, openTerminalLink, positionFromPointer } from "./terminal-links";
 import { useTheme } from "../../state/theme";
 import { hasCommandHandler } from "../../lib/shortcuts/dispatcher";
-import { matchShortcut } from "../../lib/shortcuts/match";
 import { currentPlatform } from "../../lib/shortcuts/platform";
 import { keymap } from "../../lib/shortcuts/store";
 import { terminalClipboardAction } from "../../lib/shortcuts/terminal-clipboard";
+import { terminalKeyAction } from "../../lib/shortcuts/terminal-keys";
 
 /**
  * xterm and its addons load lazily, on the first actual terminal render: their UMD
@@ -357,20 +357,21 @@ export function TerminalView({
       /**
        * Keys the terminal decides before xterm does. xterm hands this handler its own
        * textarea's events and nothing else, so everything here is seen only by the terminal
-       * that has focus, with no window-level listener involved.
+       * that has focus.
        *
        * 1. Clipboard keys, a fixed platform convention (lib/shortcuts/terminal-clipboard.ts):
        *    a copy writes the selection here; a paste rides the browser's NATIVE paste event
        *    into xterm's textarea (no clipboard permission involved), so returning false —
        *    skip xterm's own key handling, keep the browser default — is the whole
        *    implementation, and calling the async clipboard API as well would double-paste.
-       * 2. The keymap. A terminal-scope command (`terminal.close`, ⌘W / Ctrl+W by default) is
-       *    consumed here so it never reaches the shell, where it is readline's delete-word;
-       *    browsers keep that chord for closing the browser tab and may act first, the
-       *    desktop shell delivers it. A global-scope command with a handler (Ctrl+` toggling
-       *    the docks) is not sent to the shell either, but is left un-prevented so it bubbles
-       *    to the window dispatcher that owns it — VS Code's "commands to skip shell".
-       *    Anything else, including a chord no surface answers, goes to the shell as typed.
+       * 2. The keymap (lib/shortcuts/terminal-keys.ts decides). A terminal-scope command
+       *    (`terminal.close`, ⌘W / Ctrl+W by default) is consumed here so it never reaches the
+       *    shell, where it is readline's delete-word; browsers keep that chord for closing the
+       *    browser tab and act first, the desktop shell delivers it. A global-scope command
+       *    with a handler (Ctrl+` toggling the docks) is not sent to the shell either, but is
+       *    left un-prevented so it bubbles to the window dispatcher that owns it — VS Code's
+       *    "commands to skip shell". Anything else, including a chord no surface answers, goes
+       *    to the shell as typed.
        */
       const platform = currentPlatform();
       term.attachCustomKeyEventHandler((event) => {
@@ -383,16 +384,25 @@ export function TerminalView({
         if (clipboard === "paste") {
           return false; // native paste path (see above)
         }
-        const command = matchShortcut(event, keymap(), ["terminal", "global"], platform);
-        if (command === "terminal.close") {
-          if (!callbacks.current.onCloseRequest) return true; // no host close: the key is the shell's
-          event.preventDefault();
-          event.stopPropagation();
-          callbacks.current.onCloseRequest();
-          return false;
+        const action = terminalKeyAction(event, keymap(), platform, {
+          canClose: callbacks.current.onCloseRequest !== undefined,
+          hasHandler: hasCommandHandler,
+        });
+        switch (action) {
+          case "shell":
+            return true;
+          case "skip-shell":
+            return false;
+          case "consume":
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+          case "close":
+            event.preventDefault();
+            event.stopPropagation();
+            callbacks.current.onCloseRequest?.();
+            return false;
         }
-        if (command !== null && hasCommandHandler(command)) return false;
-        return true;
       });
 
       /**

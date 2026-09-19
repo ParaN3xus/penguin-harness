@@ -44,7 +44,7 @@ import { Dropdown } from "../../components/ui/dropdown";
 import { GlyphIcon } from "../../components/ui/glyph-icon";
 import { Kbd } from "../../components/ui/kbd";
 import { ICON_SIZE } from "../../lib/icon-scale";
-import { useBinding, useShortcutLabel } from "../../lib/shortcuts/use-keymap";
+import { useDisplayedBinding, useShortcutLabel } from "../../lib/shortcuts/use-keymap";
 import { toneDot } from "../../lib/tone";
 import { useTerminalChrome } from "../terminal/terminal-appearance";
 import {
@@ -248,7 +248,7 @@ function DockPicker({
   /** The bottom (and merged) surface lays its choices out in a row, the right one as a list. */
   horizontal: boolean;
 }) {
-  const toggleChord = useBinding("terminal.toggle");
+  const toggleChord = useDisplayedBinding("terminal.toggle");
   const rowClass =
     "flex items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-gray-600 transition-colors duration-150 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100";
   const row = (kind: PanelKind) => (

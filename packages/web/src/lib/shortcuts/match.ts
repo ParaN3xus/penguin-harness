@@ -3,6 +3,7 @@
  * scopes that currently hold focus and the platform, and gets back a command id or null.
  */
 import { chordEquals, chordOf } from "./chord";
+import { usCharacter } from "./format";
 import { SHORTCUT_COMMANDS } from "./registry";
 import type { Chord, CommandId, KeyLike, Keymap, Platform, ShortcutScope } from "./types";
 
@@ -40,26 +41,22 @@ export function isShortcut(e: KeyLike, keymap: Keymap, id: CommandId, platform: 
  * Defaults are authored in US key positions. Where the browser exposes the keyboard layout
  * (`navigator.keyboard.getLayoutMap()`, a `code → character` map), a default whose key types a
  * different character than it does on US is moved to the key that types the US character, so
- * "the W key" means the key labelled W on an AZERTY board (`KeyZ`) too. Only letter keys move;
- * user-recorded chords are physical and are never relocated.
+ * "the S key" means the key that types S: `KeyZ` on AZERTY for W, `Semicolon` on US-Dvorak for
+ * S. Every code in the map is a candidate — Dvorak puts letters on the punctuation positions.
+ * User-recorded chords are physical and are never relocated.
+ *
+ * One layout the map cannot describe: macOS's "Dvorak – QWERTY ⌘" input source types Dvorak
+ * but switches to QWERTY while ⌘ is held, so relocation moves ⌘S to `Semicolon` there while the
+ * user's ⌘S arrives on `KeyS`. That source wants relocation off for Mod chords; nothing exposes
+ * it, so it is not handled.
  */
 export function relocateChord(chord: Chord, layout: ReadonlyMap<string, string>): Chord {
-  const letter = /^Key([A-Z])$/.exec(chord.code)?.[1];
-  if (letter === undefined) return chord;
-  const produced = layout.get(chord.code)?.toUpperCase();
-  if (produced === undefined || produced === letter) return chord;
+  const wanted = usCharacter(chord.code);
+  if (wanted === null) return chord;
+  const produced = layout.get(chord.code);
+  if (produced === undefined || produced.toLowerCase() === wanted) return chord;
   for (const [code, char] of layout) {
-    if (/^Key[A-Z]$/.test(code) && char.toUpperCase() === letter) return { ...chord, code };
+    if (char.toLowerCase() === wanted) return { ...chord, code };
   }
   return chord;
-}
-
-export function relocateDefaults(
-  defaults: ReadonlyMap<CommandId, Chord | null>,
-  layout: ReadonlyMap<string, string>,
-): Map<CommandId, Chord | null> {
-  const out = new Map<CommandId, Chord | null>();
-  for (const [id, chord] of defaults)
-    out.set(id, chord === null ? null : relocateChord(chord, layout));
-  return out;
 }

@@ -79,7 +79,6 @@ export const zh = {
     adminOnly: "只有管理员可以安装到机器上。",
   },
 
-  /** Server-side terminal (the in-app dock and the standalone /terminal page). */
   /** Keyboard shortcuts: the registry's command and group labels (lib/shortcuts/registry.ts). */
   shortcuts: {
     commands: {
@@ -123,6 +122,7 @@ export const zh = {
     saveFailed: "快捷键未能保存到账号",
   },
 
+  /** Server-side terminal (the in-app dock and the standalone /terminal page). */
   terminal: {
     title: "终端",
     newShell: "新建终端",

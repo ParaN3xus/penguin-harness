@@ -26,7 +26,7 @@ function modifierReads(): { allowed: string[]; elsewhere: string[] } {
         continue;
       }
       if (!/\.tsx?$/.test(entry.name)) continue;
-      const rel = path.relative(WEB_SRC, full);
+      const rel = path.relative(WEB_SRC, full).replaceAll(path.sep, "/");
       const code = fs
         .readFileSync(full, "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
