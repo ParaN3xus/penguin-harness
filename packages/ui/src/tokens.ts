@@ -3,8 +3,11 @@
  * gallery's Foundations pages present them.
  *
  * One name set for every theme. Each of `themes/github.css`, `themes/modern.css` and
- * `themes/geek.css` declares **every** name below in **both** modes (light and dark); the
- * contract test parses the three files and diffs them against {@link TOKEN_NAMES}. Components
+ * `themes/geek.css` gives **every** name below a value in **both** modes (light and dark): its
+ * base rule declares all of them with the light values, and its dark rule declares only the names
+ * whose value dark changes — a group that does not vary by mode (shape, families, type scale,
+ * density, motion, icons) lives once, in the base rule. The contract test parses the three files
+ * and diffs each mode (the base rule plus that mode's own) against {@link TOKEN_NAMES}. Components
  * read these names only — through the semantic Tailwind utilities `theme.css` bridges
  * (`bg-surface`, `text-fg-muted`, `border-line`, …) or through `var(--ui-*)` directly — and never
  * branch on which theme is active.

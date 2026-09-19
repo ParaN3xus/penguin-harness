@@ -26,10 +26,11 @@ reflows to the 18px default.
   the tokens as utilities (`bg-surface`, `text-fg-muted`, `border-line`, `bg-accent`,
   `text-tone-danger-fg`, …) and re-points Tailwind's font, radius and shadow scales at them, the
   base rules that read tokens, and the five accent presets.
-- `themes/github.css` defines every token in light and dark with the app's existing values, and a
-  gray bridge that re-points Tailwind's `--color-gray-*` and `--color-white`, so the existing gray
-  classes follow the theme with no component edits. `themes/modern.css` and `themes/geek.css` were
-  added as empty placeholders.
+- `themes/github.css` defines every token with the app's existing values, and a gray bridge that
+  re-points Tailwind's `--color-gray-*` and `--color-white`, so the existing gray classes follow
+  the theme with no component edits. Its base rule holds every token; its dark rule holds only the
+  values dark changes, so a mode-independent group (shape, type, density, motion, icons) is
+  written once. `themes/modern.css` and `themes/geek.css` were added as empty placeholders.
 - `boot.ts` generates the pre-paint script now inlined in `packages/web/index.html`, and the
   `applyThemeAttributes()` the theme provider reconciles with. The dark `theme-color` became
   `#000000`, the page's real dark background.

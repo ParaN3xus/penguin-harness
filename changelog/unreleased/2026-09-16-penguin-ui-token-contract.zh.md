@@ -21,9 +21,10 @@
   强调色预设因此总能压过主题的深色块）、把令牌暴露为工具类（`bg-surface`、`text-fg-muted`、
   `border-line`、`bg-accent`、`text-tone-danger-fg` 等）并把 Tailwind 的字体、圆角与阴影刻度改指令牌的
   桥接、读取令牌的基础规则，以及五个强调色预设。
-- `themes/github.css` 以应用现有取值定义每个令牌的浅色与深色，并用一段灰阶桥接改指 Tailwind 的
-  `--color-gray-*` 与 `--color-white`，现有灰阶类无需改动组件即随主题变化。`themes/modern.css` 与
-  `themes/geek.css` 以空占位文件加入。
+- `themes/github.css` 以应用现有取值定义每个令牌，并用一段灰阶桥接改指 Tailwind 的
+  `--color-gray-*` 与 `--color-white`，现有灰阶类无需改动组件即随主题变化。它的基础规则定义全部令牌，
+  深色规则只写深色下取值不同的令牌，与明暗无关的组（形状、字号、密度、动效、图标）只写一次。
+  `themes/modern.css` 与 `themes/geek.css` 以空占位文件加入。
 - `boot.ts` 生成现已内联进 `packages/web/index.html` 的首帧前脚本，以及主题 Provider 用来同步的
   `applyThemeAttributes()`。深色 `theme-color` 改为页面真实的深色背景 `#000000`。
 - 主题 Provider 新增一个存储的主题 id（`penguin.themeId`，缺省 `github`），以 `html[data-theme]`
