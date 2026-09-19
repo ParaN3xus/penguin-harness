@@ -3,14 +3,16 @@
  * contract and contrast tests — and for anyone filling a theme who wants the list of what is
  * still missing without running the suite.
  *
- * A theme file is one `@layer ui-theme` block with a light rule and a dark rule on fixed
+ * A theme file is one `@layer ui-theme` block with a base rule and a dark rule on fixed
  * selectors (tokens.ts, `themes/github.css`):
  *
- *   default theme   light `:root, :root[data-theme="github"]`   dark `:root.dark, :root[data-theme="github"].dark`
- *   any other       light `:root[data-theme="<id>"]`             dark `:root[data-theme="<id>"].dark`
+ *   default theme   base `:root, :root[data-theme="github"]`   dark `:root.dark, :root[data-theme="github"].dark`
+ *   any other       base `:root[data-theme="<id>"]`             dark `:root[data-theme="<id>"].dark`
  *
- * Each rule declares every contract name, plus the gray bridge that re-points Tailwind's own
- * palette variables. Nothing else is a token.
+ * The base rule declares every contract name with its light value, plus the gray bridge that
+ * re-points Tailwind's own palette variables. The dark rule matches the same root and declares
+ * only what dark changes, so a mode is the base rule overlaid with that mode's own rule (light has
+ * none of its own). Nothing else is a token.
  */
 import { DEFAULT_THEME_ID, THEME_MODES, TOKEN_NAMES } from "../tokens";
 import type { ThemeId, ThemeModeName } from "../tokens";
@@ -23,7 +25,7 @@ export const THEME_LAYER = "@layer ui-theme";
 /** Tailwind palette variables a theme may re-point: the gray bridge, plus white and black. */
 export const BRIDGE_VARIABLE = /^--color-(?:white|black|gray-(?:50|[1-9]00|950))$/;
 
-/** The eleven gray steps. A non-default theme re-points all of them in both modes (see below). */
+/** The eleven gray steps. A non-default theme re-points all of them, in its base rule (see below). */
 export const GRAY_STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950] as const;
 
 /** Marker a stub theme file carries in its header comment until its tokens are written. */
@@ -42,7 +44,11 @@ export function themeSelectors(themeId: ThemeId, mode: ThemeModeName): string[] 
 
 export interface ThemeFileAnalysis {
   readonly themeId: ThemeId;
-  /** Custom properties declared by the canonical rule(s) of each mode, name → value. */
+  /**
+   * Custom properties each canonical rule declares itself, name → value: `light` is the base rule
+   * (it applies in both modes), `dark` the dark rule alone. {@link modeDeclarations} gives what a
+   * mode resolves to.
+   */
   readonly modes: Readonly<Record<ThemeModeName, ReadonlyMap<string, string>>>;
   /** True once any rule in the file declares a `--ui-*` property. */
   readonly declaresTokens: boolean;
@@ -102,9 +108,26 @@ export function analyzeThemeFile(css: string, themeId: ThemeId): ThemeFileAnalys
   };
 }
 
-/** Contract problems for one mode: missing names, names outside the contract, bad values. */
+/**
+ * What one mode of a theme defines within its own file: the base rule, overlaid in dark with the
+ * dark rule. `:root.dark` also matches the base rule, so a name the dark rule leaves out keeps its
+ * base value.
+ */
+export function modeDeclarations(
+  analysis: ThemeFileAnalysis,
+  mode: ThemeModeName,
+): ReadonlyMap<string, string> {
+  return mode === "light"
+    ? analysis.modes.light
+    : new Map([...analysis.modes.light, ...analysis.modes.dark]);
+}
+
+/**
+ * Contract problems for one mode — the base rule plus that mode's own: missing names, names
+ * outside the contract, bad values.
+ */
 export function contractProblems(analysis: ThemeFileAnalysis, mode: ThemeModeName): string[] {
-  const declared = analysis.modes[mode];
+  const declared = modeDeclarations(analysis, mode);
   const problems: string[] = [];
   const missing = TOKEN_NAMES.filter((name) => !declared.has(name));
   if (missing.length > 0) {
@@ -141,10 +164,23 @@ export function contractProblems(analysis: ThemeFileAnalysis, mode: ThemeModeNam
 }
 
 /**
+ * Dark-rule declarations that repeat the base rule's value, as `name: value`. The base rule already
+ * gives the name that value in dark, so a repeat is a second home for one value — the two drift the
+ * first time an edit reaches one of them. The dark rule declares only what dark changes.
+ */
+export function darkRepeats(analysis: ThemeFileAnalysis): string[] {
+  return [...analysis.modes.dark]
+    .filter(([name, value]) => analysis.modes.light.get(name) === value)
+    .map(([name, value]) => `${name}: ${value}`);
+}
+
+/**
  * The value a custom property resolves to for `mode` of a theme, following the cascade the
- * selectors produce: the mode's own rule, then (dark only) the same theme's light rule, which the
- * dark `<html>` also matches, then the default theme's rules, which match every `<html>`.
- * `var()` references are substituted recursively, fallbacks honoured. `null` when unresolvable.
+ * selectors produce: the mode's own rule, then (dark only) the same theme's base rule, which the
+ * dark `<html>` also matches, then the default theme's rules, which match every `<html>`. (Against
+ * the default theme's dark rule, another theme's base rule ties on specificity and wins because
+ * the theme files are imported after `github.css`.) `var()` references are substituted
+ * recursively, fallbacks honoured. `null` when unresolvable.
  */
 export function resolveThemeValue(
   name: string,

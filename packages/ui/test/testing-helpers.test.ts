@@ -17,10 +17,12 @@ import {
   composite,
   contractProblems,
   contrastRatio,
+  darkRepeats,
   filesNamed,
   findSourceFile,
   formatColor,
   markupStructure,
+  modeDeclarations,
   parseColor,
   parseCssRules,
   renderStatic,
@@ -140,6 +142,7 @@ describe("theme file analysis", () => {
   const grays = GRAY_STEPS.map((step) => `--color-gray-${step}: #808080;`).join("\n");
   const rule = (selector: string, body: string) => `${selector} {\n${body}\n}`;
   const complete = (value = "#123456") => TOKEN_NAMES.map((n) => `${n}: ${value};`).join("\n");
+  /** The base rule carries the gray bridge; the dark rule only what it is given. */
   const modern = (
     light: string,
     dark: string,
@@ -148,29 +151,44 @@ describe("theme file analysis", () => {
     wrap(
       [
         rule(':root[data-theme="modern"]', `${light}\n${grays}`),
-        rule(':root[data-theme="modern"].dark', `${dark}\n${grays}`),
+        rule(':root[data-theme="modern"].dark', dark),
       ].join("\n"),
     );
 
   it("accepts a complete file", () => {
-    const analysis = analyzeThemeFile(modern(complete(), complete()), "modern");
+    const analysis = analyzeThemeFile(modern(complete(), complete("#654321")), "modern");
     expect(analysis.declaresTokens).toBe(true);
     expect(analysis.isStub).toBe(false);
     expect(analysis.structure).toEqual([]);
     expect(contractProblems(analysis, "light")).toEqual([]);
     expect(contractProblems(analysis, "dark")).toEqual([]);
-    expect(analysis.modes.dark.size).toBe(TOKEN_NAMES.length + GRAY_STEPS.length);
+    expect(darkRepeats(analysis)).toEqual([]);
+    expect(analysis.modes.light.size).toBe(TOKEN_NAMES.length + GRAY_STEPS.length);
+    expect(analysis.modes.dark.size).toBe(TOKEN_NAMES.length);
+  });
+
+  it("completes dark from the base rule, and flags a dark value that repeats the base one", () => {
+    const analysis = analyzeThemeFile(
+      modern(complete(), "--ui-canvas: #000000;\n--ui-fg: #123456;\n--color-gray-50: #808080;"),
+      "modern",
+    );
+    expect(contractProblems(analysis, "dark")).toEqual([]);
+    expect(modeDeclarations(analysis, "dark").get("--ui-canvas")).toBe("#000000");
+    expect(modeDeclarations(analysis, "dark").get("--ui-surface")).toBe("#123456");
+    expect(darkRepeats(analysis)).toEqual(["--ui-fg: #123456", "--color-gray-50: #808080"]);
   });
 
   it("names a missing token, an extra one and an unknown variable per mode", () => {
     const light = complete().replace("--ui-canvas: #123456;", "--ui-bogus: #fff;");
-    const dark = `${complete()}\n--brand-thing: 1;`;
-    const analysis = analyzeThemeFile(modern(light, dark), "modern");
+    const analysis = analyzeThemeFile(modern(light, "--brand-thing: 1;"), "modern");
     expect(contractProblems(analysis, "light")).toEqual([
       `missing 1 of ${TOKEN_NAMES.length}: --ui-canvas`,
       "--ui-bogus is not in tokens.ts — add it to the contract or remove it",
     ]);
+    // Dark mode inherits the base rule's gap and stray, and adds its own.
     expect(contractProblems(analysis, "dark")).toEqual([
+      `missing 1 of ${TOKEN_NAMES.length}: --ui-canvas`,
+      "--ui-bogus is not in tokens.ts — add it to the contract or remove it",
       expect.stringMatching(/^--brand-thing is neither a contract token nor a bridged/),
     ]);
   });

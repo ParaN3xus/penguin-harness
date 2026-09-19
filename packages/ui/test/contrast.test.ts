@@ -12,6 +12,7 @@
  * - a tone's ink (`tone-*-fg`) as a glyph or status word on the four page surfaces — 3:1, except
  *   `neutral`, the one tone allowed to recede where its meaning is already in text;
  * - a tone's ink on its own tint (`tone-*-bg`, a badge) and a solid badge's label on its fill — 4.5:1;
+ * - `fg-on-emphasis` on the fill it is defined for, the neutral emphasis fill (tokens.ts) — 4.5:1;
  * - the accent's label on the accent at rest and on hover (the primary button), for the theme's own
  *   accent and every user preset in theme.css — 4.5:1.
  *
@@ -93,6 +94,7 @@ const PAIRS: readonly Pair[] = [
       min: 4.5 as const,
     },
   ]),
+  { fg: "--ui-fg-on-emphasis", bg: "--ui-tone-neutral-emphasis", min: 4.5 },
   { fg: "--ui-accent-fg", bg: "--ui-accent", min: 4.5 },
   { fg: "--ui-accent-fg", bg: "--ui-accent-hover", min: 4.5 },
 ];
