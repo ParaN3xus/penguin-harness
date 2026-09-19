@@ -3551,7 +3551,7 @@ Benchmark：
       temporary: (n: number): string => `临时（${n}）`,
       /** A Temporary entry's name on the collapsed rail, where no group header says where it belongs. */
       temporaryEntry: (title: string): string => `临时 · ${title}`,
-      closeTemporary: "从临时中移除",
+      closeTemporary: "从「临时」中移除",
     },
     overview: {
       title: "概览",
