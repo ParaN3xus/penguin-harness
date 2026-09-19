@@ -15,14 +15,17 @@
 
 - 六个 fontsource 包，全部为 SIL Open Font License 1.1：Mona Sans 与 JetBrains Mono（为后续的 Primer 打磨
   预先声明；Frost 已用 JetBrains Mono 排代码）、Console 的 IBM Plex Sans、IBM Plex Sans Condensed（仅 600）
-  与 Commit Mono，以及 Primer 与 Console 的中文字体 Noto Sans SC。
+  与 Commit Mono，以及 Console 的中文字体 Noto Sans SC（Primer 自 W1a 起也用它）。
 - Frost 的拉丁文与中文统一使用小米的 MiSans，字重 400 与 500。MiSans 没有官方 npm 包，因此由
   `scripts/build-misans.py` 从小米官方字体包中截取 MiSans Regular 与 Medium，按 Noto Sans SC 的分片划分，
   各切成 99 个 `unicode-range` WOFF2 分片放入 `fonts/misans/`，并逐个回读分片，确认其中的字形、OpenType
   特性与名称记录均与原字体一致。该划分之外的生僻汉字不随包分发。Frost 关闭了字重合成，粗体请求以 Medium
   呈现。
-- 页面只下载当前主题引用的字形，以及文字实际用到的分片：在样例页面上，Frost 的英文页加载 93 KB 字体，中文页
-  加载 627 KB。构建产物共含 9.1 MB 字体：MiSans 4.26 MB、Noto Sans SC 4.52 MB、拉丁字形 0.32 MB。
+- 页面只下载当前主题引用的字体文件，以及文字实际用到的分片：在样例页面上，Frost 的英文页加载 93 KB 字体，
+  中文页加载 627 KB；Primer 目前不引用任何随包字族，不下载字体文件。`@font-face` 声明则不同：三套主题的声明都
+  在应用的主样式表里，每个用户都要下载，约占其压缩后 122 KB 中的 94 KB；这一开销已被接受，没有改为按主题按需
+  加载字体样式表。构建时不把字体内联进该样式表。构建产物共含 9.1 MB 字体：MiSans 4.26 MB、Noto Sans SC
+  4.52 MB、拉丁字形 0.32 MB。
 - `scripts/sync-font-licenses.mjs` 把各 fontsource 包的许可文本镜像到 `fonts/LICENSES/`。《MiSans 字体知识产权
   许可协议》依小米发布的 PDF 转录到同一目录，并登记在 `fonts/vendored-fonts.json` 中。`penguinUi()` Vite 插件
   把所有许可文本以 `fonts-licenses/<名称>.txt` 输出到每个构建产物中；`fonts/README.md` 记录各字族、许可、
@@ -36,7 +39,8 @@
   `themes/github.css` 以应用当前的取值声明了这三个新名称。
 - `hooks.ts` 列出六个样式钩子：`ui-glass`、`ui-eyebrow`、`ui-display`、`ui-live`、`ui-frame` 与
   `ui-underline-nav`，并写明每个样式依赖的标记结构。
-- `theme.css` 把按钮、链接与标签页可过渡的属性限定为文字颜色、背景与边框颜色、不透明度和阴影。
+- `theme.css` 为按钮、链接与标签页设定默认的过渡属性列表（文字颜色、背景与边框颜色、不透明度和阴影），
+  任何 `transition-*` 工具类都会将其替换；组件不设时长就没有过渡。
 
 ## 主题
 

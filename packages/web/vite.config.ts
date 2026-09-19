@@ -71,6 +71,12 @@ function katexWoff2Only(): Plugin {
 
 export default defineConfig({
   plugins: [penguinUi(), react(), tailwindcss(), katexWoff2Only()],
+  build: {
+    // Never inline a font. Vite turns any asset under 4 KB into a data: URI, and a font slice the
+    // stylesheet references would then ride inside the one render-blocking CSS file for every
+    // session, whatever its theme. As its own file it is fetched only when some text needs it.
+    assetsInlineLimit: (file) => (file.endsWith(".woff2") ? false : undefined),
+  },
   // The highlighting worker loads its themes and each grammar with a dynamic import, so its
   // bundle has to be code-split — and Vite's default worker format, IIFE, cannot be. Without this
   // the build fails outright rather than shipping something subtly wrong, which is the good case.
