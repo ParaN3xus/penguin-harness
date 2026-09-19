@@ -15,15 +15,16 @@ nothing as components move between the two.
 
 ## Package tests
 
-- `token-contract`: every theme × mode (light, dark) declares every name in `tokens.ts`, inside
-  `@layer ui-theme` on the canonical selectors, once each, with nothing outside the contract; a
-  non-default theme also re-points all eleven gray steps. The contract holds 189 names, with
+- `token-contract`: every theme × mode (light, dark) defines every name in `tokens.ts` — the base
+  rule, plus the dark rule in dark — inside `@layer ui-theme` on the canonical selectors, once each,
+  with nothing outside the contract, and a dark rule never repeats a base value; a non-default
+  theme also re-points all eleven gray steps. The contract holds 189 names, with
   `--ui-radius-control` (bridged as `rounded-control`), `--ui-stack-0` and `--ui-stack-4` and without
   `--ui-glass-highlight`, and every `--ui-*` name spelled in the package, the Web App or the gallery
   (stylesheets and string literals) must be a contract name.
 - `contrast`: WCAG 2 ratios resolved from the theme CSS — text on every surface (4.5:1), tone inks
   on the page surfaces (3:1, `neutral` exempt), tone text on its tint and solid-badge labels
-  (4.5:1), and the accent label on the theme accent and on every user preset (4.5:1). Shortfalls
+  (4.5:1), `fg-on-emphasis` on the neutral emphasis fill (4.5:1), and the accent label on the theme accent and on every user preset (4.5:1). Shortfalls
   are recorded in an exception list that fails once an entry starts passing.
 - `no-app-strings` and `no-theme-reads`: the package imports nothing from the web app's
   dictionaries, and nothing outside the theme machinery reads the theme id.
