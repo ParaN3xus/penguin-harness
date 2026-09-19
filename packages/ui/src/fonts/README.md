@@ -33,13 +33,21 @@ own tokens stop at 500.
 
 ## Loading
 
-`index.css` declares every theme's faces, and declaring a face downloads nothing. A browser fetches
-a face only when an element's `font-family` names it and its text falls inside the face's
-`unicode-range`. Each theme file names only its own families, so a session downloads its theme's
-faces and nothing else, and only the slices its text touches.
+Font files and font declarations cost differently:
 
-Measured on a specimen page (the same paragraphs, headings, controls and a code frame in each
-language; Playwright network log, identical in light and dark):
+- **Files.** A browser fetches a font file only when an element's `font-family` names its family
+  and its text falls inside the face's `unicode-range`. Each theme file names only its own
+  families, so a session downloads its theme's faces and nothing else, and only the slices its text
+  touches; Primer names no bundled family in W0 and downloads none. The consumers' Vite configs
+  never inline a font (`build.assetsInlineLimit`), so every slice stays a file of its own.
+- **Declarations.** `index.css` declares every theme's faces unconditionally, so all of them are
+  rules in the app's main stylesheet and every session downloads them, Primer's included: about
+  94 KB of the stylesheet's 122 KB gzipped, most of it the `unicode-range` lists of MiSans's 198
+  faces and Noto's 101. That cost was accepted on 2026-09-18 over loading each theme's font sheet
+  on demand.
+
+Font files fetched on a specimen page (the same paragraphs, headings, controls and a code frame in
+each language; Playwright network log, identical in light and dark):
 
 | theme | English page | Chinese page |
 | --- | --- | --- |
@@ -90,7 +98,7 @@ What the licence asks, and where the app does it:
 | condition | how it is met |
 | --- | --- |
 | 1. The software states that it uses MiSans. | The Web App's account menu ends with a credit line in both dictionaries (`S.settings.fontCredit`). |
-| 2. No adaptation or redevelopment of the font or its components. | The slices are subsets delivered as WOFF2: every glyph they carry keeps its outline, hinting, metrics and name, every feature and every name record is kept, and `build-misans.py` reads each finished file back and fails unless it matches the official TTF. Whether subsetting itself counts as adaptation is for the licensor to say; it has not been confirmed. |
+| 2. No adaptation or redevelopment of the font or its components. | The slices are subsets delivered as WOFF2: every glyph they carry keeps its outline, hinting, metrics and name, every feature and every name record is kept, and `build-misans.py` reads each finished file back and fails unless it matches the official TTF. The maintainer decided on 2026-09-17 that cutting the official TTFs into these slices is delivery, not adaptation. |
 | 3. No renting, sublicensing or redistributing the font on its own. | The slices are part of the application: committed in its source tree, and shipped inside its builds and its npm package. Nothing links to them or offers them for download on their own, and the full TTF is never committed. |
 | 4. Copies keep the copyright notice and the agreement. | Every slice keeps the font's name table (its copyright record included), and `fonts-licenses/misans.txt` ships beside the files in every build. |
 | 5. No illegal use. | — |
@@ -102,7 +110,8 @@ What the licence asks, and where the app does it:
 - **MiSans:** download the official package from https://hyperos.mi.com/font/ (the site asks you to
   accept the licence first), then from the repository root run
   `uv run packages/ui/scripts/build-misans.py <MiSans.zip>` (or `pnpm --filter
-  @prismshadow/penguin-ui fonts:misans <MiSans.zip>`); `--check` rebuilds in a temporary directory
+  @prismshadow/penguin-ui fonts:misans /absolute/path/to/MiSans.zip`: pnpm runs the script in
+  `packages/ui`, so a relative path would not resolve); `--check` rebuilds in a temporary directory
   and compares byte for byte. The script pins the sha256 of the Regular and Medium TTFs it accepts,
   so a new MiSans release is a deliberate change: update the pins, rebuild, review the slices, and
   re-read the licence PDF for changes.
