@@ -10,10 +10,11 @@
 The first step of the theme system. A private, source-only package, `@prismshadow/penguin-ui`
 (`packages/ui`), took over the Web App's colours, radii, shadows, fonts and focus and scrollbar
 rules as one named set of design tokens, and the current look became its default theme, `github`,
-value for value — the app renders pixel-identically. The one visible change is on first load: the
-stored light/dark mode, accent and font size are applied before the first frame, so a dark page no
-longer flashes white while the bundle loads and the first frame no longer renders at 16px and
-reflows to the 18px default.
+value for value: the twelve pages the pixel diff covers render identically in both modes and both
+languages, and the one rule whose font stack moved, `.font-sans`, is described below. The one
+intended visible change is on first load: the stored light/dark mode, accent and font size are
+applied before the first frame, so a dark page no longer flashes white while the bundle loads and
+the first frame no longer renders at 16px and reflows to the 18px default.
 
 ## Details
 
@@ -26,6 +27,11 @@ reflows to the 18px default.
   the tokens as utilities (`bg-surface`, `text-fg-muted`, `border-line`, `bg-accent`,
   `text-tone-danger-fg`, …) and re-points Tailwind's font, radius and shadow scales at them, the
   base rules that read tokens, and the five accent presets.
+- `.font-sans` reads the app's own sans stack (`--ui-font-sans`) instead of Tailwind's stock
+  `ui-sans-serif, system-ui, sans-serif, …`. One element uses the class, the full-prompt preview
+  folded into the Create-with-AI dialogs: its Latin text keeps its face (`system-ui` is second in
+  both stacks), and its CJK text now resolves through the named PingFang SC / Microsoft YaHei
+  instead of the OS fallback, the same face on most systems but not guaranteed on Windows.
 - `themes/github.css` defines every token with the app's existing values, and a gray bridge that
   re-points Tailwind's `--color-gray-*` and `--color-white`, so the existing gray classes follow
   the theme with no component edits. Its base rule holds every token; its dark rule holds only the
