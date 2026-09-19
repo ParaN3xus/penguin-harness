@@ -18,7 +18,6 @@ import type { ITheme, Terminal as XTerminal } from "@xterm/xterm";
 import { TerminalOpcode, decodeFrame, encodeFrame, encodeResize } from "./terminal-frames";
 import { LinkClickTracker, openTerminalLink, positionFromPointer } from "./terminal-links";
 import { useTheme } from "../../state/theme";
-import { hasCommandHandler } from "../../lib/shortcuts/dispatcher";
 import { currentPlatform } from "../../lib/shortcuts/platform";
 import { keymap } from "../../lib/shortcuts/store";
 import { terminalClipboardAction } from "../../lib/shortcuts/terminal-clipboard";
@@ -364,14 +363,14 @@ export function TerminalView({
        *    into xterm's textarea (no clipboard permission involved), so returning false —
        *    skip xterm's own key handling, keep the browser default — is the whole
        *    implementation, and calling the async clipboard API as well would double-paste.
-       * 2. The keymap (lib/shortcuts/terminal-keys.ts decides). A terminal-scope command
+       * 2. The keymap (lib/shortcuts/terminal-keys.ts decides). The terminal-scope command
        *    (`terminal.close`, ⌘W / Ctrl+W by default) is consumed here so it never reaches the
        *    shell, where it is readline's delete-word; browsers keep that chord for closing the
-       *    browser tab and act first, the desktop shell delivers it. A global-scope command
-       *    with a handler (Ctrl+` toggling the docks) is not sent to the shell either, but is
-       *    left un-prevented so it bubbles to the window dispatcher that owns it — VS Code's
-       *    "commands to skip shell". Anything else, including a chord no surface answers, goes
-       *    to the shell as typed.
+       *    browser tab and act first, the desktop shell delivers it. Everything else is xterm's:
+       *    the shell keeps every key xterm would send it (Ctrl+B, Ctrl+K, Ctrl+J stay a tmux
+       *    prefix, kill-line and newline even when an app command is bound to them), and the
+       *    chords xterm sends nothing for — Ctrl+`, Ctrl+Shift+`, every ⌘ chord — are left
+       *    un-prevented and bubble to the window dispatcher that owns them.
        */
       const platform = currentPlatform();
       term.attachCustomKeyEventHandler((event) => {
@@ -386,13 +385,10 @@ export function TerminalView({
         }
         const action = terminalKeyAction(event, keymap(), platform, {
           canClose: callbacks.current.onCloseRequest !== undefined,
-          hasHandler: hasCommandHandler,
         });
         switch (action) {
           case "shell":
             return true;
-          case "skip-shell":
-            return false;
           case "consume":
             event.preventDefault();
             event.stopPropagation();

@@ -94,4 +94,8 @@ export interface KeyLike {
   shiftKey: boolean;
   repeat?: boolean;
   isComposing?: boolean;
+  /** A DOM or React event's modifier query; the matcher asks it for AltGraph. */
+  getModifierState?: (key: string) => boolean;
+  /** Test literals set this directly; on a real event it is read through getModifierState. */
+  altGraph?: boolean;
 }

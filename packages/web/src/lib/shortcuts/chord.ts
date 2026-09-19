@@ -109,6 +109,9 @@ export function codeFromKey(key: string): string {
  */
 export function chordOf(e: KeyLike, platform: Platform): Chord | null {
   if (e.isComposing === true) return null;
+  // AltGr is typing: Windows reports it as Ctrl+Alt on the character it produces (AltGr+B is
+  // `{` on the Czech and Hungarian layouts), so that keydown is not a chord however it reads.
+  if (e.altGraph === true || e.getModifierState?.("AltGraph") === true) return null;
   const code = e.code !== "" ? e.code : codeFromKey(e.key);
   if (code === "" || isModifierCode(code)) return null;
   if (platform === "mac") {

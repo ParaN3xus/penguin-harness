@@ -1,7 +1,8 @@
 /**
  * The focused terminal's key decision (src/lib/shortcuts/terminal-keys.ts) as a table: the Mac
- * behaviour change (⌘W closes, Ctrl+W reaches readline), the toggle skipping the shell, the
- * unanswered chord reaching the shell, the missing-close fallback, and the repeat.
+ * behaviour change (⌘W closes, Ctrl+W reaches readline), the shell keeping every key xterm
+ * sends (Ctrl+B, Ctrl+K, Ctrl+J stay the shell's even when bound), the missing-close fallback,
+ * and the repeat.
  */
 import { describe, expect, it } from "vitest";
 import { SHORTCUT_COMMANDS, defaultChord } from "../src/lib/shortcuts/registry";
@@ -18,7 +19,6 @@ function key(overrides: Partial<KeyLike> & { code: string }): KeyLike {
 
 const host = (overrides: Partial<TerminalKeyHost> = {}): TerminalKeyHost => ({
   canClose: true,
-  hasHandler: (id) => id === "terminal.toggle",
   ...overrides,
 });
 
@@ -28,20 +28,46 @@ describe("terminalKeyAction", () => {
     ["Ctrl+W is readline's on a Mac", "mac", key({ code: "KeyW", ctrlKey: true }), host(), "shell"],
     ["Ctrl+W closes off a Mac", "linux", key({ code: "KeyW", ctrlKey: true }), host(), "close"],
     ["Ctrl+W closes on Windows", "windows", key({ code: "KeyW", ctrlKey: true }), host(), "close"],
+    // The shell keeps the control characters an app command is bound to; the page never
+    // takes them from a focused terminal.
     [
-      "the toggle skips the shell everywhere",
-      "mac",
-      key({ code: "Backquote", ctrlKey: true }),
+      "Ctrl+B (sidebar.toggle) is the shell's",
+      "linux",
+      key({ code: "KeyB", ctrlKey: true }),
       host(),
-      "skip-shell",
+      "shell",
     ],
     [
-      "the toggle skips the shell on Linux",
+      "Ctrl+K (sessions.search) is the shell's",
+      "windows",
+      key({ code: "KeyK", ctrlKey: true }),
+      host(),
+      "shell",
+    ],
+    [
+      "Ctrl+J (dock.toggleBottom) is the shell's",
+      "linux",
+      key({ code: "KeyJ", ctrlKey: true }),
+      host(),
+      "shell",
+    ],
+    // Chords xterm sends nothing for are handed back to xterm too; it leaves them
+    // un-prevented and the window dispatcher runs them.
+    [
+      "Ctrl+` goes back to xterm, which sends nothing and lets it bubble",
       "linux",
       key({ code: "Backquote", ctrlKey: true }),
       host(),
-      "skip-shell",
+      "shell",
     ],
+    [
+      "Ctrl+Shift+` likewise",
+      "mac",
+      key({ code: "Backquote", ctrlKey: true, shiftKey: true }),
+      host(),
+      "shell",
+    ],
+    ["⌘B likewise on a Mac", "mac", key({ code: "KeyB", metaKey: true }), host(), "shell"],
     [
       "an unanswered chord is the shell's (Ctrl+P before the palette)",
       "linux",
@@ -58,13 +84,6 @@ describe("terminalKeyAction", () => {
     ],
     ["plain typing is the shell's", "mac", key({ code: "KeyW", key: "w" }), host(), "shell"],
     [
-      "a plain Ctrl+C is the shell's",
-      "linux",
-      key({ code: "KeyC", ctrlKey: true }),
-      host(),
-      "shell",
-    ],
-    [
       "with no close on offer the chord goes to the shell",
       "linux",
       key({ code: "KeyW", ctrlKey: true }),
@@ -77,13 +96,6 @@ describe("terminalKeyAction", () => {
       key({ code: "KeyW", metaKey: true, repeat: true }),
       host(),
       "consume",
-    ],
-    [
-      "a held toggle still skips the shell (the dispatcher swallows the repeat)",
-      "linux",
-      key({ code: "Backquote", ctrlKey: true, repeat: true }),
-      host(),
-      "skip-shell",
     ],
   ];
 

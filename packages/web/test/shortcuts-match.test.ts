@@ -178,6 +178,34 @@ describe("the six panel and navigation commands", () => {
     }
   });
 
+  it("reads an AltGr character as typing, not as Mod+Alt: `{` stays typable on Czech and Hungarian Windows", () => {
+    const altGr = key({ code: "KeyB", key: "{", ctrlKey: true, altKey: true, altGraph: true });
+    expect(matchShortcut(altGr, defaults("windows"), ALL, "windows")).toBeNull();
+    expect(
+      matchShortcut(
+        key({
+          code: "KeyB",
+          key: "{",
+          ctrlKey: true,
+          altKey: true,
+          getModifierState: (k) => k === "AltGraph",
+        }),
+        defaults("windows"),
+        ALL,
+        "windows",
+      ),
+    ).toBeNull();
+    // A real Ctrl+Alt+B still is the chord.
+    expect(
+      matchShortcut(
+        key({ code: "KeyB", ctrlKey: true, altKey: true }),
+        defaults("windows"),
+        ALL,
+        "windows",
+      ),
+    ).toBe("dock.toggleRight");
+  });
+
   it("opens a new terminal on Ctrl+Shift+` on every platform, like the toggle", () => {
     for (const platform of ["mac", "windows", "linux"] as const) {
       expect(

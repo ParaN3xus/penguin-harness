@@ -1,27 +1,29 @@
 /**
  * What a focused terminal does with a keydown after the clipboard keys have had their turn.
- * Pure: the surface passes what it knows (whether it offers a close, which global commands have a
- * handler) and acts on the answer. This is the decision behind the platform split — ⌘W closes on
- * a Mac while Ctrl+W reaches readline; the terminal toggle pressed inside xterm runs without
- * reaching the pty; a chord nothing answers (Ctrl+P before the palette exists) is the shell's.
+ * Pure: the surface passes what it knows (whether it offers a close) and acts on the answer.
+ *
+ * The shell keeps every key xterm would send it. Ctrl+B, Ctrl+K and Ctrl+J are a shell's tmux
+ * prefix, kill-line and newline, so an app command bound to one of them yields to the shell
+ * while a terminal has focus, as on main before the registry existed. The app commands still
+ * reachable from a focused terminal are the ones xterm sends nothing for and so never cancels:
+ * Ctrl+` and Ctrl+Shift+` (the terminal toggle and new terminal) and every ⌘ chord on a Mac —
+ * those bubble to the window dispatcher on their own. The one terminal-scoped command,
+ * `terminal.close`, is decided here.
  */
 import { matchShortcut } from "./match";
-import type { CommandId, KeyLike, Keymap, Platform } from "./types";
+import type { KeyLike, Keymap, Platform } from "./types";
 
 export type TerminalKeyAction =
   /** Run the host's close: prevent, stop propagation, do not send to the shell. */
   | "close"
   /** A repeat of the close chord: prevent and stop as for "close", but run nothing. */
   | "consume"
-  /** A global command some surface answers: not the shell's, and left un-prevented so it bubbles to the window dispatcher. */
-  | "skip-shell"
-  /** Everything else, including a chord nothing answers: xterm sends it to the shell. */
+  /** Everything else: xterm handles it, sending to the shell what it sends. */
   | "shell";
 
 export interface TerminalKeyHost {
   /** Whether this terminal offers a close at all (the dock tab and the standalone page do). */
   canClose: boolean;
-  hasHandler: (id: CommandId) => boolean;
 }
 
 export function terminalKeyAction(
@@ -30,11 +32,7 @@ export function terminalKeyAction(
   platform: Platform,
   host: TerminalKeyHost,
 ): TerminalKeyAction {
-  const command = matchShortcut(e, keymap, ["terminal", "global"], platform);
-  if (command === null) return "shell";
-  if (command === "terminal.close") {
-    if (!host.canClose) return "shell";
-    return e.repeat === true ? "consume" : "close";
-  }
-  return host.hasHandler(command) ? "skip-shell" : "shell";
+  if (matchShortcut(e, keymap, ["terminal"], platform) !== "terminal.close") return "shell";
+  if (!host.canClose) return "shell";
+  return e.repeat === true ? "consume" : "close";
 }
