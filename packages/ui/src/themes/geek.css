@@ -22,10 +22,12 @@
  *   themes never reflows a layout vertically; this theme changes radius, colour, font, shadow,
  *   tracking, weight, transform and padding-inline only.
  *
- * Shape of the file (the same in every theme): one `@layer ui-theme` block holding a light
- * section and a dark section — each defines every name in tokens.ts, in its group order, after the
- * gray bridge that re-points Tailwind's `--color-gray-*` / `--color-white` so the app's existing
- * palette classes follow the theme — and then this theme's recipes for the style hooks (hooks.ts).
+ * Shape of the file (the same in every theme): one `@layer ui-theme` block holding the base rule,
+ * which defines every name in tokens.ts in its group order with its light value, after the gray
+ * bridge that re-points Tailwind's `--color-gray-*` / `--color-white` so the app's existing
+ * palette classes follow the theme; the dark rule, which declares only what dark changes (the
+ * rest keeps its base value, since this file comes after `github.css` and so its base rule beats
+ * that file's dark rule); and then this theme's recipes for the style hooks (hooks.ts).
  */
 @layer ui-theme {
   /* Light: docs.e2b.dev light. */
@@ -66,7 +68,8 @@
     --ui-line-emphasis: #a59f9e;
     --ui-divider: #ededed;
 
-    /* Colour — accent: interface orange */
+    /* Colour — accent: interface orange. Hover darkens: the brighter fire orange drops white text
+       under 4.5:1. */
     --ui-accent: #e32a01;
     --ui-accent-hover: #ce2600;
     --ui-accent-active: #a82000;
@@ -225,7 +228,7 @@
     /* Density */
     --ui-control-py-sm: 0.25rem;
     --ui-control-py-md: 0.375rem;
-    --ui-control-py-lg: 0.5rem;
+    --ui-control-py-lg: 0.625rem;
     --ui-control-px-sm: 0.625rem;
     --ui-control-px-md: 0.75rem;
     --ui-control-px-lg: 1rem;
@@ -276,19 +279,16 @@
   /* Dark: e2b.dev — the primary Console look. */
   :root[data-theme="geek"].dark {
     /* Tailwind bridge: 950 canvas, 900 raised, 800 hover / panel line, 700 control line, then the
-       ink ramp up to 50. white stays literal: `dark:*-white/N` hairlines read it as ink. */
+       ink ramp up to 50; 950, 300, 100 and 50 keep the light ramp's values. white stays literal:
+       `dark:*-white/N` hairlines read it as ink. */
     --color-white: #ffffff;
-    --color-gray-50: #fafafa;
-    --color-gray-100: #f4f4f4;
     --color-gray-200: #e1e1e1;
-    --color-gray-300: #d4d4d4;
     --color-gray-400: #b8b8b8;
     --color-gray-500: #8a8a8a;
     --color-gray-600: #585858;
     --color-gray-700: #2c2c2c;
     --color-gray-800: #1f1f1f;
     --color-gray-900: #0a0a0a;
-    --color-gray-950: #000000;
 
     /* Colour — surfaces: cards are outlined, not filled */
     --ui-canvas: #000000;
@@ -302,7 +302,6 @@
     --ui-fg: #ffffff;
     --ui-fg-muted: #b8b8b8;
     --ui-fg-subtle: #6b6b6b;
-    --ui-fg-on-emphasis: #ffffff;
     --ui-fg-link: #ffffff;
     --ui-fg-link-hover: #ff5029;
 
@@ -312,11 +311,7 @@
     --ui-line-emphasis: #585858;
     --ui-divider: #1f1f1f;
 
-    /* Colour — accent. Hover darkens: the brighter fire orange drops white text under 4.5:1. */
-    --ui-accent: #e32a01;
-    --ui-accent-hover: #ce2600;
-    --ui-accent-active: #a82000;
-    --ui-accent-fg: #ffffff;
+    /* Colour — accent: the same orange, its wash and line a step stronger on black */
     --ui-accent-muted: rgb(227 42 1 / 0.16);
     --ui-accent-line: rgb(227 42 1 / 0.6);
 
@@ -342,10 +337,8 @@
     --ui-tone-done-emphasis: #b57cff;
     --ui-tone-done-emphasis-fg: #000000;
     --ui-tone-neutral-fg: #b8b8b8;
-    --ui-tone-neutral-bg: transparent;
     --ui-tone-neutral-line: #2c2c2c;
     --ui-tone-neutral-emphasis: #585858;
-    --ui-tone-neutral-emphasis-fg: #ffffff;
     --ui-tone-info-fg: #5696fd;
     --ui-tone-info-bg: rgb(86 150 253 / 0.14);
     --ui-tone-info-line: #5696fd;
@@ -376,143 +369,16 @@
     --ui-diff-del-word: rgb(255 59 59 / 0.3);
     --ui-diff-hunk-bg: rgb(86 150 253 / 0.1);
 
-    /* Shape */
-    --ui-radius-xs: 0;
-    --ui-radius-sm: 0;
-    --ui-radius-md: 0;
-    --ui-radius-lg: 0;
-    --ui-radius-xl: 0;
-    --ui-radius-pill: 0;
-    --ui-radius-control: 0;
-    --ui-border-w: 1px;
-    --ui-border-w-thick: 1px;
-
     /* Elevation: layering, not shadow; a black ring cuts an overlay out of what it covers. */
-    --ui-shadow-flat: 0 0 #0000;
-    --ui-shadow-raised: 0 0 #0000;
     --ui-shadow-overlay: 0 0 0 1px #000000;
-    --ui-shadow-modal: 0 0 #0000;
     --ui-shadow-drawer: 0 0 0 1px #000000;
-    --ui-glass-bg: var(--ui-overlay);
-    --ui-glass-blur: 0px;
-    --ui-glass-saturate: 1;
     --ui-glass-line: var(--ui-line-emphasis);
 
-    /* Typography — families */
-    --ui-font-cjk: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei";
-    --ui-font-sans:
-      "IBM Plex Sans Variable", var(--ui-font-cjk), ui-sans-serif, system-ui, sans-serif;
-    --ui-font-mono:
-      "Commit Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
-      var(--ui-font-cjk), monospace;
-    --ui-font-display:
-      "IBM Plex Sans Condensed", "IBM Plex Sans Variable", var(--ui-font-cjk), ui-sans-serif,
-      system-ui, sans-serif;
-
-    /* Typography — scale (shared by every theme) and roles */
-    --ui-text-body-size: 0.875rem;
-    --ui-text-body-lh: 1.5;
-    --ui-text-small-size: 0.75rem;
-    --ui-text-small-lh: 1.5;
-    --ui-text-caption-size: 0.75rem;
-    --ui-text-caption-lh: 1.35;
-    --ui-text-code-size: 0.8125rem;
-    --ui-text-code-lh: 1.6;
-    --ui-text-prose-size: 1rem;
-    --ui-text-prose-lh: 1.6;
-    --ui-h1-size: 1.953rem;
-    --ui-h1-lh: 1.15;
-    --ui-h1-weight: 600;
-    --ui-h1-tracking: -0.02em;
-    --ui-h1-transform: uppercase;
-    --ui-h1-font: var(--ui-font-display);
-    --ui-h2-size: 1.5625rem;
-    --ui-h2-lh: 1.2;
-    --ui-h2-weight: 600;
-    --ui-h2-tracking: -0.015em;
-    --ui-h2-transform: none;
-    --ui-h2-font: var(--ui-font-sans);
-    --ui-h3-size: 1.25rem;
-    --ui-h3-lh: 1.3;
-    --ui-h3-weight: 500;
-    --ui-h3-tracking: -0.01em;
-    --ui-h3-transform: none;
-    --ui-h3-font: var(--ui-font-sans);
-    --ui-h4-size: 1rem;
-    --ui-h4-lh: 1.4;
-    --ui-h4-weight: 500;
-    --ui-h4-tracking: 0;
-    --ui-h4-transform: none;
-    --ui-h4-font: var(--ui-font-sans);
-    --ui-h5-size: 0.875rem;
-    --ui-h5-lh: 1.5;
-    --ui-h5-weight: 500;
-    --ui-h5-tracking: 0;
-    --ui-h5-transform: none;
-    --ui-h5-font: var(--ui-font-sans);
-    --ui-h6-size: 0.75rem;
-    --ui-h6-lh: 1.5;
-    --ui-h6-weight: 500;
-    --ui-h6-tracking: 0.06em;
-    --ui-h6-transform: uppercase;
-    --ui-h6-font: var(--ui-font-sans);
-    --ui-md-h1-size: 1.25rem;
-    --ui-md-h2-size: 1.125rem;
-    --ui-md-h3-size: 1rem;
-    --ui-weight-body: 400;
-    --ui-weight-medium: 500;
-    --ui-weight-strong: 600;
-    --ui-tracking-body: -0.01em;
-    --ui-tracking-mono: 0.01em;
-    --ui-tracking-label: 0.06em;
-
-    /* Density */
-    --ui-control-py-sm: 0.25rem;
-    --ui-control-py-md: 0.375rem;
-    --ui-control-py-lg: 0.5rem;
-    --ui-control-px-sm: 0.625rem;
-    --ui-control-px-md: 0.75rem;
-    --ui-control-px-lg: 1rem;
-    --ui-control-gap-sm: 0.375rem;
-    --ui-control-gap-md: 0.5rem;
-    --ui-row-py: 0.5rem;
-    --ui-row-px: 0.75rem;
-    --ui-menu-row-py: 0.375rem;
-    --ui-menu-row-px: 0.5rem;
-    --ui-card-p: 1rem;
-    --ui-panel-p: 1.25rem;
-    --ui-stack-0: 0.25rem;
-    --ui-stack-1: 0.5rem;
-    --ui-stack-2: 1rem;
-    --ui-stack-3: 1.5rem;
-    --ui-stack-4: 2.5rem;
-
-    /* Motion */
-    --ui-dur-fast: 120ms;
-    --ui-dur-base: 150ms;
-    --ui-dur-slow: 260ms;
-    --ui-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-    --ui-ease-in-out: cubic-bezier(0.215, 0.61, 0.355, 1);
-    --ui-ease-spring: cubic-bezier(0.23, 1, 0.32, 1);
-    --ui-ease-overlay-in: cubic-bezier(0.23, 1, 0.32, 1);
-    --ui-ease-overlay-out: cubic-bezier(0.4, 0, 1, 1);
-    --ui-live-timing: steps(2, end);
-
-    /* Icons */
-    --ui-icon-stroke: 1.4;
-    --ui-icon-cap: butt;
-    --ui-icon-join: miter;
-
     /* Focus, selection and scrollbar */
-    --ui-focus-ring: 1px solid var(--ui-accent);
-    --ui-focus-ring-offset: 2px;
-    --ui-focus-ring-input: inset 0 0 0 1px var(--ui-accent);
     --ui-selection-bg: rgb(227 42 1 / 0.32);
-    --ui-scrollbar-w: thin;
     --ui-scrollbar-thumb: #2c2c2c;
     --ui-scrollbar-thumb-hover: #585858;
     --ui-scrollbar-track: #0a0a0a;
-    --ui-scrollbar-visibility: always;
   }
 
   /*

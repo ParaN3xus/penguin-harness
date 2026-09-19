@@ -447,8 +447,7 @@ const PAGES = [
       await page
         .getByText(/Example Benchmark|示例/)
         .first()
-        .click({ timeout: 5000 })
-        .catch(() => {});
+        .click({ timeout: 5000 });
     },
   },
 ];
@@ -489,12 +488,8 @@ async function capture(args) {
   });
   srv.stderr.on("data", (d) => process.stderr.write(`[srv!] ${d}`));
   const cleanup = () => {
-    try {
-      srv.kill();
-    } catch {}
-    try {
-      mock.close();
-    } catch {}
+    srv.kill();
+    mock.close();
   };
   process.on("exit", cleanup);
 
