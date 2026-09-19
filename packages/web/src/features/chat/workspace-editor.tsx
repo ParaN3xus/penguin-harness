@@ -55,8 +55,9 @@ export function WorkspaceFileEditor({
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
     if (isShortcut(e.nativeEvent, keymap(), "editor.save", currentPlatform())) {
+      // A held chord repeats: every repeat is kept from the browser (Save Page), one save runs.
       e.preventDefault();
-      onSave();
+      if (!e.repeat) onSave();
     }
   };
 

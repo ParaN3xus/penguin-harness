@@ -101,12 +101,14 @@ export function codeFromKey(key: string): string {
 }
 
 /**
- * The chord an event IS, or null when it is not one: a modifier-only press, an auto-repeat (a
- * held ⌘W must not close two tabs), a key inside an IME composition (the IME owns it), a Meta
- * chord on Windows/Linux (the Super key belongs to the OS), or an event with no usable code.
+ * The chord an event IS, or null when it is not one: a modifier-only press, a key inside an IME
+ * composition (the IME owns it), a Meta chord on Windows/Linux (the Super key belongs to the
+ * OS), or an event with no usable code. An auto-repeat IS the chord: the caller still has to
+ * prevent the browser's own action for it (a held ⌘S would otherwise open Save Page from the
+ * first repeat on), and decides for itself not to run the command again.
  */
 export function chordOf(e: KeyLike, platform: Platform): Chord | null {
-  if (e.repeat === true || e.isComposing === true) return null;
+  if (e.isComposing === true) return null;
   const code = e.code !== "" ? e.code : codeFromKey(e.key);
   if (code === "" || isModifierCode(code)) return null;
   if (platform === "mac") {

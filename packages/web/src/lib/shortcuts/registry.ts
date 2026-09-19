@@ -17,7 +17,6 @@ export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
     scope: "global",
     group: "general",
     defaults: { default: "Mod+KeyP" },
-    rebindable: true,
   },
   {
     id: "terminal.toggle",
@@ -25,21 +24,18 @@ export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
     group: "terminal",
     // ⌃` on macOS too: ⌘` is macOS's own window cycling, and VS Code and Codex use ⌃` there.
     defaults: { default: "Ctrl+Backquote" },
-    rebindable: true,
   },
   {
     id: "terminal.close",
     scope: "terminal",
     group: "terminal",
     defaults: { default: "Mod+KeyW" },
-    rebindable: true,
   },
   {
     id: "editor.save",
     scope: "editor",
     group: "editor",
     defaults: { default: "Mod+KeyS" },
-    rebindable: true,
   },
 ];
 
@@ -57,10 +53,6 @@ export function commandById(id: CommandId): ShortcutCommand {
   const cmd = BY_ID.get(id);
   if (cmd === undefined) throw new Error(`unknown shortcut command: ${id}`);
   return cmd;
-}
-
-export function isCommandId(id: string): id is CommandId {
-  return BY_ID.has(id as CommandId);
 }
 
 /** The platform's own default when the command has one, else the shared default; normalized for the platform. */
