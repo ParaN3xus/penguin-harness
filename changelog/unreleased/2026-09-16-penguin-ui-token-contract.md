@@ -40,9 +40,9 @@ reflows to the 18px default.
   vitest and tsc read its live source through the package's `exports`, and Tailwind scans the
   package's source. `styles.css` dropped the rules the package now owns.
 - Call sites that spelled `var(--accent-bg)` / `var(--accent-fg)` moved to `bg-accent`,
-  `border-accent`, `ring-accent` and `text-accent-fg`; the eight `text-white` labels on neutral
-  fills that invert in dark moved to `text-fg-on-emphasis`; the three `bg-black/45` dialog backdrops moved to the
-  `--ui-overlay-backdrop` token. `--accent-bg` / `--accent-fg` remain as aliases for one wave.
+  `border-accent`, `ring-accent` and `text-accent-fg`, and the three `bg-black/45` dialog backdrops
+  moved to the `--ui-overlay-backdrop` token. `--accent-bg` / `--accent-fg` remain as aliases for
+  one wave.
 - `packages/web/scripts/theme-shots.mjs` captures twelve pages × light/dark × en/zh from any
   number of web builds against one server, one data set and a frozen clock, and diffs the shot
   trees pixel for pixel.

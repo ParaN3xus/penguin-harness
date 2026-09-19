@@ -68,7 +68,7 @@ export function UserAvatar({
       // this sits in already names the account, in its own accessible name or in the text
       // beside it, so announcing a bare initial as well would only repeat the first letter.
       aria-hidden
-      className={`relative flex shrink-0 items-center justify-center rounded-full bg-gray-900 font-bold text-fg-on-emphasis dark:bg-gray-200 dark:text-gray-900 ${className ?? ""}`}
+      className={`relative flex shrink-0 items-center justify-center rounded-full bg-gray-900 font-bold text-white dark:bg-gray-200 dark:text-gray-900 ${className ?? ""}`}
       style={{ ...box, fontSize: Math.round(size * INITIAL_RATIO) }}
     >
       {avatarInitial(who, userId)}

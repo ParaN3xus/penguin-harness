@@ -65,6 +65,10 @@ export const TOKEN_GROUPS = [
       "--ui-fg",
       "--ui-fg-muted",
       "--ui-fg-subtle",
+      // Text and icons on an emphasis fill: the neutral one, `--ui-tone-neutral-emphasis`, which
+      // stays a strong fill in both modes, so this ink is light in both (GitHub's
+      // `fgColor-onEmphasis` on `bgColor-emphasis`). The accent and each tone's own fill carry
+      // their own label ink, `--ui-accent-fg` and `--ui-tone-*-emphasis-fg`.
       "--ui-fg-on-emphasis",
       "--ui-fg-link",
       "--ui-fg-link-hover",

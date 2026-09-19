@@ -31,9 +31,8 @@
 - Web App 以 `workspace:*` 依赖该包，pnpm 将其链接到 `packages/ui`，Vite、vitest 与 tsc 因而按包的
   `exports` 直接读取包的源码，Tailwind 也扫描包的源码。`styles.css` 删去了改由包负责的规则。
 - 原先写 `var(--accent-bg)` / `var(--accent-fg)` 的调用处改为 `bg-accent`、`border-accent`、
-  `ring-accent` 与 `text-accent-fg`；八处画在深色模式下反色的中性填充上的 `text-white` 改为
-  `text-fg-on-emphasis`；三处 `bg-black/45`
-  对话框遮罩改读 `--ui-overlay-backdrop` 令牌。`--accent-bg` / `--accent-fg` 作为别名再保留一个波次。
+  `ring-accent` 与 `text-accent-fg`，三处 `bg-black/45` 对话框遮罩改读 `--ui-overlay-backdrop` 令牌。
+  `--accent-bg` / `--accent-fg` 作为别名再保留一个波次。
 - `packages/web/scripts/theme-shots.mjs` 针对同一服务端、同一份数据与冻结的时钟，从任意多个 Web 构建
   截取 12 个页面 × 浅色/深色 × 中/英，并逐像素比对截图目录。
 - CI 的 `web-cli` 分片运行新包的测试；`packages/core/src/internal/ports.ts` 的端口表为组件画廊的开发
