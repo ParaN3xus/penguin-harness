@@ -72,8 +72,7 @@ function rooted(path: string, scope: PathScope): boolean {
   const p = path.replace(/\\/g, "/");
   if (p.startsWith(`${PLACEHOLDER_ROOT}/`)) return true;
   if (p.startsWith("/api/")) return false;
-  const marker = new RegExp(`/${escapeRe(scope.projectId)}/(?:organizations|agents)(?:/|$)`);
-  return scope.projectId !== "" && marker.test(p);
+  return new RegExp(`/${escapeRe(scope.projectId)}/(?:organizations|agents)(?:/|$)`).test(p);
 }
 
 /** Text right after a prose path that carries it on through a non-ASCII segment. */
