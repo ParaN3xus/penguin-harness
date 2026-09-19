@@ -3,6 +3,7 @@
 - **Date:** 2026-09-18
 - **Type:** fix
 - **Scope:** `core`, `server`, `web`, `docs`
+- **PR:** [#794](https://github.com/Prism-Shadow/penguin-harness/pull/794)
 - **Breaking:** yes — a model entry with no `api_key` in a gateway group (TokenDance, OpenRouter, Fireworks AI, SiliconFlow, Qwen Pay-As-You-Go, Qwen Token Plan), in `custom`, `vllm` or a user-created group, or a vendor entry with a `base_url` of its own, no longer reads `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` (or any vendor variable) from the server environment; Sessions, the connection test, the group speed test, the vision probe, protocol detection and the endpoint listing refuse it instead
 
 [中文版](2026-09-18-gateway-no-env-keys.zh.md)

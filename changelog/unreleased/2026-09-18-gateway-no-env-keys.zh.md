@@ -3,6 +3,7 @@
 - **Date:** 2026-09-18
 - **Type:** fix
 - **Scope:** `core`, `server`, `web`, `docs`
+- **PR:** [#794](https://github.com/Prism-Shadow/penguin-harness/pull/794)
 - **Breaking:** yes — 网关分组（TokenDance、OpenRouter、Fireworks AI、SiliconFlow、Qwen Pay-As-You-Go、Qwen Token Plan）、`custom`、`vllm` 或自建分组里没有 `api_key` 的模型条目，以及自带 `base_url` 的厂商条目，不再从服务端环境读取 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`（或任何厂商变量）；会话、连通性测试、分组测速、视觉探测、协议检测与端点导入一律拒绝
 
 [English](2026-09-18-gateway-no-env-keys.md)
