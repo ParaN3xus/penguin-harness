@@ -3575,6 +3575,7 @@ Scenarios:
       temporary: (n: number): string => `Temporary (${n})`,
       temporaryEntry: (title: string): string => `Temporary · ${title}`,
       closeTemporary: "Remove from Temporary",
+      closeAllTemporary: "Close all",
     },
     overview: {
       title: "Overview",

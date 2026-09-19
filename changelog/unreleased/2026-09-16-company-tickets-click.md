@@ -35,6 +35,8 @@ a new Temporary group.
 - The parent ticket, each child ticket and each ticket session opened by clicking its title, which
   underlines on hover and names its destination in its tooltip. The jump buttons beside them were
   removed.
+- A session the ticket still named but whose record was gone, for example after its Agent was
+  deleted, showed as plain text instead of a link.
 
 ## Ticket sessions
 
@@ -46,11 +48,11 @@ a new Temporary group.
   below **Desks** and shown only while it listed something. Each row had the employee's avatar, the
   session title, its run mark and a ✕; the collapsed rail showed the entries' avatars after the
   desk avatars.
-- An entry stayed until its ✕ removed it. Going elsewhere or reloading the page kept it, and a ✕
-  pressed on the session on screen removed only the row. Opening a listed session again moved it
-  to the top.
-- The list was kept in the browser's localStorage, per user, Project and organization, and held
-  the 20 most recent sessions. A desk session opened from a ticket was not listed; its desk row
-  already named it.
+- An entry stayed until its ✕ removed it, or until **Close all** in the group's header emptied the
+  group in one click, with no confirmation; both took entries off the list and left the sessions
+  themselves alone. Going elsewhere or reloading the page kept an entry, and a ✕ pressed on the
+  session on screen removed only the row. Opening a listed session again moved it to the top.
+- The list was kept in the browser's localStorage, per user, Project and organization, with no
+  cap. A desk session opened from a ticket was not listed; its desk row already named it.
 - The company mode guide described the board's click and drag, the dialog's titles and the
   Temporary group, in both languages.

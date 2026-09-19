@@ -10,8 +10,8 @@
  *
  * Temporary: ticket sessions have no group of their own. Each exists because a ticket started
  * it, and it is opened from that ticket's dialog. The ones opened from there are listed below the
- * desks, newest first, until the reader removes each with its ✕; the group shows only while it
- * lists something (temp-session.ts).
+ * desks, newest first, until the reader removes one with its ✕ or all of them with the header's
+ * "Close all"; the group shows only while it lists something (temp-session.ts).
  *
  * A row that names a desk session carries the development list's row menu (right-click, and
  * the hover ellipsis), pared down to the two actions an organization leaves to the reader:
@@ -59,7 +59,12 @@ import { MessagingBindingModal } from "../messaging/messaging-binding-modal";
 import { orgKey } from "./company-nav";
 import { deskRows, orgRowActivity, ticketSessionTitles } from "./org-sessions";
 import type { OrgDeskRow } from "./org-sessions";
-import { dismissTempSession, tempSessionRows, useTempSessions } from "./temp-session";
+import {
+  dismissAllTempSessions,
+  dismissTempSession,
+  tempSessionRows,
+  useTempSessions,
+} from "./temp-session";
 import type { TempSessionRow } from "./temp-session";
 
 /**
@@ -459,6 +464,17 @@ export function OrgSessionGroups({
           label={S.company.sessionList.temporary(tempRows.length)}
           open={tempOpen}
           onToggle={() => setTempOpen((v) => !v)}
+          // One click, no confirmation: nothing is lost, each session stays one click away in
+          // its ticket. Nothing navigates, even when the session on screen was listed.
+          action={
+            <button
+              type="button"
+              onClick={() => dismissAllTempSessions(user?.userId ?? null, projectId, orgId)}
+              className="shrink-0 rounded px-1.5 py-1 text-[11px] font-medium text-gray-400 transition-colors duration-150 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-200"
+            >
+              {S.company.sessionList.closeAllTemporary}
+            </button>
+          }
         >
           <ul className="space-y-0.5">
             {tempRows.map((row) => (

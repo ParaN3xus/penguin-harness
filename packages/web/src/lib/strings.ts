@@ -3552,6 +3552,8 @@ Benchmark：
       /** A Temporary entry's name on the collapsed rail, where no group header says where it belongs. */
       temporaryEntry: (title: string): string => `临时 · ${title}`,
       closeTemporary: "从「临时」中移除",
+      /** The Temporary group header's action: removes every entry at once; the sessions themselves are kept. */
+      closeAllTemporary: "全部关闭",
     },
     overview: {
       title: "概览",

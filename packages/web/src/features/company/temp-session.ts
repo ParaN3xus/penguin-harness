@@ -7,9 +7,8 @@
  * this list, and the sidebar draws the list as a collapsible group below the Desks group:
  *
  * - Opening a session puts it at the top, or moves it there if it is already listed.
- * - An entry stays until the reader removes it with its ✕. Going elsewhere keeps it, and so does
- *   a reload.
- * - The list holds at most MAX_TEMP_SESSIONS entries; opening one more drops the oldest.
+ * - An entry stays until the reader removes it: its own ✕, or the group's "Close all". Nothing
+ *   else does — going elsewhere keeps it, a reload keeps it, and the list has no cap.
  * - A desk session is never listed: its desk row already names it.
  *
  * The list is kept in localStorage, one key per user, Project and organization: two people on
@@ -37,12 +36,6 @@ export interface TempSessionRow extends TempSessionEntry {
   active: boolean;
 }
 
-/**
- * The most entries one list holds, newest first. Enough for the tickets of a working day, and
- * short enough to stay a glanceable group rather than a second session list.
- */
-export const MAX_TEMP_SESSIONS = 20;
-
 /** The route a Session opens at. */
 export function chatPath(sessionId: string): string {
   return `/chat/${sessionId}`;
@@ -63,8 +56,8 @@ function isDesk(sessionId: string, deskSessionIds: Iterable<string | null>): boo
 const EMPTY: readonly TempSessionEntry[] = [];
 
 /**
- * The list after opening `entry`: at the top and listed once, with the oldest dropped past the
- * cap. A desk session leaves the list as it was, the same array.
+ * The list after opening `entry`: at the top and listed once. A desk session leaves the list as
+ * it was, the same array.
  */
 export function withOpened(
   list: readonly TempSessionEntry[],
@@ -72,10 +65,7 @@ export function withOpened(
   deskSessionIds: Iterable<string | null> = [],
 ): readonly TempSessionEntry[] {
   if (isDesk(entry.sessionId, deskSessionIds)) return list;
-  return [entry, ...list.filter((e) => e.sessionId !== entry.sessionId)].slice(
-    0,
-    MAX_TEMP_SESSIONS,
-  );
+  return [entry, ...list.filter((e) => e.sessionId !== entry.sessionId)];
 }
 
 /** The list after removing one session. A session it does not hold leaves it as it was, the same array. */
@@ -134,6 +124,8 @@ export interface TempSessionStore {
   list(key: string): readonly TempSessionEntry[];
   open(key: string, entry: TempSessionEntry, deskSessionIds?: Iterable<string | null>): void;
   dismiss(key: string, sessionId: string): void;
+  /** Removes every entry of one list at once. */
+  dismissAll(key: string): void;
   /** Drops the copy held for `key` (for every key when null), so the next read goes back to storage. */
   reread(key: string | null): void;
   subscribe(listener: () => void): () => void;
@@ -189,6 +181,9 @@ export function createTempSessionStore(
       const current = list(key);
       const next = withDismissed(current, sessionId);
       if (next !== current) write(key, next);
+    },
+    dismissAll(key) {
+      if (list(key).length > 0) write(key, EMPTY);
     },
     reread(key) {
       if (key === null) lists.clear();
@@ -257,4 +252,17 @@ export function dismissTempSession(
   sessionId: string,
 ): void {
   store.dismiss(tempSessionsKey(userId, projectId, orgId), sessionId);
+}
+
+/**
+ * The group's "Close all": every entry of this organization's list at once, with no
+ * confirmation — the sessions themselves are untouched, and each is still one click away in
+ * its ticket. Nothing navigates.
+ */
+export function dismissAllTempSessions(
+  userId: string | null,
+  projectId: string,
+  orgId: string,
+): void {
+  store.dismissAll(tempSessionsKey(userId, projectId, orgId));
 }

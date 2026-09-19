@@ -1,13 +1,12 @@
 /**
  * temp-session.ts unit tests: the company sidebar's Temporary group of ticket sessions. Opening
- * a session adds it at the top or moves it there, ✕ removes it, and nothing else does: going
- * elsewhere only moves the on-screen mark, and a reload reads the list back from storage. The
- * list is capped with the oldest dropped, never holds a desk session, and is kept per user,
- * Project and organization.
+ * a session adds it at the top or moves it there; ✕ removes one entry and "Close all" every
+ * entry, and nothing else removes any: going elsewhere only moves the on-screen mark, a reload
+ * reads the list back from storage, and the list has no cap. It never holds a desk session, and
+ * is kept per user, Project and organization.
  */
 import { describe, expect, it } from "vitest";
 import {
-  MAX_TEMP_SESSIONS,
   chatPath,
   createTempSessionStore,
   parseTempSessions,
@@ -62,17 +61,12 @@ describe("temporary session list", () => {
     expect(withDismissed(list, "sess_gone")).toBe(list);
   });
 
-  it(`keeps the newest ${MAX_TEMP_SESSIONS} and drops the oldest`, () => {
+  it("has no cap: opening more sessions never drops an older one", () => {
     let list: readonly TempSessionEntry[] = [];
-    for (let n = 1; n <= MAX_TEMP_SESSIONS + 1; n += 1) list = withOpened(list, entry(n));
-    expect(list).toHaveLength(MAX_TEMP_SESSIONS);
-    expect(list[0]!.sessionId).toBe(`sess_${MAX_TEMP_SESSIONS + 1}`);
-    expect(ids(list)).not.toContain("sess_1");
-    // Moving one to the top of a full list drops nothing else.
-    const moved = withOpened(list, entry(5));
-    expect(moved).toHaveLength(MAX_TEMP_SESSIONS);
-    expect(moved[0]!.sessionId).toBe("sess_5");
-    expect(ids(moved)).toContain("sess_2");
+    for (let n = 1; n <= 50; n += 1) list = withOpened(list, entry(n));
+    expect(list).toHaveLength(50);
+    expect(list[0]!.sessionId).toBe("sess_50");
+    expect(list[49]!.sessionId).toBe("sess_1");
   });
 
   it("never lists a desk session, which has its desk row", () => {
@@ -134,6 +128,32 @@ describe("temporary session store", () => {
     store.dismiss(KEY, "sess_a");
     expect(storage.map.has(KEY)).toBe(false);
     expect(createTempSessionStore(() => storage).list(KEY)).toEqual([]);
+  });
+
+  it("closes every entry at once with Close all, and says so once", () => {
+    const storage = memStorage();
+    const store = createTempSessionStore(() => storage);
+    const other = tempSessionsKey("admin", "proj", "globex");
+    store.open(KEY, entry("a"));
+    store.open(KEY, entry("b"));
+    store.open(other, entry("c"));
+    let notified = 0;
+    store.subscribe(() => {
+      notified += 1;
+    });
+
+    store.dismissAll(KEY);
+    expect(store.list(KEY)).toEqual([]);
+    expect(notified).toBe(1);
+    expect(storage.map.has(KEY)).toBe(false);
+    // Another organization's list is its own.
+    expect(store.list(other)).toEqual([entry("c")]);
+    // And the next page load agrees.
+    expect(createTempSessionStore(() => storage).list(KEY)).toEqual([]);
+
+    // Nothing left to close: nobody is told.
+    store.dismissAll(KEY);
+    expect(notified).toBe(1);
   });
 
   it("keeps one list per user, Project and organization", () => {
