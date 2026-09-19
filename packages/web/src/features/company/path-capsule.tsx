@@ -12,8 +12,10 @@
  * In Markdown the pass works on the mdast the shared pipeline produced, so everything the
  * parser already decided holds: a path inside a fenced block or a link stays as it is, and a
  * path the parser split — `__init__` read as emphasis — is left whole as text rather than
- * capsuled in part. A capsule reaches React as `<samp>`: no Markdown syntax and no KaTeX output
- * produces one, so claiming it in the components map collides with nothing.
+ * capsuled in part. A path written with `\` is the exception: the parser took some of its
+ * separators for escapes, so its capsule takes the path from the source (spellAsWritten). A
+ * capsule reaches React as `<samp>`: no Markdown syntax and no KaTeX output produces one, so
+ * claiming it in the components map collides with nothing.
  */
 import { useMemo } from "react";
 import type { ReactNode } from "react";
@@ -26,7 +28,7 @@ import { GlyphIcon } from "../../components/ui/glyph-icon";
 import { FOLDER_ICON } from "../../components/ui/group-list";
 import { FILE_ICON } from "../../components/ui/icons";
 import { Md } from "../chat/md";
-import { codePath, pathKind, pathLabel, splitPaths } from "./path-capsules";
+import { codePath, pathKind, pathLabel, spellAsWritten, splitPaths } from "./path-capsules";
 import type { PathScope } from "./path-capsules";
 
 /** One data path as a capsule. */
@@ -72,6 +74,7 @@ interface MdNode {
   type: string;
   value?: string;
   children?: MdNode[];
+  position?: { start?: { offset?: number }; end?: { offset?: number } };
   data?: { hName?: string; hChildren?: Array<{ type: string; value: string }> };
 }
 
@@ -87,7 +90,14 @@ function capsuleNode(path: string): MdNode {
 /** Parents whose text is not prose to capsule: a link's label (a button cannot nest in an anchor). */
 const SKIP = new Set(["link", "linkReference"]);
 
-function walk(parent: MdNode, scope: PathScope): void {
+/** The Markdown a node was parsed from, or its own value when the node carries no position. */
+function sourceOf(node: MdNode, source: string): string {
+  const start = node.position?.start?.offset;
+  const end = node.position?.end?.offset;
+  return start === undefined || end === undefined ? (node.value ?? "") : source.slice(start, end);
+}
+
+function walk(parent: MdNode, scope: PathScope, source: string): void {
   const children = parent.children;
   if (!children) return;
   for (let i = 0; i < children.length; i += 1) {
@@ -102,13 +112,13 @@ function walk(parent: MdNode, scope: PathScope): void {
       if (!pieces.some((p) => p.kind === "path")) continue;
       // A path touching the node's edge may run on into the sibling there — the parser split
       // it (`…/src/__init__.py` has an emphasis in the middle) — so it stays text. Only a bare
-      // `/` can be the tail of such a split; `<app_data_dir>`, `~` and a drive letter only
-      // ever start one.
+      // `/` or `\` can be the tail of such a split; `<app_data_dir>`, `~` and a drive letter
+      // only ever start one.
       const first = pieces[0]!;
       const lastPiece = pieces[pieces.length - 1]!;
       if (
         first.kind === "path" &&
-        first.path.startsWith("/") &&
+        /^[/\\]/.test(first.path) &&
         i > 0 &&
         children[i - 1]!.type !== "break"
       ) {
@@ -121,20 +131,21 @@ function walk(parent: MdNode, scope: PathScope): void {
       ) {
         pieces[pieces.length - 1] = { kind: "text", text: lastPiece.path };
       }
-      const replaced = pieces.map((p) =>
+      const replaced = spellAsWritten(pieces, sourceOf(node, source)).map((p) =>
         p.kind === "path" ? capsuleNode(p.path) : { type: "text", value: p.text },
       );
       children.splice(i, 1, ...replaced);
       i += replaced.length - 1;
       continue;
     }
-    if (!SKIP.has(node.type)) walk(node, scope);
+    if (!SKIP.has(node.type)) walk(node, scope, source);
   }
 }
 
 /** The remark pass: data paths in prose and whole-path inline code become capsule nodes. */
 export function remarkPathCapsules(scope: PathScope) {
-  return (tree: MdNode): void => walk(tree, scope);
+  return (tree: MdNode, file: { value?: unknown }): void =>
+    walk(tree, scope, String(file.value ?? ""));
 }
 
 function textOf(children: ReactNode): string {
