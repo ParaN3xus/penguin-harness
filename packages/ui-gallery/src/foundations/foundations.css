@@ -613,6 +613,8 @@
   width: 1rem;
   height: 1rem;
   border-radius: 999px;
+  /* Light in both modes, with a hairline so it reads on a near-white accent (Primer dark). */
+  border: 1px solid var(--ui-line);
   background: var(--ui-fg-on-emphasis);
 }
 .gf-switch[data-on] {

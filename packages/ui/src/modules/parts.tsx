@@ -1016,7 +1016,11 @@ export function Radio({
   );
 }
 
-/** A switch: its track is round in every theme, like the state dots. */
+/**
+ * A switch: its track is round in every theme, like the state dots. The knob is light in both
+ * modes, as the app's is, and keeps a hairline so it still reads on a near-white accent (Primer's
+ * dark one).
+ */
 export function Switch({ on, disabled = false }: { on: boolean; disabled?: boolean }) {
   return (
     <span
@@ -1027,7 +1031,7 @@ export function Switch({ on, disabled = false }: { on: boolean; disabled?: boole
       }`}
     >
       <span
-        className={`absolute size-4 rounded-full bg-fg-on-emphasis ${on ? "left-4.5" : "left-0.5"}`}
+        className={`absolute size-4 rounded-full border border-line bg-fg-on-emphasis ${on ? "left-4.5" : "left-0.5"}`}
       />
     </span>
   );
