@@ -56,8 +56,9 @@ describe("main.ts window-open handling", () => {
     const guard = /function guardOpenedWindow\([\s\S]*?\n\}/.exec(source)?.[0];
     expect(guard).toBeDefined();
     expect(guard).toMatch(/child\.center\(\)/);
+    // A WebContents event, not a window one: the request comes from the page.
     expect(guard).toMatch(
-      /child\.on\("content-bounds-updated", \(event\) => event\.preventDefault\(\)\)/,
+      /child\.webContents\.on\("content-bounds-updated", \(event\) => event\.preventDefault\(\)\)/,
     );
   });
 });

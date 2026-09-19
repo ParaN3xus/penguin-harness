@@ -211,7 +211,7 @@ function openWindowFor(target: string, iconPath: string | null): WindowOpenHandl
  */
 function guardOpenedWindow(child: BrowserWindow, iconPath: string | null): void {
   child.center();
-  child.on("content-bounds-updated", (event) => event.preventDefault());
+  child.webContents.on("content-bounds-updated", (event) => event.preventDefault());
   child.webContents.setWindowOpenHandler(({ url: target }) => openWindowFor(target, iconPath));
   child.webContents.on("did-create-window", (next) => guardOpenedWindow(next, iconPath));
   child.webContents.on("will-navigate", (event, target) => {
