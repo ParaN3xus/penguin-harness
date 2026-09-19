@@ -17,6 +17,7 @@ import {
   detectableBaseUrl,
   displayWidthCh,
   envHintClientType,
+  envHintKeyFor,
   isCustomLikeGroup,
   isGenericProtocolClientType,
   needsProtocolDetectOnSave,
@@ -177,6 +178,60 @@ describe("envHintClientType (custom groups never infer a client from the model i
     expect(envHintClientType("anthropic", "")).toBeUndefined();
     expect(envFor("anthropic", "claude-sonnet-5", "")).toBe("ANTHROPIC_API_KEY");
     expect(envFor("google", "gemini-3.1-pro", "")).toBe("GEMINI_API_KEY");
+  });
+});
+
+describe("envHintKeyFor (the API-key field promises a variable only where the entry may fall back to it)", () => {
+  it("names nothing for a gateway row: its preset endpoint is not the vendor's, so the vendor key is not its key", () => {
+    // The #786 finding: once an Anthropic row had proved OPENAI_API_KEY / ANTHROPIC_API_KEY
+    // set, a TokenDance or OpenCode Go row read "leave empty to use the ... env var".
+    expect(
+      envHintKeyFor("tokendance", "glm-5.3", "openai-chat", "https://tokendance.space/gateway/v1"),
+    ).toBeUndefined();
+    expect(
+      envHintKeyFor(
+        "openrouter",
+        "openai/gpt-5.5",
+        "openai-responses",
+        "https://openrouter.ai/api/v1",
+      ),
+    ).toBeUndefined();
+    expect(
+      envHintKeyFor("custom", "claude-sonnet-5", "ant-messages", "https://gw.example.com"),
+    ).toBeUndefined();
+    expect(envHintKeyFor("vllm", "Qwen/Qwen3.8-27B", "", "http://gpu-box:8000/v1")).toBeUndefined();
+    expect(
+      envHintKeyFor("my-group", "some-model", "", "https://gw.example.com/v1"),
+    ).toBeUndefined();
+  });
+
+  it("names the vendor's variable for a first-party row, and the relay's own for Penguin Go", () => {
+    expect(envHintKeyFor("anthropic", "claude-sonnet-4-6", "", "")).toBe("ANTHROPIC_API_KEY");
+    expect(envHintKeyFor("google", "gemini-3.1-pro", "", "")).toBe("GEMINI_API_KEY");
+    expect(
+      envHintKeyFor("deepseek", "deepseek-flash", "deepseek-v4", "https://api.deepseek.com"),
+    ).toBe("DEEPSEEK_API_KEY");
+    // A custom row pointed at the vendor's own endpoint gets the vendor's key: it goes to the vendor.
+    expect(envHintKeyFor("custom", "gpt-5.6", "openai-chat", "https://api.openai.com/v1")).toBe(
+      "OPENAI_API_KEY",
+    );
+    expect(
+      envHintKeyFor(
+        "penguin-go",
+        "gemini-3.8-flash",
+        "gemini-3.8",
+        "https://token.penguin.ooo/api",
+      ),
+    ).toBe("PENGUIN_GO_API_KEY");
+  });
+
+  it("follows the base URL as it is edited: re-pointing a vendor row at a proxy drops the hint", () => {
+    expect(
+      envHintKeyFor("anthropic", "claude-sonnet-4-6", "", "https://proxy.example/anthropic"),
+    ).toBeUndefined();
+    expect(envHintKeyFor("anthropic", "claude-sonnet-4-6", "", "https://api.anthropic.com/")).toBe(
+      "ANTHROPIC_API_KEY",
+    );
   });
 });
 

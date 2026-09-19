@@ -24,6 +24,13 @@ import {
   fastModeProtocol,
   resolveModelEnv,
   resolveProviderModelEnv,
+  ModelCredentialError,
+  PENGUIN_GO_BASE_URL,
+  endpointEnvApiKey,
+  modelEnvFallback,
+  providerEnvFallbackKey,
+  resolveModelCredential,
+  sameEndpoint,
 } from "../src/state/index.js";
 
 describe("model-catalog", () => {
@@ -1751,5 +1758,198 @@ describe("off-peak schedules", () => {
     for (const { schedule, refs } of offPeakScheduledRefs()) {
       expect(schedule.utcOffsetMinutes, `${refs[0]!.provider}/${refs[0]!.modelId}`).toBe(480);
     }
+  });
+});
+
+describe("modelEnvFallback / resolveModelCredential (a vendor key from the environment goes only to the vendor)", () => {
+  const VENDOR_ENV = {
+    OPENAI_API_KEY: "sk-openai-env",
+    ANTHROPIC_API_KEY: "sk-anthropic-env",
+    GEMINI_API_KEY: "sk-gemini-env",
+    DEEPSEEK_API_KEY: "sk-deepseek-env",
+  };
+  const shapeOf = (m: (typeof MODEL_CATALOG)[number]) => ({
+    provider: m.provider,
+    modelId: m.modelId,
+    clientType: m.clientType,
+    baseUrl: m.baseUrl,
+  });
+
+  it("refuses every keyless row of every gateway group, whatever vendor variables are set", () => {
+    const gateways = MODEL_PROVIDERS.filter((p) => p.gatewayBaseUrl !== undefined).map((p) => p.id);
+    expect(gateways).toContain("tokendance");
+    expect(gateways).toContain("openrouter");
+    const rows = MODEL_CATALOG.filter((m) => gateways.includes(m.provider));
+    expect(rows.length).toBeGreaterThan(20);
+    for (const m of rows) {
+      expect(
+        modelEnvFallback(shapeOf(m), VENDOR_ENV),
+        `${m.provider}/${m.modelId}`,
+      ).toBeUndefined();
+      expect(
+        () => resolveModelCredential(shapeOf(m), VENDOR_ENV),
+        `${m.provider}/${m.modelId}`,
+      ).toThrow(ModelCredentialError);
+    }
+    // The message says "API key", which is what hosts classify a missing credential by.
+    expect(() =>
+      resolveModelCredential(shapeOf(catalogEntryFor("tokendance", "glm-5.3")!), VENDOR_ENV),
+    ).toThrow(/has no API key/);
+  });
+
+  it("leaves a first-party vendor row on its client's own variable, handing the client no key", () => {
+    // No base URL: the client's default endpoint is the vendor's own.
+    const sonnet = shapeOf(catalogEntryFor("anthropic", "claude-sonnet-4-6")!);
+    expect(modelEnvFallback(sonnet, VENDOR_ENV)).toEqual({
+      envKey: "ANTHROPIC_API_KEY",
+      envBaseUrlKey: "ANTHROPIC_BASE_URL",
+      readByClient: true,
+    });
+    expect(resolveModelCredential(sonnet, VENDOR_ENV)).toEqual({});
+    // A pinned vendor endpoint (the catalog's DeepSeek / MiniMax rows) is the vendor's own too.
+    const flash = shapeOf(catalogEntryFor("deepseek", "deepseek-flash")!);
+    expect(flash.baseUrl).toBe("https://api.deepseek.com");
+    expect(modelEnvFallback(flash, VENDOR_ENV)?.envKey).toBe("DEEPSEEK_API_KEY");
+    expect(resolveModelCredential(flash, VENDOR_ENV)).toEqual({
+      baseUrl: "https://api.deepseek.com",
+    });
+    // The variable being unset is the client's business, not ours: still handed nothing
+    // (a Bedrock ANTHROPIC_BASE_URL with no ANTHROPIC_API_KEY stays valid).
+    expect(resolveModelCredential(sonnet, {})).toEqual({});
+    // An inline key always wins, on any row.
+    expect(resolveModelCredential({ ...sonnet, apiKey: "sk-inline" }, VENDOR_ENV)).toEqual({
+      apiKey: "sk-inline",
+    });
+    expect(
+      resolveModelCredential(
+        { ...shapeOf(catalogEntryFor("openrouter", "openai/gpt-5.5")!), apiKey: "sk-or" },
+        VENDOR_ENV,
+      ),
+    ).toMatchObject({ apiKey: "sk-or" });
+  });
+
+  it("reads the Penguin Go relay's own variable itself and never a vendor's", () => {
+    const relayRows = MODEL_CATALOG.filter((m) => m.provider === "penguin-go");
+    expect(relayRows.length).toBeGreaterThan(0);
+    for (const m of relayRows) {
+      expect(modelEnvFallback(shapeOf(m), VENDOR_ENV), m.modelId).toEqual({
+        envKey: "PENGUIN_GO_API_KEY",
+        envBaseUrlKey: "PENGUIN_GO_BASE_URL",
+        readByClient: false,
+      });
+      // Vendor variables set, relay variable unset: refused, not GEMINI_API_KEY.
+      expect(() => resolveModelCredential(shapeOf(m), VENDOR_ENV), m.modelId).toThrow(
+        /PENGUIN_GO_API_KEY/,
+      );
+      expect(
+        resolveModelCredential(shapeOf(m), { ...VENDOR_ENV, PENGUIN_GO_API_KEY: " pg-key " }),
+        m.modelId,
+      ).toEqual({ apiKey: "pg-key", baseUrl: PENGUIN_GO_BASE_URL });
+    }
+    // The relay key belongs to the relay endpoint: a row with no base URL is refused even
+    // with a key, so the key cannot travel to the vendor's default endpoint.
+    expect(() =>
+      resolveModelCredential(
+        {
+          provider: "penguin-go",
+          modelId: "gemini-3.8-flash",
+          clientType: "gemini-3.8",
+          apiKey: "pg",
+        },
+        VENDOR_ENV,
+      ),
+    ).toThrow(/has no base URL/);
+  });
+
+  it("judges custom, vLLM and user-defined rows by their endpoint, not their group", () => {
+    // A private server: refused.
+    const local = {
+      provider: "custom",
+      modelId: "local-model",
+      clientType: "openai-chat",
+      baseUrl: "http://127.0.0.1:8000/v1",
+    };
+    expect(modelEnvFallback(local, VENDOR_ENV)).toBeUndefined();
+    expect(() => resolveModelCredential(local, VENDOR_ENV)).toThrow(ModelCredentialError);
+    const vllm = shapeOf(MODEL_CATALOG.find((m) => m.provider === "vllm")!);
+    expect(
+      modelEnvFallback({ ...vllm, baseUrl: "http://gpu-box:8000/v1" }, VENDOR_ENV),
+    ).toBeUndefined();
+    // The vendor's own endpoint typed into a custom row: the OpenAI key goes to OpenAI.
+    expect(
+      modelEnvFallback({ ...local, baseUrl: "https://api.openai.com/v1/" }, VENDOR_ENV)?.envKey,
+    ).toBe("OPENAI_API_KEY");
+    // The endpoint the environment itself names: the user paired key and URL deliberately.
+    const paired = { ...VENDOR_ENV, OPENAI_BASE_URL: "http://127.0.0.1:8000/v1/" };
+    expect(modelEnvFallback(local, paired)?.envKey).toBe("OPENAI_API_KEY");
+    expect(resolveModelCredential(local, paired)).toEqual({ baseUrl: local.baseUrl });
+    // ...but only with the environment in hand (the browser has none): skipped otherwise.
+    expect(modelEnvFallback(local)).toBeUndefined();
+    // A user-defined group with no base URL auto-routes to the vendor: allowed, like before.
+    expect(
+      modelEnvFallback({ provider: "myproxy", modelId: "claude-sonnet-4-6" }, VENDOR_ENV)?.envKey,
+    ).toBe("ANTHROPIC_API_KEY");
+    // A vendor row re-pointed at a proxy: refused.
+    expect(
+      modelEnvFallback(
+        {
+          provider: "anthropic",
+          modelId: "claude-sonnet-4-6",
+          baseUrl: "https://proxy.example/anthropic",
+        },
+        VENDOR_ENV,
+      ),
+    ).toBeUndefined();
+    // An id nothing routes has no client and so no variable.
+    expect(modelEnvFallback({ provider: "custom", modelId: "opaque" }, VENDOR_ENV)).toBeUndefined();
+  });
+
+  it("endpointEnvApiKey lends a bare endpoint the protocol's key on the same terms", () => {
+    expect(
+      endpointEnvApiKey("openai-chat", "https://gw.example.com/v1", VENDOR_ENV),
+    ).toBeUndefined();
+    expect(endpointEnvApiKey("ant-messages", "https://gw.example.com", VENDOR_ENV)).toBeUndefined();
+    expect(endpointEnvApiKey("openai-chat", "https://api.openai.com/v1", VENDOR_ENV)).toBe(
+      "sk-openai-env",
+    );
+    expect(endpointEnvApiKey("ant-messages", "https://api.anthropic.com/", VENDOR_ENV)).toBe(
+      "sk-anthropic-env",
+    );
+    expect(endpointEnvApiKey("openai-responses", undefined, VENDOR_ENV)).toBe("sk-openai-env");
+    expect(
+      endpointEnvApiKey("openai-chat", "https://gw.example.com/v1", {
+        ...VENDOR_ENV,
+        OPENAI_BASE_URL: "https://gw.example.com/v1",
+      }),
+    ).toBe("sk-openai-env");
+    expect(
+      endpointEnvApiKey("openai-chat", "https://api.openai.com/v1", { OPENAI_API_KEY: "  " }),
+    ).toBeUndefined();
+  });
+
+  it("providerEnvFallbackKey names the group-level fallback only for first-party groups", () => {
+    expect(providerEnvFallbackKey("anthropic")).toBe("ANTHROPIC_API_KEY");
+    expect(providerEnvFallbackKey("deepseek")).toBe("DEEPSEEK_API_KEY");
+    expect(providerEnvFallbackKey("penguin-go")).toBe("PENGUIN_GO_API_KEY");
+    for (const id of [
+      "tokendance",
+      "openrouter",
+      "fireworks",
+      "siliconflow",
+      "qwen-token-plan",
+      "vllm",
+      "custom",
+      "my-group",
+    ]) {
+      expect(providerEnvFallbackKey(id), id).toBeUndefined();
+    }
+  });
+
+  it("sameEndpoint ignores case in the host and trailing slashes, and nothing else", () => {
+    expect(sameEndpoint("https://API.OpenAI.com/v1/", "https://api.openai.com/v1")).toBe(true);
+    expect(sameEndpoint("https://api.openai.com/v1", "https://api.openai.com/v2")).toBe(false);
+    expect(sameEndpoint("https://api.openai.com/v1", "https://api.openai.com")).toBe(false);
+    expect(sameEndpoint("http://host:8000/v1", "http://host:8001/v1")).toBe(false);
+    expect(sameEndpoint("not a url", "not a url")).toBe(false);
   });
 });

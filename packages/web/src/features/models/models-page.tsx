@@ -86,6 +86,7 @@ import {
   fastModeProtocol,
   modelHomepageUrl,
   providerClientType,
+  providerEnvFallbackKey,
   providerInfo,
   resolveProviderModelEnv,
 } from "@prismshadow/penguin-core/model-catalog";
@@ -112,6 +113,7 @@ import {
   detectableBaseUrl,
   displayWidthCh,
   envHintClientType,
+  envHintKeyFor,
   isCustomLikeGroup,
   isGenericProtocolClientType,
   needsProtocolDetectOnSave,
@@ -2841,20 +2843,26 @@ function ModelDialog({
   // the model id and API key labels in both the add and edit dialogs; custom
   // and self-defined groups have no link).
   const dialogProvider = providerInfo(form.provider);
-  // env fallback resolves live from the current form (uses the same
-  // the same provider-aware resolver as the server's getModels): the Penguin Go relay
-  // keeps its own key while ordinary groups follow client routing.
+  // The variable the entry ROUTES to, resolved live from the current form (the same
+  // provider-aware resolver as the server): the Penguin Go relay keeps its own key while
+  // ordinary groups follow client routing. This is the routability signal for vendor groups
+  // (autoRouteMiss below), not the key hint.
   //
   // Custom and user-defined groups opt out of the model_id half (per maintainer): typing
   // `claude-sonnet-5` into a custom group must not quietly imply the Anthropic client and
   // its ANTHROPIC_* key. Those groups default to the compatible client, which is also what
   // gets persisted when nothing is picked or detected — so keying the hint off it is what
   // the entry will actually read after saving.
-  const liveEnvKey = resolveProviderModelEnv(
+  const routedEnvKey = resolveProviderModelEnv(
     form.provider,
     form.modelId.trim(),
     envHintClientType(form.provider, form.clientType),
   )?.envKey;
+  // The variable a blank key may actually FALL BACK to for the entry as drafted (core's
+  // modelEnvFallback, the rule the server enforces): undefined for every row whose endpoint
+  // is not the vendor's own — a gateway's preset base URL, a custom or vLLM server, a vendor
+  // row re-pointed at a proxy. The hint follows this, never routedEnvKey.
+  const liveEnvKey = envHintKeyFor(form.provider, form.modelId, form.clientType, form.baseUrl);
   // The protocol this group pins on every entry, user-added ones included (OpenRouter,
   // vLLM); undefined for every group that leaves the protocol to auto-routing, a gateway
   // preset, or detection.
@@ -2872,7 +2880,7 @@ function ModelDialog({
     vendorGroup &&
     !form.clientType.trim() &&
     form.modelId.trim() !== "" &&
-    liveEnvKey === undefined;
+    routedEnvKey === undefined;
 
   /** Identity section: upstream model id (renamable; "get model id" link next
    * to the label) + display name and group side by side (both editable;
@@ -3677,6 +3685,7 @@ function GroupKeyDialog({
   onSubmit: (apiKey: string) => void;
 }) {
   const [key, setKey] = useState("");
+  const groupEnvKey = providerEnvFallbackKey(provider.id);
   return (
     <Modal
       open
@@ -3709,11 +3718,14 @@ function GroupKeyDialog({
           className="font-mono"
           autoComplete="off"
           autoFocus
-          // Only promise the variable when the server reported a value for it: the group's
-          // variable name is always known, which says nothing about whether it is set.
+          // Only promise the variable when this group's rows may fall back to it at all
+          // (providerEnvFallbackKey: never a gateway, custom, vLLM or user-defined group —
+          // the OpenAI key an Anthropic row proved set is not this gateway's key) AND the
+          // server reported a value for it: the group's variable name is always known,
+          // which says nothing about whether it is set.
           placeholder={
-            detectedEnvKeys.has(provider.envKey)
-              ? S.models.apiKeyEnvHint(provider.envKey)
+            groupEnvKey !== undefined && detectedEnvKeys.has(groupEnvKey)
+              ? S.models.apiKeyEnvHint(groupEnvKey)
               : undefined
           }
         />

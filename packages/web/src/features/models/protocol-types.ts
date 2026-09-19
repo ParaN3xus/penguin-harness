@@ -6,7 +6,11 @@
  * The probing itself is server-side (packages/server/src/services/protocol-detect.ts); these
  * only decide what the dialog shows and what is worth sending there.
  */
-import { providerClientType, providerInfo } from "@prismshadow/penguin-core/model-catalog";
+import {
+  modelEnvFallback,
+  providerClientType,
+  providerInfo,
+} from "@prismshadow/penguin-core/model-catalog";
 
 /**
  * AgentHub's generic protocol client types, in detection order (custom / user-defined
@@ -158,6 +162,29 @@ export function envHintClientType(provider: string, clientType: string): string 
     providerClientType(provider) ??
     (isCustomLikeGroup(provider) ? DEFAULT_CUSTOM_CLIENT_TYPE : undefined)
   );
+}
+
+/**
+ * The variable the dialog's API-key field may promise for the entry as drafted, or undefined
+ * when a blank key gets no fallback at all: core's modelEnvFallback over the form's group, id,
+ * protocol (resolved as envHintClientType does) and base URL. A gateway row carries its
+ * preset endpoint, so it resolves to nothing — the hint that used to read "leave empty to use
+ * OPENAI_API_KEY" on a TokenDance or OpenRouter row was promising the user's OpenAI key to a
+ * third party. The browser cannot see the server environment, so the `*_BASE_URL`-named
+ * clause is skipped here: a missing hint is harmless, a false one is the bug.
+ */
+export function envHintKeyFor(
+  provider: string,
+  modelId: string,
+  clientType: string,
+  baseUrl: string,
+): string | undefined {
+  return modelEnvFallback({
+    provider,
+    modelId: modelId.trim(),
+    clientType: envHintClientType(provider, clientType),
+    baseUrl,
+  })?.envKey;
 }
 
 /*

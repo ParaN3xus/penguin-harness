@@ -169,7 +169,7 @@ describe("models preset & catalog enrichment", () => {
     expect(pick(body, "tokendance", "hy4-preview")).not.toHaveProperty("discount");
   });
 
-  it("masks allowed direct and relay env fallbacks, never gateway fallbacks, and never leaks a value", async () => {
+  it("reports and masks the env fallback only where the entry is allowed one (the vendor's own endpoint, or the relay's own variable), and never leaks a value", async () => {
     const saved = {
       anthropic: process.env.ANTHROPIC_API_KEY,
       deepseek: process.env.DEEPSEEK_API_KEY,
@@ -193,16 +193,26 @@ describe("models preset & catalog enrichment", () => {
           { provider: "deepseek", modelId: "deepseek-v4-pro" },
           // Off-catalog id in a vendor group, pure auto-route: still first-party.
           { provider: "anthropic", modelId: "claude-sonnet-4-6-preview" },
-          // Vendor group re-pointed at a generic protocol: not first-party.
+          // Vendor group on a generic protocol with no base URL: the OpenAI client talks to
+          // api.openai.com, so the OpenAI key may back it — whatever the group is called.
           { provider: "anthropic", modelId: "claude-via-gateway", clientType: "openai" },
-          // Gateway and custom groups never carry a preview, even with OPENAI_API_KEY set.
+          // A gateway row carries the gateway's endpoint: no fallback at all, so no envKey
+          // and no preview, even with OPENAI_API_KEY set.
           {
             provider: "openrouter",
             modelId: "xiaomi/mimo-v2.5",
             clientType: "openai-chat",
             baseUrl: "https://openrouter.ai/api/v1",
           },
+          // Custom rows are judged by their endpoint: none → the vendor's own; a private
+          // server → nothing.
           { provider: "custom", modelId: "my-model", clientType: "openai" },
+          {
+            provider: "custom",
+            modelId: "my-local",
+            clientType: "openai",
+            baseUrl: "http://127.0.0.1:8000/v1",
+          },
           // Both protocols in the relay group resolve the same provider-scoped key.
           {
             provider: "penguin-go",
@@ -228,13 +238,17 @@ describe("models preset & catalog enrichment", () => {
       expect(pick(body, "anthropic", "claude-sonnet-4-6").envKeyMasked).toBe(masked);
       expect(pick(body, "anthropic", "claude-sonnet-4-6-preview").envKeyMasked).toBe(masked);
       expect(pick(body, "deepseek", "deepseek-v4-pro").envKeyMasked).toBeUndefined();
+      const openaiMasked = `${openaiValue.slice(0, 4)}…${openaiValue.slice(-4)}`;
       const rePointed = pick(body, "anthropic", "claude-via-gateway");
       expect(rePointed.envKey).toBe("OPENAI_API_KEY");
-      expect(rePointed.envKeyMasked).toBeUndefined();
+      expect(rePointed.envKeyMasked).toBe(openaiMasked);
       const gateway = pick(body, "openrouter", "xiaomi/mimo-v2.5");
-      expect(gateway.envKey).toBe("OPENAI_API_KEY");
+      expect(gateway.envKey).toBeUndefined();
       expect(gateway.envKeyMasked).toBeUndefined();
-      expect(pick(body, "custom", "my-model").envKeyMasked).toBeUndefined();
+      expect(pick(body, "custom", "my-model").envKey).toBe("OPENAI_API_KEY");
+      expect(pick(body, "custom", "my-model").envKeyMasked).toBe(openaiMasked);
+      expect(pick(body, "custom", "my-local").envKey).toBeUndefined();
+      expect(pick(body, "custom", "my-local").envKeyMasked).toBeUndefined();
       const penguinMasked = "sk-p…-456";
       expect(pick(body, "penguin-go", "gemini-3.8-flash").envKey).toBe("PENGUIN_GO_API_KEY");
       expect(pick(body, "penguin-go", "gemini-3.8-flash").envKeyMasked).toBe(penguinMasked);
@@ -321,8 +335,8 @@ describe("models preset & catalog enrichment", () => {
     const body = (await (await api.get(url())).json()) as ModelsResponse;
     const legacy = pick(body, "custom", "legacy-openai-model");
     expect(legacy.clientType).toBe("openai-chat");
-    // The env fallback resolves like any openai-chat entry.
-    expect(legacy.envKey).toBe("OPENAI_API_KEY");
+    // Its own endpoint, so no environment fallback is reported for it.
+    expect(legacy.envKey).toBeUndefined();
   });
 
   it("a configured model that has since been dropped from the built-in catalog still loads, keeps its data, and stays usable", async () => {
@@ -450,7 +464,8 @@ describe("models preset & catalog enrichment", () => {
     expect(pick(body, "moonshot", "kimi-k2.6").credential?.apiKeyMasked).toBe("sk-o…1111");
     expect(pick(body, "moonshot", "kimi-k2.6").envKey).toBe("MOONSHOT_API_KEY");
     expect(pick(body, "siliconflow", "kimi-k2.6").credential?.apiKeyMasked).toBe("sk-g…2222");
-    expect(pick(body, "siliconflow", "kimi-k2.6").envKey).toBe("OPENAI_API_KEY");
+    // A gateway row: no environment fallback, so none is reported.
+    expect(pick(body, "siliconflow", "kimi-k2.6").envKey).toBeUndefined();
 
     // Round-trips through disk unchanged.
     const again = (await (await api.get(url())).json()) as ModelsResponse;
@@ -991,6 +1006,69 @@ describe("model-reference rekeying and the connectivity test", () => {
     }
   });
 
+  it("the connectivity test and the group speed test refuse a keyless gateway row without touching the environment", async () => {
+    // The #786 review's finding: a keyless gateway row handed AgentHub no key, and its
+    // generic client read OPENAI_API_KEY / ANTHROPIC_API_KEY itself — one speed test on a
+    // gateway group sent the user's vendor keys to the gateway once per model. Both paths run
+    // through testModel; both must refuse before any request leaves the process.
+    const saved = { openai: process.env.OPENAI_API_KEY, anthropic: process.env.ANTHROPIC_API_KEY };
+    process.env.OPENAI_API_KEY = "vendor-openai-must-not-cross";
+    process.env.ANTHROPIC_API_KEY = "vendor-anthropic-must-not-cross";
+    const realFetch = globalThis.fetch;
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      throw new Error("no request may leave the process for a refused probe");
+    }) as typeof fetch;
+    try {
+      // A gateway preset: the group's endpoint, no key. Both an OpenAI-protocol gateway and a
+      // Messages-protocol custom row (the Atria preset) are refused.
+      for (const [provider, modelId] of [
+        ["tokendance", "glm-5.3"],
+        ["openrouter", "openai/gpt-5.5"],
+      ] as const) {
+        expect(catalogEntryFor(provider, modelId)).toBeDefined();
+        for (const speed of [false, true]) {
+          const res = await api.post(testUrl(), { provider, modelId, speed });
+          expect(res.status).toBe(200);
+          const body = (await res.json()) as ModelTestResponse;
+          expect(body.ok).toBe(false);
+          expect(body.message).toMatch(/has no API key/);
+          expect(body.message).toMatch(/set the API key on the model entry/);
+        }
+      }
+      // A not-yet-saved custom row pointed at a private server: same refusal.
+      const draft = await api.post(testUrl(), {
+        provider: "custom",
+        modelId: "draft-model",
+        clientType: "openai-chat",
+        baseUrl: "http://127.0.0.1:9/v1",
+      });
+      expect(((await draft.json()) as ModelTestResponse).message).toMatch(/has no API key/);
+      // The vision probe shares the rule.
+      const vision = await api.post(`${url()}/detect-vision`, {
+        provider: "tokendance",
+        modelId: "glm-5.3",
+      });
+      expect((await vision.json()) as ModelVisionDetectResponse).toMatchObject({
+        outcome: "failed",
+        message: expect.stringMatching(/has no API key/) as string,
+      });
+      expect(requests).toBe(0);
+      // The refusal is not a 400 with the SDK's own text: the message never names a vendor variable.
+      expect(JSON.stringify(await (await api.get(url())).json())).not.toContain("must-not-cross");
+    } finally {
+      globalThis.fetch = realFetch;
+      for (const [key, value] of [
+        ["OPENAI_API_KEY", saved.openai],
+        ["ANTHROPIC_API_KEY", saved.anthropic],
+      ] as const) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
   it("Penguin Go probes never substitute vendor environment keys", async () => {
     const saved = {
       gemini: process.env.GEMINI_API_KEY,
@@ -1006,7 +1084,7 @@ describe("model-reference rekeying and the connectivity test", () => {
         expect(tested.status).toBe(200);
         expect((await tested.json()) as ModelTestResponse).toMatchObject({
           ok: false,
-          message: "Missing API key for Penguin Go.",
+          message: expect.stringMatching(/has no API key.*PENGUIN_GO_API_KEY/) as string,
         });
 
         const vision = await api.post(`${url()}/detect-vision`, {
@@ -1016,7 +1094,7 @@ describe("model-reference rekeying and the connectivity test", () => {
         expect(vision.status).toBe(200);
         expect((await vision.json()) as ModelVisionDetectResponse).toMatchObject({
           outcome: "failed",
-          message: "Missing API key for Penguin Go.",
+          message: expect.stringMatching(/has no API key.*PENGUIN_GO_API_KEY/) as string,
         });
       }
 
@@ -1028,7 +1106,7 @@ describe("model-reference rekeying and the connectivity test", () => {
       });
       expect((await noEndpoint.json()) as ModelTestResponse).toMatchObject({
         ok: false,
-        message: "Missing API base URL for Penguin Go.",
+        message: expect.stringMatching(/has no base URL/) as string,
       });
     } finally {
       for (const [key, value] of [
