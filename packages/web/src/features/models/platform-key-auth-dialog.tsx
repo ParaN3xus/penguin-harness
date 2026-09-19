@@ -9,9 +9,8 @@ import * as api from "../../api/endpoints";
 import { Button } from "../../components/ui/button";
 import { Modal } from "../../components/ui/modal";
 import { apiErrorText } from "../../lib/api-error";
-import { usesAuthorizationBridge } from "../../lib/authorization-window";
+import { isElectronRenderer } from "../../lib/desktop-renderer";
 import { S } from "../../lib/strings";
-import { useAuth } from "../../state/auth";
 
 const POLL_MS = 3_000;
 
@@ -39,12 +38,12 @@ export function PlatformKeyAuthDialog({
   onClose: () => void;
   onApplied: (applied: number) => void;
 }) {
-  const { desktopMode, sessionVia } = useAuth();
   // A browser needs a tab opened inside the click, before the server has the URL, or its
-  // popup blocker eats the navigation. The desktop shell has no popup blocker and refuses
-  // every blank window (see lib/authorization-window), so there the URL is opened once it is
-  // known and the shell hands it to the system browser.
-  const bridge = usesAuthorizationBridge({ desktopMode, sessionVia });
+  // popup blocker eats the navigation. The desktop shell's window has no popup blocker and its
+  // shell refuses every blank window, so there the URL is opened once it is known and the
+  // shell hands it to the system browser. Decided by the renderer, not the session: in attach
+  // mode the shell's window holds an ordinary password session (see lib/desktop-renderer).
+  const bridge = !isElectronRenderer(navigator.userAgent);
   const [phase, setPhase] = useState<Phase>("ready");
   const [flow, setFlow] = useState<PlatformAuthStartResponse | null>(null);
   const [error, setError] = useState<string | null>(null);

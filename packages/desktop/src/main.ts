@@ -62,6 +62,7 @@ import {
 import { getUpdaterStatus, handleUpdaterCommand, initUpdater, onUpdaterStatus } from "./updater.js";
 import { parseUpdaterCommand, updaterStatusMessage } from "./updater-status.js";
 import {
+  APP_WINDOW_OPTIONS,
   classifyWindowOpen,
   desktopLoginUrl,
   hidesOnClose,
@@ -176,14 +177,14 @@ function openWindowFor(target: string, iconPath: string | null): WindowOpenHandl
     case "window":
       return {
         action: "allow",
+        // Electron merges the page's `window.open` feature string under this override, so
+        // every key a page could use to hide the window is pinned here (APP_WINDOW_OPTIONS).
         overrideBrowserWindowOptions: {
-          width: 1100,
-          height: 800,
-          autoHideMenuBar: true,
           ...(iconPath !== null ? { icon: iconPath } : {}),
           // Same hardening as the main window: a preview is Agent-written, untrusted HTML
           // and must never get Node.
           webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+          ...APP_WINDOW_OPTIONS,
         },
       };
     case "external":
@@ -202,8 +203,15 @@ function openWindowFor(target: string, iconPath: string | null): WindowOpenHandl
  * loopback surface": a child lands on the preview host after the redirect, and the main
  * window's stricter app-origin-only rule would bounce the preview itself out. A window stays
  * open when one of its links opens externally.
+ *
+ * The window is also kept where the user can see it. APP_WINDOW_OPTIONS pins what the page's
+ * feature string could hide, but a position is not an option to pin — `left`/`top` arrive as
+ * `x`/`y` — so the window is centered here instead, and the page's own `moveTo`/`resizeTo`,
+ * which Electron would otherwise apply, is refused: off-screen is hidden too.
  */
 function guardOpenedWindow(child: BrowserWindow, iconPath: string | null): void {
+  child.center();
+  child.on("content-bounds-updated", (event) => event.preventDefault());
   child.webContents.setWindowOpenHandler(({ url: target }) => openWindowFor(target, iconPath));
   child.webContents.on("did-create-window", (next) => guardOpenedWindow(next, iconPath));
   child.webContents.on("will-navigate", (event, target) => {
