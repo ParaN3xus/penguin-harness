@@ -98,7 +98,8 @@ export const en: Strings = {
     rebind: "Change shortcut",
     record: "Press the new shortcut…",
     recordHint: "Esc cancels · Backspace clears",
-    needsModifier: "Hold Ctrl, Alt or Shift (⌘ ⌃ ⌥ ⇧ on macOS), or use an F key",
+    needsModifier:
+      "Hold Ctrl or Alt (⌘ or ⌃ on macOS); Shift only together with them. Or use an F key",
     resetRow: "Restore default",
     resetAll: "Reset all",
     resetAllBody: (n: number): string => `Restore ${n} shortcuts to their defaults?`,
@@ -107,7 +108,6 @@ export const en: Strings = {
     conflictShadowed: (other: string, surface: string): string =>
       `In ${surface}, "${other}" takes this shortcut first`,
     browserReserved: "The browser reserves this combination; it works in the desktop app only",
-    desktopShellReserved: "The desktop app uses this combination itself",
     desktopMenuReserved: "Overrides the desktop app's menu shortcut of the same keys",
     saveFailed: "Shortcuts could not be saved to the account",
   },
@@ -181,7 +181,7 @@ export const en: Strings = {
     shortcutsTitle: "Keyboard shortcuts",
     /** The Shortcuts page's "?": what follows the platform, where bindings live, and the browser's own claims. */
     shortcutsInfo:
-      "Shortcuts follow the platform: ⌘ on macOS, Ctrl elsewhere. A change applies at once and in every open tab of this account; bindings are stored per account and per platform, so a Mac and a Windows machine each keep their own. A browser tab cannot receive the chords the browser itself reserves (Ctrl+W / ⌘W, for example); those work in the desktop app and are marked in the list.",
+      "Shortcuts follow the platform: ⌘ on macOS, Ctrl elsewhere. A change applies at once in every tab of this browser; the account's other browsers and the desktop app pick it up the next time they load. Bindings are stored per account and per platform, so a Mac and a Windows machine each keep their own. A browser tab cannot receive the chords the browser itself reserves (Ctrl+W / ⌘W, for example); those work in the desktop app and are marked in the list.",
     accountTitle: "Account",
     /** Trace import: the two pickers' accessible names, the pick-a-file action, and its outcomes. */
     importTrace: "Import Trace",

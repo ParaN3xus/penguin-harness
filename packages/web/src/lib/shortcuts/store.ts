@@ -120,38 +120,32 @@ function writeStored(doc: StoredKeybindings): void {
 /**
  * Installs (or, with null, removes) the writer that carries an edit to the account's prefs. The
  * store stays free of the API client: the runtime that knows the session is signed in installs
- * it, and nothing is sent before then.
+ * it, and nothing is sent before then. Either call is an account boundary — sign-out is
+ * client-side and reloads nothing — so the "edited this session" mark starts over here: an edit
+ * made under the previous account must never be read as pending for the next one.
  */
 export function setKeybindingsPersister(fn: ((doc: StoredKeybindings) => void) | null): void {
   persister = fn;
+  writtenThisSession = false;
 }
-
-export type HydrateOutcome = "applied" | "pushed" | "cleared";
 
 /**
  * Reconciles the mirror with the account's copy once it arrives. The server wins: its document
- * replaces the mirror. An absent server copy means one of two things — this tab edited the
- * bindings before the prefs answered, in which case the mirror is the pending edit and is pushed;
- * or nothing was ever stored for this account, in which case the mirror is cleared, so a browser
- * that signs into another account cannot resurrect the previous account's bindings.
+ * replaces the mirror. An absent server copy means one of two things — this account edited the
+ * bindings in this tab before the prefs answered, in which case the mirror is that edit and
+ * stays (the persister already carried it, so nothing is sent again); or nothing was ever stored
+ * for this account, in which case the mirror is cleared, so a browser that signs into another
+ * account does not resurrect the previous account's bindings.
  */
-export function hydrateFromServer(stored: unknown): HydrateOutcome {
+export function hydrateFromServer(stored: unknown): void {
   if (stored !== undefined && stored !== null) {
     storeMirror(compactDoc(sanitizeStored(stored)));
     invalidate();
-    return "applied";
+    return;
   }
-  if (writtenThisSession) {
-    persister?.(compactDoc(readStored()));
-    return "pushed";
-  }
-  try {
-    storage()?.removeItem(KEYBINDINGS_KEY);
-  } catch {
-    /* best-effort */
-  }
+  if (writtenThisSession) return;
+  storage()?.removeItem(KEYBINDINGS_KEY);
   invalidate();
-  return "cleared";
 }
 
 function invalidate(): void {
