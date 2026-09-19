@@ -3,7 +3,8 @@
  * bottom while streaming — an upward swipe immediately pauses follow, and scrolling back near
  * the bottom resumes it (see stream-follow.ts for the exact rule).
  * StreamRenderContext threads the pending-approval map and approval callback down to tool
- * cards at any nesting depth.
+ * cards at any nesting depth. Text selected in the stream gets the app's own context menu
+ * (Copy / Add to conversation — see stream-selection-menu.tsx).
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
@@ -14,10 +15,13 @@ import type { TaskStats } from "../../lib/omni/task-stats";
 import type { PendingApproval } from "./use-session-stream";
 import { EmptyState } from "../../components/ui/empty-state";
 import { MessageItem } from "./message-item";
+import { WorkspaceLinksProvider } from "./md";
 import { WorkGroup, isWorkItem } from "./work-group";
 import { createStreamFollow, stickToBottom } from "./stream-follow";
 import type { StreamFollow } from "./stream-follow";
 import type { ForkTarget } from "./task-stats-line";
+import { useStreamSelectionMenu } from "./stream-selection-menu";
+import type { ComposerReference } from "../../lib/workspace-tree";
 
 /** Context passed down to nested rendering (pending approvals + approval submit callback + current origin chain). */
 export interface StreamRenderContext {
@@ -50,7 +54,12 @@ export interface StreamRenderContext {
   onRetryNow?: () => void;
   /** "Give up" on the live reconnect countdown: the ordinary session abort (same call as the Stop button). */
   onGiveUp?: () => void;
-  /** Opens the Files panel and navigates to this file (triggered by clicking the file-summary card at the end of a message; takes a Workspace-relative path); the card doesn't render if this isn't wired up. */
+  /**
+   * Opens the Files panel and navigates to this file (a file-summary card's row, or a link in
+   * the stream's Markdown naming a Workspace file; takes a Workspace-relative path). The card
+   * doesn't render and links keep opening a new tab if this isn't wired up. Must be stable:
+   * every rendered link reads it through context (see WorkspaceLinksProvider).
+   */
   onOpenFile?: (path: string) => void;
   /** Opens the subagents panel focused on this child session (subagent chip click); `origin` is the ctx.origin at the chip's render level — the child's ancestor chain, excluding its own id. */
   onOpenSubagent?: (sessionId: string, origin: string[]) => void;
@@ -195,6 +204,7 @@ export function MessageStream({
   scrollElRef,
   outline,
   older,
+  onAddExcerpt,
 }: {
   items: ChatItem[];
   /** View-model version number (a repaint signal for in-place updates that also drives auto-scroll). */
@@ -210,8 +220,15 @@ export function MessageStream({
   outline?: ReactNode;
   /** Scroll-up backfill of older history windows; omitted = the whole transcript is loaded (no top affordance). */
   older?: OlderHistoryControls;
+  /**
+   * Stages text selected in the stream in this conversation's composer, as a chip (the
+   * selection menu's "Add to conversation"). Required: every stream this app renders belongs
+   * to a conversation with a composer.
+   */
+  onAddExcerpt: (reference: ComposerReference) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const selectionMenu = useStreamSelectionMenu(onAddExcerpt);
   // An upward-swipe intent immediately exits auto-follow; scrolling back near the bottom resumes it — see stream-follow.ts (#75) for the exact rule.
   const followRef = useRef<StreamFollow | null>(null);
   const follow = (followRef.current ??= createStreamFollow());
@@ -287,9 +304,27 @@ export function MessageStream({
     syncJump();
   };
 
+  // The selection menu holds the view while it is open: it hangs off a point in the content, and
+  // a snap during a live reply would scroll that point out from under it (the menu then closes,
+  // as it does for any scroll that moves its anchor). Declared before the commit snap below so a
+  // commit that opens the menu applies the hold first. Releasing it catches a view that was
+  // following up with whatever arrived meanwhile; the user's own scrolling during the hold still
+  // decides whether it was following (see stream-follow.ts).
+  const menuOpen = selectionMenu.open;
+  useLayoutEffect(() => {
+    follow.hold(menuOpen);
+    if (menuOpen) return;
+    const el = scrollRef.current;
+    if (el && follow.snaps && !returningRef.current) stickToBottom(el, follow);
+    syncJump();
+    // syncJump is recreated per render; the effect keys on the menu's open state only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuOpen, follow]);
+
   // Layout effect (not useEffect): the stick-to-bottom snap must land before paint, otherwise
   // fast streams show the bottom edge "catching up" by the growth of each commit. Suppressed
-  // during the animated return — the glide owns the scroll position until it arrives.
+  // during the animated return — the glide owns the scroll position until it arrives — and
+  // while the selection menu holds the view (follow.snaps).
   // Every snap goes through stickToBottom, which reports the landed position to the follow
   // model synchronously — the snap's async scroll event otherwise races late content growth
   // and could misinitialize follow as "parked above the bottom" right after entering a
@@ -301,15 +336,16 @@ export function MessageStream({
     // content growth (same pre-paint timing as the stick snap, so nothing flashes).
     // Keyed on the prepend count — ordinary streaming growth at the bottom must not
     // shift the view. lastHeightRef is refreshed every commit, so at the prepend commit
-    // it still holds the pre-prepend height. Skipped while sticking (the snap below
-    // owns the position; a prepend while stuck at the bottom cannot move the tail).
+    // it still holds the pre-prepend height. Skipped while the snap below owns the
+    // position (a prepend while stuck at the bottom cannot move the tail); a held view is
+    // anchored like any other, since nothing snaps it.
     const prepended = older?.prependedCount ?? 0;
-    if (el && prepended > lastPrependedRef.current && !follow.stick && !returningRef.current) {
+    if (el && prepended > lastPrependedRef.current && !follow.snaps && !returningRef.current) {
       el.scrollTop += el.scrollHeight - lastHeightRef.current;
     }
     lastPrependedRef.current = prepended;
     if (el) lastHeightRef.current = el.scrollHeight;
-    if (el && follow.stick && !returningRef.current) stickToBottom(el, follow);
+    if (el && follow.snaps && !returningRef.current) stickToBottom(el, follow);
     syncJump();
     // syncJump is recreated per render; the effect intentionally keys on stream growth only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -327,7 +363,7 @@ export function MessageStream({
     if (!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
       lastHeightRef.current = el.scrollHeight;
-      if (follow.stick && !returningRef.current) stickToBottom(el, follow);
+      if (follow.snaps && !returningRef.current) stickToBottom(el, follow);
       syncJump();
     });
     ro.observe(el);
@@ -386,7 +422,13 @@ export function MessageStream({
         ref={(el) => {
           scrollRef.current = el;
           if (scrollElRef) scrollElRef.current = el;
+          selectionMenu.hostRef(el);
         }}
+        // A selection inside the stream answers a secondary click with the app's own menu;
+        // everything else keeps the browser's (see stream-selection-menu.tsx).
+        onPointerDown={selectionMenu.hostProps.onPointerDown}
+        onContextMenu={selectionMenu.hostProps.onContextMenu}
+        onKeyDown={selectionMenu.hostProps.onKeyDown}
         onScroll={onScroll}
         onWheel={(e) => {
           follow.wheel(e.deltaY);
@@ -436,11 +478,16 @@ export function MessageStream({
           {items.length === 0 ? (
             <EmptyState title={S.chat.emptyStream} />
           ) : (
-            <MessageItems items={items} ctx={ctx} />
+            // Links in replies, reasoning and compaction summaries name files of this Session's
+            // Workspace: they open in its Files panel rather than a new tab (see md.tsx).
+            <WorkspaceLinksProvider workspace={ctx.workspace ?? null} onOpenFile={ctx.onOpenFile}>
+              <MessageItems items={items} ctx={ctx} />
+            </WorkspaceLinksProvider>
           )}
         </div>
       </div>
       {outline}
+      {selectionMenu.panel}
       {/* Back-to-bottom (shows once the user scrolls away from content below the fold): floats
           just above the composer; clicking returns to the bottom and re-enters follow, so the
           view keeps tracking the live stream. */}
