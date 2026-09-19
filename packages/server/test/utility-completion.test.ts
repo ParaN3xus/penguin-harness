@@ -70,7 +70,9 @@ describe("utilityCompletionConfig", () => {
   });
 
   it("never tightens to an uncapped entry's -1", () => {
-    expect(utilityCompletionConfig("m-bench", { max_tokens: -1 }).maxTokens).toBe(300);
+    expect(utilityCompletionConfig("m-bench", { api_key: "sk-1", max_tokens: -1 }).maxTokens).toBe(
+      300,
+    );
   });
 });
 

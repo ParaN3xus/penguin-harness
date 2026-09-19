@@ -383,7 +383,8 @@ describe("models preset & catalog enrichment", () => {
     expect(orphan.pricing).toEqual({ cacheRead: 0, cacheWrite: 0, output: 0 });
     expect(orphan.vision).toBe(false);
     expect(orphan.clientType).toBe("openai-chat");
-    expect(orphan.envKey).toBe("OPENAI_API_KEY");
+    // It still carries the gateway's endpoint, so it gets no environment fallback.
+    expect(orphan.envKey).toBeUndefined();
     // The credential survives, masked; the base URL is still inlined on the entry.
     expect(orphan.credential?.baseUrl).toBe("https://openrouter.ai/api/v1");
     expect(orphan.credential?.apiKeyMasked).toBeTruthy();
@@ -464,8 +465,10 @@ describe("models preset & catalog enrichment", () => {
     expect(pick(body, "moonshot", "kimi-k2.6").credential?.apiKeyMasked).toBe("sk-o…1111");
     expect(pick(body, "moonshot", "kimi-k2.6").envKey).toBe("MOONSHOT_API_KEY");
     expect(pick(body, "siliconflow", "kimi-k2.6").credential?.apiKeyMasked).toBe("sk-g…2222");
-    // A gateway row: no environment fallback, so none is reported.
-    expect(pick(body, "siliconflow", "kimi-k2.6").envKey).toBeUndefined();
+    // Saved without the gateway's base URL, this row's client talks to api.openai.com — so
+    // the OpenAI variable honestly is its fallback (the preset, which carries the gateway
+    // endpoint, gets none; see the env-fallback test above).
+    expect(pick(body, "siliconflow", "kimi-k2.6").envKey).toBe("OPENAI_API_KEY");
 
     // Round-trips through disk unchanged.
     const again = (await (await api.get(url())).json()) as ModelsResponse;
