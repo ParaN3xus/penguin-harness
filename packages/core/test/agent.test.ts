@@ -1180,13 +1180,15 @@ describe("Agent.createSession credential rule (a keyless gateway row never borro
     await expect(
       agent.createSession({ workspaceDir: ws, provider: preset.provider, modelId: preset.modelId }),
     ).rejects.toThrow(/has no API key/);
-    // No Session, so nothing to dispose; the same row with its own key is a normal Session.
+    // No Session, so nothing to dispose; the same row with its own key is a normal Session
+    // (an Agent reads the Project config when it is created, so a fresh one sees the key).
     await addModel(tmpRoot, DEFAULT_PROJECT_ID, {
       provider: preset.provider,
       model_id: preset.modelId,
       api_key: "sk-gateway-own-key",
     });
-    const session = await agent.createSession({
+    const keyed = await createAgent();
+    const session = await keyed.createSession({
       workspaceDir: ws,
       provider: preset.provider,
       modelId: preset.modelId,
