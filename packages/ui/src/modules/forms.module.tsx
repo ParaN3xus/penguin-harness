@@ -153,8 +153,10 @@ function DialogForm({ f, errors = false }: { f: Fixtures; errors?: boolean }) {
                 </Notice>
               </div>
             )}
-            <Button variant="secondary">{form.cancel}</Button>
-            <Button variant="primary" state={errors ? "disabled" : "rest"}>
+            <Button variant="secondary" size="sm">
+              {form.cancel}
+            </Button>
+            <Button variant="primary" size="sm" state={errors ? "disabled" : "rest"}>
               {form.submit}
             </Button>
           </>

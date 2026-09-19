@@ -77,18 +77,25 @@ function Stage({
   );
 }
 
+/**
+ * W3's `InfoPopover`, open: the circled "?" that sits after the title it explains, and the panel it
+ * discloses. The app portals the panel; here it hangs below the row that holds the title (the
+ * nearest positioned box).
+ */
 function InfoPopover({ f }: { f: Fixtures }) {
   const s = f.copy.settings;
   return (
-    <FloatingPanel className="w-72">
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-1 px-2 py-1.5 text-sm">
-        <p className="font-(--ui-weight-medium) text-fg">{s.toolAliases}</p>
-        <p className="text-fg-muted">{s.toolAliasesInfo}</p>
-        <p className="pt-1">
-          <Link external>{f.copy.common.learnMore}</Link>
-        </p>
-      </div>
-    </FloatingPanel>
+    <>
+      <GlyphIcon name="help" size={14} />
+      <FloatingPanel className="absolute right-0 top-[calc(100%+0.375rem)] w-72">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-1 px-2 py-1.5 text-sm font-(--ui-weight-body)">
+          <p className="text-fg-muted">{s.toolAliasesInfo}</p>
+          <p className="pt-1">
+            <Link external>{f.copy.common.learnMore}</Link>
+          </p>
+        </div>
+      </FloatingPanel>
+    </>
   );
 }
 
@@ -135,7 +142,14 @@ function Menus({ f }: { f: Fixtures }) {
             ),
           )}
         </FloatingPanel>
-        <InfoPopover f={f} />
+        {/* Where this "?" lives in the app: the Appearance row it explains. */}
+        <div className="relative flex w-full items-center justify-between gap-4 rounded-md border border-line bg-surface px-3 py-2.5">
+          <div className="flex items-center gap-1 text-sm font-(--ui-weight-medium) text-fg">
+            {f.copy.settings.toolAliases}
+            <InfoPopover f={f} />
+          </div>
+          <Switch on={false} />
+        </div>
       </div>
     </Stage>
   );
@@ -206,8 +220,12 @@ function Dialogs({ f }: { f: Fixtures }) {
           description={c.body}
           footer={
             <>
-              <Button variant="secondary">{c.keep}</Button>
-              <Button variant="danger">{c.confirm}</Button>
+              <Button variant="secondary" size="sm">
+                {c.keep}
+              </Button>
+              <Button variant="danger" size="sm">
+                {c.confirm}
+              </Button>
             </>
           }
         />

@@ -59,8 +59,12 @@ function Footer({ f }: { f: Fixtures }) {
         description={a.deleteBody}
         footer={
           <>
-            <Button variant="secondary">{f.copy.common.cancel}</Button>
-            <Button variant="danger">{a.delete}</Button>
+            <Button variant="secondary" size="sm">
+              {f.copy.common.cancel}
+            </Button>
+            <Button variant="danger" size="sm">
+              {a.delete}
+            </Button>
           </>
         }
       />

@@ -61,28 +61,42 @@ function StatChip({ icon, value, label }: { icon: IconName; value: string; label
   );
 }
 
+/**
+ * A ring gauge draws its own geometry: it is not the line-icon family, so neither the family's
+ * weights nor `--ui-icon-stroke` apply. Like the app's TokenDonut and FinanceGauge, its stroke
+ * follows its size (W8's `Ring` replaces them all).
+ */
 function Ring({ share, label }: { share: number; label: string }) {
+  const size = 52;
+  const stroke = Math.round(size * 0.1);
   const r = 20;
   const c = 2 * Math.PI * r;
   return (
     <svg
-      width="52"
-      height="52"
-      viewBox="0 0 52 52"
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
       role="img"
       aria-label={label}
       className="shrink-0"
     >
-      <circle cx="26" cy="26" r={r} fill="none" stroke="var(--ui-chart-grid)" strokeWidth="5" />
       <circle
-        cx="26"
-        cy="26"
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="var(--ui-chart-grid)"
+        strokeWidth={stroke}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
         r={r}
         fill="none"
         stroke="var(--ui-chart-1)"
-        strokeWidth="5"
+        strokeWidth={stroke}
         strokeDasharray={`${Math.max(share * c, 2)} ${c}`}
-        transform="rotate(-90 26 26)"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
       />
     </svg>
   );
