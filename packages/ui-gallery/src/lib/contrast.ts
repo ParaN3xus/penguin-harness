@@ -10,7 +10,9 @@ export function contrastTargets(name: string): string[] {
       ? ["--ui-canvas", "--ui-surface", `--ui-tone-${tone[1]}-bg`]
       : [`--ui-tone-${tone[1]}-emphasis`];
   }
-  if (name === "--ui-accent-fg" || name === "--ui-fg-on-emphasis") return ["--ui-accent"];
+  if (name === "--ui-accent-fg") return ["--ui-accent"];
+  // The fill tokens.ts pairs it with.
+  if (name === "--ui-fg-on-emphasis") return ["--ui-tone-neutral-emphasis"];
   if (name.startsWith("--ui-fg")) return ["--ui-canvas", "--ui-surface", "--ui-inset"];
   if (/^--ui-chart-(\d|cache-|output)/.test(name)) return ["--ui-canvas", "--ui-surface"];
   return [];
