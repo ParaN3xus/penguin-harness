@@ -79,15 +79,12 @@ FACES: dict[int, tuple[str, str]] = {
     ),
 }
 
-# Left out of the `extra` slice: ideographs the partition does not carry, and private-use code
-# points (a vendor's logos live there, and they are not text).
+# Left out of the `extra` slice: the ideographs the partition does not carry.
 EXCLUDED_FROM_EXTRA = (
     (0x3400, 0x4DBF),  # CJK Unified Ideographs Extension A
     (0x4E00, 0x9FFF),  # CJK Unified Ideographs
-    (0xE000, 0xF8FF),  # Private Use Area
     (0xF900, 0xFAFF),  # CJK Compatibility Ideographs
     (0x20000, 0x3FFFF),  # Supplementary and Tertiary Ideographic Planes
-    (0xF0000, 0x10FFFF),  # Supplementary Private Use Areas
 )
 
 EXTRA_SLICE = "extra"
@@ -151,7 +148,10 @@ def load_partition() -> tuple[list[tuple[str, set[int]]], str]:
     # co-occur with its characters, and the script slices (latin, latin-ext, ...) come last. A
     # browser tries overlapping faces last-declared first, so under the Noto CSS a code point is
     # fetched from the last slice that lists it. Assigning each code point to that slice alone
-    # gives disjoint slices that load the same way, with no glyph shipped twice.
+    # gives slices that load the same way and share almost nothing. The exception: the subsetter
+    # adds a requested character's Bidi mirror to the cut, so the pairs ≤ ≥, 〈 〉 and ＜ ＞ are
+    # held, and declared, by two slices each. That is harmless: a browser takes the last-declared
+    # face, as it does under Noto.
     taken: set[int] = set()
     slices: list[tuple[str, set[int]]] = []
     for key, value in reversed(list(raw.items())):
@@ -183,8 +183,9 @@ def read_faces(package: Path) -> dict[int, bytes]:
 _FACE_DATA: dict[int, bytes] = {}
 
 
-def _init_worker(package: str) -> None:
-    _FACE_DATA.update(read_faces(Path(package)))
+def _init_worker(faces: dict[int, bytes]) -> None:
+    """Hands each worker the TTFs `build()` already read and verified."""
+    _FACE_DATA.update(faces)
 
 
 def _cut(job: tuple[int, str, list[int]]) -> tuple[int, str, bytes, list[int]]:
@@ -260,7 +261,7 @@ def compare_with_source(source_data: bytes, cut_data: bytes) -> tuple[list[str],
 
 def font_version(data: bytes) -> str:
     font = subset.load_font(io.BytesIO(data), subset_options())
-    version = font["name"].getDebugName(5) or "unknown version"
+    version = font["name"].getDebugName(5)
     font.close()
     return version.removeprefix("Version ")
 
@@ -287,7 +288,7 @@ def build(package: Path, target: Path, jobs: int) -> None:
     work = [(weight, name, points) for weight in FACES for name, points in slices]
     results: dict[tuple[int, str], tuple[bytes, list[int]]] = {}
     with concurrent.futures.ProcessPoolExecutor(
-        max_workers=jobs, initializer=_init_worker, initargs=(str(package),)
+        max_workers=jobs, initializer=_init_worker, initargs=(faces,)
     ) as pool:
         for weight, name, data, held in pool.map(_cut, work, chunksize=1):
             results[(weight, name)] = (data, held)
