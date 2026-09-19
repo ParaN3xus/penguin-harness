@@ -1031,7 +1031,7 @@ export function Switch({ on, disabled = false }: { on: boolean; disabled?: boole
       }`}
     >
       <span
-        className={`absolute size-4 rounded-full border border-line bg-fg-on-emphasis ${on ? "left-4.5" : "left-0.5"}`}
+        className={`absolute size-4 rounded-full border border-line bg-tone-neutral-emphasis-fg ${on ? "left-4.5" : "left-0.5"}`}
       />
     </span>
   );

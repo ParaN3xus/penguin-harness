@@ -615,7 +615,7 @@
   border-radius: 999px;
   /* Light in both modes, with a hairline so it reads on a near-white accent (Primer dark). */
   border: 1px solid var(--ui-line);
-  background: var(--ui-fg-on-emphasis);
+  background: var(--ui-tone-neutral-emphasis-fg);
 }
 .gf-switch[data-on] {
   background: var(--ui-accent);

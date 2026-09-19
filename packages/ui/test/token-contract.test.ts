@@ -115,12 +115,19 @@ describe("theme files", () => {
 
 describe("the de-slop revision of the contract (K-redesign §2.5)", () => {
   it("adds the control radius and the outer rhythm steps, and drops the glass highlight", () => {
-    // 187 names in W0, less the inset glow line glass drew, plus three: 189.
+    // 186 names in W0, less the inset glow line glass drew, plus three: 188.
     for (const name of ["--ui-radius-control", "--ui-stack-0", "--ui-stack-4"]) {
       expect(TOKEN_NAMES).toContain(name);
     }
     expect(TOKEN_NAMES.includes("--ui-glass-highlight" as never)).toBe(false);
-    expect(TOKEN_NAMES.length).toBe(189);
+    expect(TOKEN_NAMES.length).toBe(188);
+  });
+
+  it("has no second name for the neutral fill's label", () => {
+    // `--ui-fg-on-emphasis` said what `--ui-tone-neutral-emphasis-fg` says (user decision,
+    // 2026-09-18); a component labelling the neutral emphasis fill reads the tone token.
+    expect(TOKEN_NAMES.includes("--ui-fg-on-emphasis" as never)).toBe(false);
+    expect(TOKEN_NAMES).toContain("--ui-tone-neutral-emphasis-fg");
   });
 
   it("bridges the control radius, so a pressable control reads it as rounded-control", () => {
@@ -129,6 +136,32 @@ describe("the de-slop revision of the contract (K-redesign §2.5)", () => {
     const sheet = stripCssComments(readFileSync(join(SRC_DIR, "theme.css"), "utf8"));
     expect(sheet).toMatch(/@theme inline\s*\{[^}]*--radius-control:\s*var\(--ui-radius-control\);/);
   });
+});
+
+describe("theme import order", () => {
+  // In dark, a theme takes every token its dark rule leaves out from its own base rule. That base
+  // rule ties with github.css's dark rule (`:root.dark`) on specificity and wins only by coming
+  // later in the sheet, so an entry stylesheet must import github.css before the other themes:
+  // the other way round, Frost and Console in dark would take Primer's dark values for those
+  // tokens.
+  const GALLERY = join(REPO_ROOT, "packages", "ui-gallery");
+  const entries: Record<string, string> = {
+    web: join(WEB_DIR, "src", "styles.css"),
+    ...(existsSync(GALLERY) ? { gallery: join(GALLERY, "src", "styles.css") } : {}),
+  };
+  const IMPORT = /@import\s+["']@prismshadow\/penguin-ui\/themes\/([\w-]+)\.css["']/g;
+
+  for (const [name, file] of Object.entries(entries)) {
+    it(`${name}: imports every theme once, the default (${DEFAULT_THEME_ID}.css) first`, () => {
+      const themes = [...stripCssComments(readFileSync(file, "utf8")).matchAll(IMPORT)].map(
+        (m) => m[1],
+      );
+      expect(themes[0], `${file} imports its themes as ${themes.join(", ")}`).toBe(
+        DEFAULT_THEME_ID,
+      );
+      expect([...themes].sort()).toEqual([...THEME_IDS].sort());
+    });
+  }
 });
 
 describe("token reads", () => {

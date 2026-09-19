@@ -51,7 +51,7 @@ function Switch({ on }: { on: boolean }) {
       }`}
     >
       <span
-        className={`inline-block size-4 rounded-full border border-line bg-fg-on-emphasis shadow-sm ${
+        className={`inline-block size-4 rounded-full border border-line bg-tone-neutral-emphasis-fg shadow-sm ${
           on ? "translate-x-[1.125rem]" : "translate-x-0.5"
         }`}
       />

@@ -18,9 +18,11 @@
  *   and `--ui-radius-control` are 0). State dots and the switch knob stay round and the switch
  *   track stays a pill: those components use Tailwind's literal `rounded-full`, which no token
  *   re-points.
- * - The type scale, line-heights and control padding-block are the shared values, so switching
- *   themes never reflows a layout vertically; this theme changes radius, colour, font, shadow,
- *   tracking, weight, transform and padding-inline only.
+ * - The type scale, line-heights (Primer adopts both in W1a) and the padding-block of controls,
+ *   rows and menu rows are the shared values, so switching themes never reflows a layout
+ *   vertically; this theme changes radius, colour, font, shadow, tracking, weight, transform,
+ *   padding-inline and the panel padding only. (Its condensed h1 and the frame head, recipes
+ *   below, set their own line-height and height.)
  *
  * Shape of the file (the same in every theme): one `@layer ui-theme` block holding the base rule,
  * which defines every name in tokens.ts in its group order with its light value, after the gray
@@ -58,7 +60,6 @@
     --ui-fg: #110b0a;
     --ui-fg-muted: #565150;
     --ui-fg-subtle: #8a8483;
-    --ui-fg-on-emphasis: #ffffff;
     --ui-fg-link: #110b0a;
     --ui-fg-link-hover: #e32a01;
 
@@ -234,9 +235,9 @@
     --ui-control-px-lg: 1rem;
     --ui-control-gap-sm: 0.375rem;
     --ui-control-gap-md: 0.5rem;
-    --ui-row-py: 0.5rem;
+    --ui-row-py: 0.375rem;
     --ui-row-px: 0.75rem;
-    --ui-menu-row-py: 0.375rem;
+    --ui-menu-row-py: 0.5rem;
     --ui-menu-row-px: 0.5rem;
     --ui-card-p: 1rem;
     --ui-panel-p: 1.25rem;
