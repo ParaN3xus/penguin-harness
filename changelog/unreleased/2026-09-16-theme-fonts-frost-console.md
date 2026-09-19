@@ -16,17 +16,21 @@ looks as before, apart from a font credit at the foot of the account menu.
 
 - Six fontsource packages, all SIL Open Font License 1.1: Mona Sans and JetBrains Mono (declared
   for the later Primer polish; Frost already sets code in JetBrains Mono), IBM Plex Sans, IBM Plex
-  Sans Condensed (600 only) and Commit Mono for Console, and Noto Sans SC for Chinese under Primer
-  and Console.
+  Sans Condensed (600 only) and Commit Mono for Console, and Noto Sans SC for Console's Chinese (and
+  Primer's from W1a).
 - Frost sets Latin and Chinese alike in MiSans by Xiaomi, at weights 400 and 500. MiSans has no
   official npm package, so `scripts/build-misans.py` cuts MiSans Regular and Medium from Xiaomi's
   official package into 99 `unicode-range` WOFF2 slices per weight under `fonts/misans/`, following
   Noto Sans SC's slice partition, and reads every slice back to confirm that its glyphs, features and
   name records are the original's. The rare ideographs outside that partition are not shipped.
   Frost turns weight synthesis off, so a bold request renders in Medium.
-- A page downloads only the faces its theme names and the slices its text touches: on a specimen
-  page, Frost fetched 93 KB of fonts for English and 627 KB for Chinese. A build carries 9.1 MB of
-  fonts: 4.26 MB of MiSans, 4.52 MB of Noto Sans SC and 0.32 MB of Latin faces.
+- A page downloads only the font files its theme names and the slices its text touches: on a
+  specimen page, Frost fetched 93 KB of fonts for English and 627 KB for Chinese, and Primer, which
+  names no bundled family yet, fetches none. The `@font-face` declarations are different: every
+  theme's rules sit in the app's main stylesheet, so every user downloads them, about 94 KB of its
+  122 KB gzipped, an accepted cost rather than loading each theme's font sheet on demand. The build
+  never inlines a font into that stylesheet. A build carries 9.1 MB of fonts: 4.26 MB of MiSans,
+  4.52 MB of Noto Sans SC and 0.32 MB of Latin faces.
 - `scripts/sync-font-licenses.mjs` mirrors each fontsource licence into `fonts/LICENSES/`. The MiSans
   Font Intellectual Property License Agreement is transcribed there from Xiaomi's PDF and listed in
   `fonts/vendored-fonts.json`. The `penguinUi()` Vite plugin emits every licence text into each build
@@ -43,8 +47,9 @@ looks as before, apart from a font credit at the foot of the account menu.
   at the app's current values.
 - `hooks.ts` lists the six style hooks, `ui-glass`, `ui-eyebrow`, `ui-display`, `ui-live`, `ui-frame`
   and `ui-underline-nav`, with the markup each recipe relies on.
-- `theme.css` limits what a button, link or tab transitions to colour, background and border
-  colour, opacity and box-shadow.
+- `theme.css` gives buttons, links and tabs a default transition-property list (colour,
+  background and border colour, opacity and box-shadow), which any `transition-*` utility
+  replaces; nothing animates until a component sets a duration.
 
 ## Themes
 

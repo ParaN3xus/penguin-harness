@@ -170,9 +170,13 @@ describe("the account menu", () => {
     // is the menu body's last child, opened right after sign-out's gate closes.
     const credit = source.indexOf("{S.settings.fontCredit}");
     expect(credit).toBeGreaterThan(-1);
-    const lastGateEnd = source.lastIndexOf(")}\n", credit);
-    expect(source.slice(lastGateEnd, credit).match(/<\w/g)).toEqual(["<p"]);
-    const menuEnd = source.indexOf("</Dropdown>", credit);
-    expect(source.slice(credit, menuEnd).match(/<\/?\w/g)).toEqual(["</p", "</d"]);
+    const open = source.lastIndexOf("<p", credit);
+    const lastGateEnd = source.lastIndexOf(")}\n", open);
+    // Between that gate and the credit's `<p` only whitespace and its `{/* … */}` comment, so an
+    // inline gate (`{user && <p …`, `{desktopMode ? null : <p …`) fails here…
+    expect(source.slice(lastGateEnd + 2, open)).toMatch(/^\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?$/);
+    // …and after the credit only its `</p>`, whitespace and the menu body's `</div>`, so a gate
+    // closed inline (`</p>}`) fails here.
+    expect(source.slice(credit)).toMatch(/^\{S\.settings\.fontCredit\}\s*<\/p>\s*<\/div>/);
   });
 });
