@@ -61,5 +61,7 @@ looks as before, apart from a font credit at the foot of the account menu.
   signals, mono only for code and data, and depth drawn with lines; the modal card carries a
   line-emphasis border instead of a shadow.
 - Both themes share one type scale, with heading steps of 1.25 and nothing below .75rem, and state
-  transitions of 120–200 ms. Their controls' padding-block is Primer's (0.25, 0.375 and 0.625rem). Both carry the `done` and `info` tones, and every tone reads at 4.5:1 as
-  text on its own tint and at 3:1 as a mark on every surface.
+  transitions of 120–200 ms. The padding-block of their controls (0.25, 0.375 and 0.625rem), rows
+  (0.375rem) and menu rows (0.5rem) is Primer's, so a theme switch shifts no such height. Both carry
+  the `done` and `info` tones, and every tone reads at 4.5:1 as text on its own tint and at 3:1 as a
+  mark on every surface.

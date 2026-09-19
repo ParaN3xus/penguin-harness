@@ -13,9 +13,10 @@
  *   tint and 3:1 as a mark on every surface (proposal). Chart and code colours are proposals.
  * - Fonts: MiSans (Xiaomi) in place of Sierra's commercial GT America, Latin and Chinese in one
  *   family at weights 400 and 500, with JetBrains Mono for code (`fonts/modern.css`).
- * - The type scale, line-heights and control padding-block are the shared values, so switching
- *   themes never reflows a layout vertically; this theme changes radius, colour, font, shadow,
- *   tracking, weight and padding-inline only.
+ * - The type scale, line-heights (Primer adopts both in W1a) and the padding-block of controls,
+ *   rows and menu rows are the shared values, so switching themes never reflows a layout
+ *   vertically; this theme changes radius, colour, font, shadow, tracking, weight, padding-inline
+ *   and the panel padding only.
  *
  * Shape of the file (the same in every theme): one `@layer ui-theme` block holding the base rule,
  * which defines every name in tokens.ts in its group order with its light value, after the gray
@@ -216,8 +217,9 @@
     --ui-tracking-mono: 0;
     --ui-tracking-label: 0;
 
-    /* Density. padding-block, row and card paddings and stack gaps are shared; Frost's pills
-       take wider padding-inline. */
+    /* Density. The padding-block of controls, rows and menu rows is Primer's, so switching themes
+       never shifts their height; the card padding and stack gaps are shared too. Frost's pills
+       take wider padding-inline, its rows and menus their own, and its panels a roomier padding. */
     --ui-control-py-sm: 0.25rem;
     --ui-control-py-md: 0.375rem;
     --ui-control-py-lg: 0.625rem;
@@ -226,9 +228,9 @@
     --ui-control-px-lg: 1.125rem;
     --ui-control-gap-sm: 0.375rem;
     --ui-control-gap-md: 0.5rem;
-    --ui-row-py: 0.5rem;
+    --ui-row-py: 0.375rem;
     --ui-row-px: 1rem;
-    --ui-menu-row-py: 0.375rem;
+    --ui-menu-row-py: 0.5rem;
     --ui-menu-row-px: 0.625rem;
     --ui-card-p: 1rem;
     --ui-panel-p: 1.25rem;
