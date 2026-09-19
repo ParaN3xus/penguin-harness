@@ -37,7 +37,7 @@ looks as before, apart from a font credit at the foot of the account menu.
 
 ## Tokens and hooks
 
-- The token contract holds 189 names: `--ui-radius-control` (the pressable control's shape, bridged
+- The token contract holds 188 names: `--ui-radius-control` (the pressable control's shape, bridged
   as `rounded-control`; Primer 0.375rem, Frost a pill, Console 0), `--ui-stack-0` and `--ui-stack-4`
   were added, and `--ui-glass-highlight` was removed. `themes/github.css` declares the three new names
   at the app's current values.
@@ -61,5 +61,7 @@ looks as before, apart from a font credit at the foot of the account menu.
   signals, mono only for code and data, and depth drawn with lines; the modal card carries a
   line-emphasis border instead of a shadow.
 - Both themes share one type scale, with heading steps of 1.25 and nothing below .75rem, and state
-  transitions of 120–200 ms. Their controls' padding-block is Primer's (0.25, 0.375 and 0.625rem). Both carry the `done` and `info` tones, and every tone reads at 4.5:1 as
-  text on its own tint and at 3:1 as a mark on every surface.
+  transitions of 120–200 ms. The padding-block of their controls (0.25, 0.375 and 0.625rem), rows
+  (0.375rem) and menu rows (0.5rem) is Primer's, so a theme switch shifts no such height. Both carry
+  the `done` and `info` tones, and every tone reads at 4.5:1 as text on its own tint and at 3:1 as a
+  mark on every surface.

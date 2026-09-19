@@ -53,7 +53,6 @@
     --ui-fg: var(--color-gray-900);
     --ui-fg-muted: var(--color-gray-500);
     --ui-fg-subtle: var(--color-gray-400);
-    --ui-fg-on-emphasis: #ffffff;
     --ui-fg-link: #0b57d0; /* brand-700 */
     --ui-fg-link-hover: #1a73e8; /* brand-600 */
 
@@ -219,7 +218,8 @@
     --ui-tracking-mono: normal;
     --ui-tracking-label: normal;
 
-    /* ---- Density (shared by every theme except padding-inline) ----
+    /* ---- Density (padding-block shared by every theme; a theme may change padding-inline, the
+       control gaps and the panel padding) ----
        Control rungs, content height = 2 × padding-block + the rung's line-height (sm: small,
        md and lg: body), plus a 1px border on each side:
          sm 0.25rem × 2 + 1rem    = 1.5rem  (Button sm, Input sm)
