@@ -2,23 +2,28 @@
  * The channel composer's draft (features/company/mention-draft.ts): a picked mention shows the
  * name a sent message renders and still goes out as the token the server resolves. It is one
  * block — an edit that reaches into it takes all of it, the caret and the selection step over
- * it, an input method's edit waits for compositionend, and an undo brings it back whole — and
- * the message sent separates it from any text that would otherwise swallow its token.
+ * it, an input method's edit waits for compositionend, an undo brings it back whole, and a copy,
+ * a cut or a drag carries it through the clipboard — and the message sent separates it from any
+ * text that would otherwise swallow its token.
  */
 import { describe, expect, it } from "vitest";
 import { mentionRuns } from "../src/features/company/channel-mentions";
 import {
   EMPTY_DRAFT,
+  draftApplyClip,
   draftApplyEdit,
   draftFollowEdit,
   draftInsertMention,
   draftRecall,
   draftRemember,
   draftSegments,
+  draftSlice,
   draftSnapSelection,
   draftWireText,
   mentionCovers,
   mentionDeletedByKey,
+  parseClip,
+  serializeClip,
 } from "../src/features/company/mention-draft";
 import type { DraftHistory, MentionDraft } from "../src/features/company/mention-draft";
 
@@ -304,6 +309,141 @@ describe("undo and redo", () => {
     for (let i = 0; i < 60; i += 1) history = draftRemember(history, typeAtEnd(ada, `${i}`));
     expect(history).toHaveLength(50);
     expect(draftRecall(history, ada.text)).toBeNull();
+  });
+});
+
+describe("the clipboard", () => {
+  const names: Record<string, string> = { ceo: "Ada Lovelace", zhangsan: "张三" };
+  /** The composer's labelOf: an employee's name, a member's id, the token itself for an unknown id. */
+  const labelOf = (wire: string) => names[wire] ?? wire.replace(/^user:/, "");
+
+  it("a copy carries the mentions wholly inside the selection, offsets relative to it", () => {
+    const d = typeAtEnd(pick(typeAtEnd(EMPTY_DRAFT, "cc "), "A", "Ada Lovelace", "ceo"), "go");
+    expect(d.text).toBe("cc @Ada Lovelace go");
+    expect(draftSlice(d, 3, 19)).toEqual({
+      text: "@Ada Lovelace go",
+      mentions: [{ start: 0, label: "Ada Lovelace", wire: "ceo" }],
+    });
+    expect(draftSlice(d, 0, 3)).toEqual({ text: "cc ", mentions: [] });
+    // A stretch cutting into a mention carries none of it; the selection snaps, so a copy never does.
+    expect(draftSlice(d, 5, 19).mentions).toEqual([]);
+  });
+
+  it("serializes a clip and parses it back, CJK names and members included", () => {
+    let d = pick(EMPTY_DRAFT, "张", "张三", "zhangsan");
+    d = typeAtEnd(d, "和");
+    d = pick(d, "Ada", "Ada Lovelace", "ceo");
+    d = pick(d, "al", "alice", "user:alice");
+    const clip = draftSlice(d, 0, d.text.length);
+    expect(clip.mentions).toHaveLength(3);
+    expect(parseClip(serializeClip(clip), clip.text, labelOf)).toEqual(clip);
+  });
+
+  it("reads a payload only beside its own text, whatever line endings the clipboard gave it", () => {
+    const clip = draftSlice(base(), 0, 20);
+    expect(parseClip(serializeClip(clip), "@Ada Lovelace pleas", labelOf)).toBeNull();
+    const lines = { text: "@Ada Lovelace\nplease", mentions: clip.mentions };
+    expect(parseClip(serializeClip(lines), "@Ada Lovelace\r\nplease", labelOf)).toEqual(lines);
+  });
+
+  it("reads a payload that does not parse, or whose mentions do not read @<label> in order, as no clip", () => {
+    const text = "hi @Ada Lovelace";
+    const ok = { start: 3, label: "Ada Lovelace", wire: "ceo" };
+    const payload = (mentions: unknown) => JSON.stringify({ text, mentions });
+    expect(parseClip(payload([ok]), text, labelOf)).toEqual({ text, mentions: [ok] });
+    const bad = [
+      "",
+      "{",
+      "null",
+      "[]",
+      JSON.stringify({ text }),
+      JSON.stringify({ text: 1, mentions: [ok] }),
+      payload("x"),
+      payload([null]),
+      payload([{ ...ok, start: "3" }]),
+      payload([{ ...ok, start: 3.5 }]),
+      payload([{ ...ok, start: -1 }]),
+      payload([{ ...ok, start: 2 }]), // not where its @ is
+      payload([{ ...ok, start: 30 }]), // past the end
+      payload([{ ...ok, label: 7 }]),
+      payload([{ ...ok, wire: null }]),
+      payload([ok, ok]), // overlapping
+    ];
+    for (const p of bad) expect(parseClip(p, text, labelOf), p).toBeNull();
+  });
+
+  it("brings back only a mention whose label is still what its token shows here", () => {
+    const text = "@Ada Lovelace @张三 @Grace";
+    const mentions = [
+      { start: 0, label: "Ada Lovelace", wire: "ceo" },
+      // A name that would send someone else's token.
+      { start: 14, label: "张三", wire: "ceo" },
+      // Another organization's employee: this one does not know the id.
+      { start: 18, label: "Grace", wire: "lab_grace" },
+    ];
+    expect(parseClip(JSON.stringify({ text, mentions }), text, labelOf)).toEqual({
+      text,
+      mentions: [mentions[0]],
+    });
+    const none = JSON.stringify({ text, mentions: mentions.slice(1) });
+    expect(parseClip(none, text, labelOf)).toBeNull();
+  });
+
+  it("a cut pasted elsewhere is a mention again, and is sent by id", () => {
+    const d = base();
+    const clip = draftSlice(d, 0, 14);
+    const cut = typeAtEnd(deleteSpan(d, 0, 14).draft, " ");
+    expect(cut).toEqual({ text: "please ", mentions: [] });
+    // The box inserts the text and leaves the caret after it.
+    const pasted = draftApplyClip(cut, "please @Ada Lovelace ", 21, clip);
+    expect(pasted).toEqual({
+      draft: {
+        text: "please @Ada Lovelace ",
+        mentions: [{ start: 7, label: "Ada Lovelace", wire: "ceo" }],
+      },
+      caret: 21,
+    });
+    expect(draftWireText(pasted!.draft)).toBe("please @ceo ");
+    // Pasted again right after itself: two mentions.
+    const twice = draftApplyClip(pasted!.draft, `${pasted!.draft.text}${clip.text}`, 35, clip);
+    expect(draftWireText(twice!.draft)).toBe("please @ceo @ceo ");
+  });
+
+  it("a paste over a selection replaces it", () => {
+    const d = typeAtEnd(EMPTY_DRAFT, "hello world");
+    const clip = draftSlice(base(), 0, 13);
+    const pasted = draftApplyClip(d, "hello @Ada Lovelace", 19, clip);
+    expect(pasted?.draft.mentions).toEqual([{ start: 6, label: "Ada Lovelace", wire: "ceo" }]);
+    expect(pasted?.caret).toBe(19);
+  });
+
+  it("a drag within the box moves the mention: deleted where it was, a mention where it lands", () => {
+    const d = base();
+    const clip = draftSlice(d, 0, 13);
+    // The box deletes the dragged text (deleteByDrag) …
+    const deleted = draftApplyEdit(d, " please", 0).draft;
+    expect(deleted).toEqual({ text: " please", mentions: [] });
+    // … then inserts it where it lands, left selected (insertFromDrop).
+    const dropped = draftApplyClip(deleted, " please@Ada Lovelace", 20, clip);
+    expect(dropped?.draft.mentions).toEqual([{ start: 7, label: "Ada Lovelace", wire: "ceo" }]);
+    expect(draftWireText(dropped!.draft)).toBe(" please @ceo");
+  });
+
+  it("a clip landing inside a mention replaces the whole of it", () => {
+    const clip = draftSlice(pick(EMPTY_DRAFT, "张", "张三", "zhangsan"), 0, 3);
+    const dropped = draftApplyClip(base(), "@Ada@张三 Lovelace please", 7, clip);
+    expect(dropped).toEqual({
+      draft: { text: "@张三 please", mentions: [{ start: 0, label: "张三", wire: "zhangsan" }] },
+      caret: 3,
+    });
+  });
+
+  it("is null when the box inserted something other than the clip in front of the caret", () => {
+    const clip = draftSlice(base(), 0, 13);
+    const d = typeAtEnd(EMPTY_DRAFT, "hi ");
+    expect(draftApplyClip(d, "hi @Ada Lovelac", 15, clip)).toBeNull();
+    expect(draftApplyClip(d, "hi  @Ada Lovelace ", 18, clip)).toBeNull();
+    expect(draftApplyClip(d, "hi @Ada Lovelace", 3, clip)).toBeNull();
   });
 });
 

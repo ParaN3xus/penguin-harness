@@ -27,12 +27,22 @@
  * - Nothing is written back while an input method is composing, since that breaks the
  *   composition; the widening waits for compositionend.
  *
+ * The clipboard carries a mention as its name, which notifies nobody. So a copy, a cut or a drag
+ * of text that holds mentions also writes them in a clipboard type of this app's own, and a
+ * paste or a drop of that text puts them back once the box has inserted it: the insertion stays
+ * the browser's own, and so does its undo step. A cut deletes its selection itself, natively,
+ * since writing the clipboard means cancelling the browser's cut.
+ *
  * The keys are named in the placeholder and nothing is rendered under the box, the way
  * development mode's chat input reads: a line of hint below the composer is read once and
  * then costs a row of the stream on every later visit.
  */
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import type {
+  ClipboardEvent as ReactClipboardEvent,
+  DragEvent as ReactDragEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { S } from "../../lib/strings";
 import { ICON_GAP } from "../../lib/icon-scale";
 import { Button } from "../../components/ui/button";
@@ -48,18 +58,23 @@ import {
 import type { MentionCandidate, MentionKind } from "./channel-mentions";
 import {
   EMPTY_DRAFT,
+  MENTION_CLIP_TYPE,
+  draftApplyClip,
   draftApplyEdit,
   draftFollowEdit,
   draftInsertMention,
   draftRecall,
   draftRemember,
   draftSegments,
+  draftSlice,
   draftSnapSelection,
   draftWireText,
   mentionCovers,
   mentionDeletedByKey,
+  parseClip,
+  serializeClip,
 } from "./mention-draft";
-import type { DraftHistory, MentionDraft } from "./mention-draft";
+import type { DraftClip, DraftHistory, MentionDraft } from "./mention-draft";
 
 /**
  * The box grows with the draft up to this many pixels, then scrolls inside — the same cap the
@@ -120,6 +135,8 @@ export function ChannelComposer({
   const pendingCaret = useRef<number | null>(null);
   /** The draft when an input method started composing; null while none is. */
   const composingFrom = useRef<MentionDraft | null>(null);
+  /** The clip a paste or a drop is about to insert, and the input type that will insert it. */
+  const incoming = useRef<{ inputType: string; clip: DraftClip } | null>(null);
 
   // A caret right after a picked mention (its trailing space deleted) would read its name as
   // a query; an `@` inside a mention's name is not a new one either.
@@ -207,12 +224,16 @@ export function ChannelComposer({
     return () => el.removeEventListener("beforeinput", onBeforeInput);
   }, []);
 
+  /**
+   * The name a mention of this token shows: exactly what a sent message's chip renders
+   * (channel-markdown). A pick writes it, and a pasted mention must still read it.
+   */
+  const labelOf = (wire: string) => mentionLabel(wire, names, S.company.principalAll);
+
   const pick = (c: MentionCandidate) => {
     if (mention === null) return;
     const wire = mentionInsertId(c, candidates);
-    // The name exactly as a sent message renders this token (channel-markdown's chip).
-    const label = mentionLabel(wire, names, S.company.principalAll);
-    const next = draftInsertMention(draft, mention.start, caret, label, wire);
+    const next = draftInsertMention(draft, mention.start, caret, labelOf(wire), wire);
     setDraft(next.draft);
     setCaret(next.caret);
     focusAt.current = next.caret;
@@ -267,6 +288,35 @@ export function ChannelComposer({
       e.preventDefault();
       void send();
     }
+  };
+
+  // A copy or a cut of text that holds mentions writes the clipboard itself: the browser keeps
+  // what a handler puts there only when the event is cancelled, and then writes nothing of its
+  // own, so the plain text goes on beside the mentions. The cut's delete follows as one native
+  // edit, as the browser's own cut would have been, so Ctrl+Z undoes it.
+  const onCopyOrCut = (e: ReactClipboardEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    const { selectionStart: from, selectionEnd: to } = el;
+    const clip = draftSlice(draft, from, to);
+    if (clip.mentions.length === 0) return;
+    e.preventDefault();
+    e.clipboardData.setData("text/plain", clip.text);
+    e.clipboardData.setData(MENTION_CLIP_TYPE, serializeClip(clip));
+    if (e.type !== "cut" || document.execCommand?.("delete")) return;
+    takeEdit(draftApplyEdit(draft, el.value.slice(0, from) + el.value.slice(to), from), el.value);
+  };
+
+  // A paste or a drop: the clip's mentions, held until the box reports the insertion.
+  const expectClip = (inputType: string, data: DataTransfer) => {
+    const clip = parseClip(data.getData(MENTION_CLIP_TYPE), data.getData("text/plain"), labelOf);
+    incoming.current = clip === null ? null : { inputType, clip };
+  };
+
+  // A drag keeps the browser's own `text/plain` and adds the mentions beside it.
+  const onDragStart = (e: ReactDragEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    const clip = draftSlice(draft, el.selectionStart, el.selectionEnd);
+    if (clip.mentions.length > 0) e.dataTransfer.setData(MENTION_CLIP_TYPE, serializeClip(clip));
   };
 
   const rows: Array<{ c: MentionCandidate; i: number; head: boolean }> = suggestions.map(
@@ -328,9 +378,16 @@ export function ChannelComposer({
                   const at = e.target.selectionEnd;
                   const { inputType } = e.nativeEvent as InputEvent;
                   setHighlight(0);
+                  // A drag within the box deletes (deleteByDrag) before it inserts, so a clip
+                  // waits for the insertion its paste or drop announced.
+                  const pending = incoming.current;
+                  const clip =
+                    pending !== null && pending.inputType === inputType ? pending.clip : null;
+                  if (clip !== null) incoming.current = null;
                   const base = composingFrom.current;
                   if (base === null && inputType !== "historyUndo" && inputType !== "historyRedo") {
-                    takeEdit(draftApplyEdit(draft, value, at), value);
+                    const pasted = clip === null ? null : draftApplyClip(draft, value, at, clip);
+                    takeEdit(pasted ?? draftApplyEdit(draft, value, at), value);
                     return;
                   }
                   setDraft(
@@ -367,6 +424,11 @@ export function ChannelComposer({
                   focusAt.current = backward ? snapped.start : snapped.end;
                   setCaret(snapped.end);
                 }}
+                onCopy={onCopyOrCut}
+                onCut={onCopyOrCut}
+                onPaste={(e) => expectClip("insertFromPaste", e.clipboardData)}
+                onDragStart={onDragStart}
+                onDrop={(e) => expectClip("insertFromDrop", e.dataTransfer)}
                 onScroll={syncLayer}
                 onKeyDown={onKeyDown}
                 className={`relative block max-h-40 min-h-10 w-full resize-none border-gray-300 bg-transparent placeholder:text-gray-400 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400/30 disabled:opacity-60 dark:border-gray-700 dark:placeholder:text-gray-500 ${BOX_METRICS}`}

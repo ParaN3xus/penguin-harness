@@ -18,6 +18,10 @@
  *   (draftSnapSelection), so typing lands before or after one.
  * - Text typed or pasted anywhere else only moves the mentions after it. A pasted `@Name` is
  *   plain text; a typed or pasted `@id` is left as it is and the server resolves it as always.
+ * - A copy, a cut or a drag of text that holds mentions carries them beside its plain text, in a
+ *   clipboard type of this app's own (draftSlice, serializeClip), so pasting or dropping that
+ *   text into a composer brings them back (parseClip, draftApplyClip). The plain text is the
+ *   names, which is what every other app gets and what would otherwise notify nobody.
  * - On send, a mention that touches text the server would read into its token gets a space on
  *   that side (draftWireText), so both `x@Ada` and a typed `@id` right after a mention
  *   (`@张三@ceo`) are delivered.
@@ -103,6 +107,34 @@ function splice(draft: MentionDraft, { from, to, insert }: Edit): MentionDraft {
 }
 
 /**
+ * A stretch of a draft on its way through the clipboard: its text, and the mentions wholly inside
+ * it with their offsets counted from its start.
+ */
+export interface DraftClip {
+  text: string;
+  mentions: readonly DraftMention[];
+}
+
+/**
+ * Replaces `from`…`to` with the clip, widened like any edit, and tracks the clip's mentions; the
+ * caret goes after the clip.
+ */
+function insertClip(
+  draft: MentionDraft,
+  from: number,
+  to: number,
+  clip: DraftClip,
+): { draft: MentionDraft; caret: number } {
+  const edit = widen(draft, { from, to, insert: clip.text });
+  const next = splice(draft, edit);
+  const mentions = [
+    ...next.mentions,
+    ...clip.mentions.map((m) => ({ ...m, start: m.start + edit.from })),
+  ].sort((a, b) => a.start - b.start);
+  return { draft: { text: next.text, mentions }, caret: edit.from + clip.text.length };
+}
+
+/**
  * Replaces the `@query` being typed (`start`…`caret`) with `@<label> ` and tracks the new
  * mention; returns the draft and the caret, which lands after the trailing space.
  */
@@ -113,13 +145,10 @@ export function draftInsertMention(
   label: string,
   wire: string,
 ): { draft: MentionDraft; caret: number } {
-  const inserted = `@${label} `;
-  const edit = widen(draft, { from: start, to: caret, insert: inserted });
-  const next = splice(draft, edit);
-  const mentions = [...next.mentions, { start: edit.from, label, wire }].sort(
-    (a, b) => a.start - b.start,
-  );
-  return { draft: { text: next.text, mentions }, caret: edit.from + inserted.length };
+  return insertClip(draft, start, caret, {
+    text: `@${label} `,
+    mentions: [{ start: 0, label, wire }],
+  });
 }
 
 /**
@@ -147,6 +176,88 @@ export function draftApplyEdit(
 export function draftFollowEdit(draft: MentionDraft, next: string, caret: number): MentionDraft {
   if (draft.text === next) return draft;
   return splice(draft, recoverEdit(draft.text, next, caret));
+}
+
+/**
+ * The clipboard type a copy, a cut or a drag out of the composer carries its mentions in. It
+ * rides beside the `text/plain` of the same text, which is the names; only a composer reads it.
+ */
+export const MENTION_CLIP_TYPE = "application/x-penguin-mentions";
+
+/** The draft's `from`…`to`, for a copy, a cut or a drag: its text and every mention wholly inside it. */
+export function draftSlice(draft: MentionDraft, from: number, to: number): DraftClip {
+  return {
+    text: draft.text.slice(from, to),
+    mentions: draft.mentions
+      .filter((m) => m.start >= from && mentionEnd(m) <= to)
+      .map((m) => ({ ...m, start: m.start - from })),
+  };
+}
+
+/** The clip as MENTION_CLIP_TYPE carries it: JSON of its text and mentions (`start`, `label`, `wire`). */
+export function serializeClip(clip: DraftClip): string {
+  return JSON.stringify({ text: clip.text, mentions: clip.mentions });
+}
+
+/**
+ * The clip a MENTION_CLIP_TYPE payload carries, or null when there is nothing to bring back.
+ *
+ * - `plain` is the `text/plain` beside it, which is what the box inserts; the payload must be
+ *   that text (line endings aside, which the box normalizes), since its mentions are offsets
+ *   into it. A payload that does not parse, or whose mentions do not each read `@<label>` in
+ *   order, is null too.
+ * - A mention comes back only when `labelOf` — the name a pick of its token writes — still gives
+ *   its label. The clipboard is shared with every other page and app, and a mention shows one
+ *   thing and sends another: this keeps it showing what it sends, and leaves one copied in
+ *   another organization, whose ids this one does not know, as the plain name.
+ */
+export function parseClip(
+  payload: string,
+  plain: string,
+  labelOf: (wire: string) => string,
+): DraftClip | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  const { text, mentions } = (data ?? {}) as { text?: unknown; mentions?: unknown };
+  if (typeof text !== "string" || !Array.isArray(mentions)) return null;
+  if (text !== plain.replace(/\r\n?/g, "\n")) return null;
+  const kept: DraftMention[] = [];
+  let end = 0;
+  for (const item of mentions as unknown[]) {
+    const { start, label, wire } = (item ?? {}) as Record<string, unknown>;
+    if (typeof start !== "number" || !Number.isInteger(start) || start < end) return null;
+    if (typeof label !== "string" || typeof wire !== "string") return null;
+    const m = { start, label, wire };
+    end = mentionEnd(m);
+    if (text.slice(start, end) !== `@${label}`) return null;
+    if (labelOf(wire) === label) kept.push(m);
+  }
+  return kept.length === 0 ? null : { text, mentions: kept };
+}
+
+/**
+ * The draft after a paste or a drop put `clip` into the box and its value became `next`, `caret`
+ * being the end of the box's selection — the end of what was inserted, as after any insertion.
+ * The clip's mentions come back with it, and a mention of the draft that the clip lands inside or
+ * replaces part of goes whole, as in draftApplyEdit. Null when `next` is not the draft with the
+ * clip put in front of the caret — the box inserted something else — and the caller takes the
+ * edit as plain text.
+ */
+export function draftApplyClip(
+  draft: MentionDraft,
+  next: string,
+  caret: number,
+  clip: DraftClip,
+): { draft: MentionDraft; caret: number } | null {
+  const from = caret - clip.text.length;
+  const to = caret + draft.text.length - next.length;
+  if (from < 0 || to < from) return null;
+  if (next !== draft.text.slice(0, from) + clip.text + draft.text.slice(to)) return null;
+  return insertClip(draft, from, to, clip);
 }
 
 /**
