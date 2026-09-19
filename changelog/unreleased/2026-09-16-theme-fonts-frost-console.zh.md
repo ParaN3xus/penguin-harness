@@ -31,7 +31,7 @@
 
 ## 令牌与钩子
 
-- 令牌契约共 189 个名称：新增 `--ui-radius-control`（可按压控件的形状，桥接为 `rounded-control`；Primer
+- 令牌契约共 188 个名称：新增 `--ui-radius-control`（可按压控件的形状，桥接为 `rounded-control`；Primer
   0.375rem、Frost 胶囊形、Console 为 0）、`--ui-stack-0` 与 `--ui-stack-4`，删除 `--ui-glass-highlight`。
   `themes/github.css` 以应用当前的取值声明了这三个新名称。
 - `hooks.ts` 列出六个样式钩子：`ui-glass`、`ui-eyebrow`、`ui-display`、`ui-live`、`ui-frame` 与

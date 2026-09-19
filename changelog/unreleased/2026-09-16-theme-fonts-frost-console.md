@@ -37,7 +37,7 @@ looks as before, apart from a font credit at the foot of the account menu.
 
 ## Tokens and hooks
 
-- The token contract holds 189 names: `--ui-radius-control` (the pressable control's shape, bridged
+- The token contract holds 188 names: `--ui-radius-control` (the pressable control's shape, bridged
   as `rounded-control`; Primer 0.375rem, Frost a pill, Console 0), `--ui-stack-0` and `--ui-stack-4`
   were added, and `--ui-glass-highlight` was removed. `themes/github.css` declares the three new names
   at the app's current values.

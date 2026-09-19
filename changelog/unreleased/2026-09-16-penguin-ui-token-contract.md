@@ -18,7 +18,7 @@ the first frame no longer renders at 16px and reflows to the 18px default.
 
 ## Details
 
-- `tokens.ts` holds the contract: 187 `--ui-*` names in 15 groups (surfaces, text, lines, accent,
+- `tokens.ts` holds the contract: 186 `--ui-*` names in 15 groups (surfaces, text, lines, accent,
   six semantic tones × five parts including the new `done` and `info`, charts, code and diff,
   shape, elevation and glass, type families, the type and heading scale, density, motion, icons,
   focus/selection/scrollbar), plus the theme ids `github` / `modern` / `geek`.
