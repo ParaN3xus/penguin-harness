@@ -72,11 +72,23 @@ describe("recorderStep", () => {
     });
   });
 
-  it("refuses a bare key that is not an F key and stays recording with a notice", () => {
+  it("refuses typing — a bare key, Shift alone, Option alone on a Mac — and stays recording with a notice", () => {
+    const refusedState = { phase: "recording", preview: null, notice: "needsModifier" };
     const refused = recorderStep(recorderStart(), key({ code: "KeyW", key: "w" }), "linux");
-    expect(refused).toEqual({
-      state: { phase: "recording", preview: null, notice: "needsModifier" },
+    expect(refused).toEqual({ state: refusedState });
+    expect(recorderStep(recorderStart(), key({ code: "KeyB", shiftKey: true }), "linux")).toEqual({
+      state: refusedState,
     });
+    expect(recorderStep(recorderStart(), key({ code: "Enter", shiftKey: true }), "mac")).toEqual({
+      state: refusedState,
+    });
+    expect(recorderStep(recorderStart(), key({ code: "KeyE", altKey: true }), "mac")).toEqual({
+      state: refusedState,
+    });
+    // Alt is a real modifier off a Mac (the design's Alt+W rebinding stays possible).
+    expect(
+      recorderStep(recorderStart(), key({ code: "KeyW", altKey: true }), "linux").commit,
+    ).toEqual({ code: "KeyW", mod: false, ctrl: false, alt: true, shift: false });
     // The notice clears once a modifier is held again.
     expect(
       recorderStep(refused.state, key({ code: "ControlLeft", ctrlKey: true }), "linux").state,

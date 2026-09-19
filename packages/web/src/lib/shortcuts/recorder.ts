@@ -3,7 +3,7 @@
  * recorder button feeds it every keydown while recording and acts on what comes back — a
  * committed chord (bind), a committed null (unbind), or nothing yet.
  */
-import { chordOf, codeFromKey, hasModifierOrFKey, isModifierCode } from "./chord";
+import { chordOf, codeFromKey, isBindableChord, isModifierCode } from "./chord";
 import type { Chord, KeyLike, Platform } from "./types";
 
 export type RecorderNotice = "needsModifier";
@@ -40,8 +40,9 @@ function modifiersOf(e: KeyLike, platform: Platform): Chord | null {
 
 /**
  * One keydown while recording. Escape alone cancels; Backspace or Delete alone unbinds; a
- * modifier-only press previews; a bare key that is not an F key is refused with a notice, since
- * a global chord without a modifier would steal typing from every input; anything else commits.
+ * modifier-only press previews; a key without a real modifier (Mod, Ctrl, Alt off a Mac; Shift
+ * alone is typing) that is not an F key is refused with a notice, since a global chord on it
+ * would steal typing from every input; anything else commits.
  */
 export function recorderStep(state: RecorderState, e: KeyLike, platform: Platform): RecorderStep {
   if (state.phase !== "recording") return { state };
@@ -57,7 +58,7 @@ export function recorderStep(state: RecorderState, e: KeyLike, platform: Platfor
     return { state: RECORDER_IDLE, commit: null };
   const chord = chordOf(e, platform);
   if (chord === null) return { state }; // Meta on Windows/Linux belongs to the OS
-  if (!hasModifierOrFKey(chord)) {
+  if (!isBindableChord(chord, platform)) {
     return { state: { phase: "recording", preview: null, notice: "needsModifier" } };
   }
   return { state: RECORDER_IDLE, commit: chord };

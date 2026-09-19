@@ -77,16 +77,12 @@ export interface ShortcutCommand {
 export type Keymap = ReadonlyMap<CommandId, Chord | null>;
 
 /**
- * The persisted form, shared by the server's `ui_prefs.keybindings` and the browser mirror.
- * Only overrides are stored; a row equal to its default is absent. Unknown ids are carried
- * through on write and never applied, so a build that predates a command keeps its binding.
+ * The persisted form, shared by the server's `ui_prefs.keybindings` and the browser mirror, is
+ * declared once, with the other prefs types the server validates. Only overrides are stored; a
+ * row equal to its default is absent. Unknown ids are carried through on write and never
+ * applied, so a build that predates a command keeps its binding.
  */
-export interface StoredKeybindings {
-  v: 1;
-  mac?: Record<string, string | null>;
-  windows?: Record<string, string | null>;
-  linux?: Record<string, string | null>;
-}
+export type { StoredKeybindings } from "@prismshadow/penguin-server/api";
 
 /** The fields of a `KeyboardEvent` the matcher reads; React's synthetic event and a test literal both fit. */
 export interface KeyLike {

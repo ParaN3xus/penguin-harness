@@ -4,7 +4,7 @@
  * browser mirror and the account's prefs — so there is no Save button; the trailing action row
  * only holds "Reset all". A row's hint is a fact about its current state, kept on screen: a
  * conflict with another command first, then the host's own claim on the chord (a browser tab
- * never receives ⌘W; the desktop shell's menu shares ⌘R).
+ * never receives ⌘W; the desktop shell's menu also carries ⌘R, and the binding takes it over).
  */
 import { useState } from "react";
 import { S } from "../../lib/strings";
@@ -61,10 +61,10 @@ function rowHint(
   if (currentHost() === "browser") {
     return browserReserved(chord, platform) ? { text: S.shortcuts.browserReserved } : null;
   }
-  const desktop = desktopReserved(chord, platform);
-  if (desktop === "shell") return { text: S.shortcuts.desktopShellReserved };
-  if (desktop === "menu") return { text: S.shortcuts.desktopMenuReserved };
-  return null;
+  // The shell binds no key before the page today, so only the menu case can arise here.
+  return desktopReserved(chord, platform) === "menu"
+    ? { text: S.shortcuts.desktopMenuReserved }
+    : null;
 }
 
 function ShortcutRow({
