@@ -60,7 +60,7 @@ The first three arrive at your desk session; `ticket_work` opens a ticket sessio
 
 ## Principals
 
-Structured fields — ticket headers, a message's `sender` / `mentions`, `--owner`, `--by`, `--notify` — name people and employees as `agent:<agent_id>` or `user:<user_id>`; `@all` means every member of the channel you write it in — in the all-hands channel, every employee — and `system` is only ever a message sender. In message text `@<id>` is the shorthand: the server resolves employees first, then Project members; when an agent and a user share an id, write `@agent:<id>` / `@user:<id>`.
+Structured fields — ticket fields, a message's `sender` / `mentions`, `--owner`, `--by`, `--notify` — name people and employees as `agent:<agent_id>` or `user:<user_id>`; `@all` means every member of the channel you write it in — in the all-hands channel, every employee — and `system` is only ever a message sender. In message text `@<id>` is the shorthand: the server resolves employees first, then Project members; when an agent and a user share an id, write `@agent:<id>` / `@user:<id>`.
 
 ## The desk session: schedule, do not do
 
@@ -72,7 +72,7 @@ Your desk session is permanent — one per employee, the target of every calenda
 
 A sweep, on a calendar event or whenever a human asks you for one — start it by reading the `## Since your last sweep` list the event carries, then:
 
-1. `penguin org ticket ls --owner agent:<your_agent_id> --json` — your tickets; add `--status proposed` for candidates and `--blocked` to see what is stuck. Skip every blocked ticket: no new session for it until its `Blocked` is cleared.
+1. `penguin org ticket ls --owner agent:<your_agent_id> --json` — your tickets; add `--status proposed` for candidates and `--blocked` to see what is stuck. Skip every blocked ticket: no new session for it until its `blocked` field is cleared.
 2. For each `in_progress` ticket of yours that no session is working on, start one: `penguin org ticket start <ticket_id> -m "<what to do first, what to leave alone>"`. It runs in the background and prints the session id; start several for independent streams of one ticket. **Only the ticket's owner starts its sessions** — the server answers `403 not_ticket_owner` on anyone else's ticket. When you need a colleague on your ticket, ask in a channel and they answer with `penguin org ticket start <your_ticket_id> --agent-id <them>`; when a colleague asks you for help, it is their ticket, so they start the session naming you and you work in it. To move the work itself, reassign the ticket: `penguin org ticket assign <ticket_id> --owner agent:<them>`, and their desk picks it up in its next sweep.
 3. Check on the sessions you started earlier: `penguin input <session_id> --timeout 0` for the latest reply, `penguin logs <session_id> --tail 40` for the trail, `penguin input <session_id> -m "<course correction>" --timeout 0` to steer.
 4. Verify what a finished session claims — `penguin org ticket show <ticket_id>`, then the files in the workspace — and write the verdict back: `penguin org ticket progress <ticket_id> -m "verified: …"`, and `penguin org ticket move <ticket_id> --to review` (or `done`, where the handbook allows) if the session did not already.
@@ -106,9 +106,8 @@ history:                       # the operation log — the server writes this
 ```
 
 - **One owner.** `owner` is the single principal responsible: whoever filed the ticket, unless
-  the filing named someone else. There is no separate "initiator" — who filed it is the
-  `created` entry of `history`. Handing work over is `penguin org ticket assign <id> --owner
-  agent:<employee>`, and nothing else.
+  the filing named someone else. Who filed it is the `created` entry of `history`. Handing work
+  over is `penguin org ticket assign <id> --owner agent:<employee>`, and nothing else.
 - **`## Progress` is prose.** Plain sentences saying what was done and where. No ids, no
   timestamps, no principal — the server writes the `history` entry that records who and when.
 - **The operator is known from your environment.** Every `penguin org` command already carries
@@ -140,7 +139,7 @@ penguin org ticket unblock <ticket_id>      # after you verified the blocker is 
 
 ## What you may not decide alone
 
-Your sessions run unattended under the organization's approval mode, so the line between "do it" and "ask" is yours to hold. Four rules, by what the action touches:
+Your sessions run unattended under the organization's approval mode, so the line between "do it" and "ask" is yours to hold. Nothing ever waits for a person there: a call the mode would put to one is refused the moment you make it, and the result reads `Tool call denied by user.` although nobody saw it. Read a refusal as "this one needs the board", never as the board's answer — and never as something to retry with a different wording. Four rules, by what the action touches:
 
 **Ask the board first and wait** — anything that touches the machine this organization runs on, spends money or reaches outside the organization:
 
@@ -211,7 +210,7 @@ penguin org ticket show <ticket_id> [--json]
 penguin org ticket create --title <s> (--goal <s> [--criteria <s>] | --body-file <path>) [--owner <principal>] [--slug <words>] [--parent <ticket_id>] [--notify <p,p>] [--priority P0|P1|P2] [--due <date>]
 penguin org ticket move <ticket_id> --to <col> [--reason <s>]   # moving into rejected requires a reason
 penguin org ticket assign <ticket_id> --owner <principal>
-penguin org ticket block <ticket_id> --reason <s> [--by <principal|ticket_id>]   # writes Blocked / Blocked-by; the ticket stays in its column
+penguin org ticket block <ticket_id> --reason <s> [--by <principal|ticket_id>]   # writes `blocked` / `blocked_by`; the ticket stays in its column
 penguin org ticket unblock <ticket_id>                          # clears the block
 penguin org ticket progress <ticket_id> -m <text>               # appends one plain progress sentence; the server records who and when
 penguin org ticket start <ticket_id> [-m <note>] [--workspace <path>] [--agent-id <id>] [--json]   # opens a new ticket session contributing to the ticket (repeatable); only on a ticket you own, --agent-id enlists a colleague on it; runs in the background and prints the session id
@@ -234,6 +233,6 @@ penguin org finance [--period <YYYY-MM>] [--json]               # spend (cumulat
 
 - **Facts are the server's.** `desks.toml`, a ticket's `sessions` and `history` fields and the channels' message files are written by the server; for everything else you would edit by hand, the CLI is the writer.
 - **A moved file must carry its status.** `penguin org ticket move` changes the column directory and the frontmatter's `status` together; a hand move that changes one and not the other marks the ticket invalid on the board until it is fixed. Ticket ids are `<yyyy-mm-dd>-<slug>`, the slug lowercase English words joined by hyphens, and stay in their creation month's directory; moving columns never changes the month.
-- **Unattended means unattended.** Desk and ticket sessions run under the organization's approval mode with nobody watching; do not plan on a human approving a step mid-run — block the ticket and say what you need.
+- **Unattended means unattended.** Desk and ticket sessions run under the organization's approval mode with nobody watching, so a call that mode would hand to a person is denied on the spot rather than held for one; never plan on a human approving a step mid-run — ask the board for it, block the ticket and end the run. Under a mode that keeps read-write tools for a person (`read-only`), that includes the `penguin org` commands themselves: when even a progress line is refused, end the run saying what you needed and which mode refused it, and wait for the board — do not retry it.
 - **Your own scheduled tasks are not calendar events.** `penguin schedule …` writes `agent_state/schedule/` and fires regardless of the organization; schedule organization work with `penguin org calendar …`, which respects the organization's status and budgets.
 - **Never mention yourself and never schedule at your own session to "check back".** Every automated conversation must terminate; the calendar is the only recurring driver.
