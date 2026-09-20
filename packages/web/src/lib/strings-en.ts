@@ -5,6 +5,7 @@
  * "agent" is a common noun: lowercase mid-sentence, capitalized only at the start
  * of a label/sentence or in a proper name (Agent State, AgentHub).
  */
+import type { PeakWindows } from "../features/models/model-grouping";
 import type { Strings } from "./strings";
 
 export const en: Strings = {
@@ -421,6 +422,8 @@ export const en: Strings = {
     retry: "Retry",
     unknownError: "Request failed, please try again later",
     requiredField: "This field is required",
+    /** A menu row that copies what it acts on (the conversation's selection menu); the confirmation is `copied`. */
+    copy: "Copy",
     copied: "Copied",
     /** Accessible name of the circled "?" that discloses a section or field explanation. */
     moreInfo: "More info",
@@ -1127,8 +1130,19 @@ export const en: Strings = {
     recommendedGroup: "Recommended",
     discountBadge: (pct: number): string => `${pct}% off`,
     discountTitle: (pct: number): string => `Promotion: ${pct}% off the list price`,
-    offPeakTitle: (pct: number): string =>
-      `Off-peak rate: ${pct}% off list. Peak hours bill at list price — 09:00–12:00 and 14:00–18:00 Beijing time, Monday to Friday`,
+    offPeakTitle: (pct: number, peak: PeakWindows): string => {
+      const day = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+      const days = peak.everyDay
+        ? "every day"
+        : peak.days
+            .map(([from, to]) =>
+              from === to ? day[from - 1] : `${day[from - 1]} to ${day[to - 1]}`,
+            )
+            .join(", ");
+      const clock = (hour: number): string => `${String(hour).padStart(2, "0")}:00`;
+      const hours = peak.hours.map(([from, to]) => `${clock(from)}–${clock(to)}`).join(" and ");
+      return `Off-peak rate: ${pct}% off list. Peak hours bill at list price — ${hours} Beijing time, ${days}`;
+    },
     visionModelBadge: "Proxy vision",
     usedTokens: (v: string) => `${v} toks`,
     usedTokensTitle: "Tokens this model has used, all time",
@@ -2245,6 +2259,10 @@ Scenarios:
     processRemove: "Remove",
     /** Remove button tooltip: removal also drops the output captured from that process. */
     processRemoveHint: "Remove this entry — the output captured from it is discarded too",
+    /** The list heading's text action: removes every exited entry at once; its hint says the captured output goes too. */
+    processClearExited: "Clear exited",
+    processClearExitedHint:
+      "Clear every exited process — the output captured from them is discarded too",
     statTokens: "Total Tokens",
     /** Info-dropdown stats list: the tokens bullet's label and its cache-hit-rate parenthetical (rate = cacheRead ÷ all input, e.g. "68%"). */
     statTotalTokens: "Total Tokens",
@@ -2279,6 +2297,8 @@ Scenarios:
     memoryChangedMark: "Changed in this conversation",
     memoryContentUnavailable: "Content unavailable (the file may have been moved or deleted)",
     memoryRowOpen: "View content",
+    /** The memory-change card header's text action: opens the Memory panel on its list (a visible label rather than a second brain glyph beside the card's own). */
+    memoryOpenList: "Open memory list",
     memoryBack: "Back to the list",
     memoryEmptyAll: "No memory yet — say “remember …” in a chat to have the agent save one",
     /** Visible label on the Memory panel's header link (not a tooltip-only glyph): says what the click does and where it lands. */
