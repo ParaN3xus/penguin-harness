@@ -8,13 +8,18 @@ import type { GalleryStrings } from "./strings";
 export const en: GalleryStrings = {
   brand: {
     title: "Penguin UI",
-    subtitle: "Modules",
+    tagline: "Every module of the shared UI package, as a real interface in three themes.",
   },
   rail: {
     theme: "Theme",
+    themeNames: { github: "Primer", modern: "Frost", geek: "Console" },
     mode: "Mode",
+    accent: "Accent",
+    accentTheme: "Theme's own",
     size: "Size",
     language: "Language",
+    viewport: "Viewport",
+    viewports: { desktop: "Desktop", phone: "Phone" },
     langNames: { en: "EN", zh: "中文" },
     modes: { light: "Light", dark: "Dark", system: "System" },
     sizeTitle: (px) => `${px}px root`,
@@ -22,13 +27,18 @@ export const en: GalleryStrings = {
     reducedMotion: "Reduced motion",
     fonts: "Fonts & licences",
     modules: "Modules",
+    menu: "Open the menu",
+    closeMenu: "Close the menu",
     feedbackTitle: "Feedback",
     feedbackBody:
       "Quote the breadcrumb at a card's bottom left, or copy its address with the link button.",
+    feedbackExample: "Frost › Conversation › Approval · dark",
+  },
+  crumb: {
+    modes: { light: "light", dark: "dark" },
+    phone: "phone",
   },
   intro: {
-    title: "Component gallery",
-    body: "The shared UI package as fifteen modules, each a realistic composition built from one mock dataset, switchable across three themes, light and dark, three sizes and two languages. Every variant has an address you can quote.",
     resolving: "Resolving tokens…",
     problems: "Module and demo problems",
   },
@@ -53,12 +63,12 @@ export const en: GalleryStrings = {
     label: "Playback",
     play: "Play",
     pause: "Pause",
-    restart: "Play from the start",
+    replay: "Replay",
     previous: "Previous frame",
     next: "Next frame",
     frames: "Frames",
     rate: "Speed",
-    live: "Live variant: plays frame by frame on a clock",
+    scene: "Animated: press play to watch",
   },
   embed: {
     unknownModule: (id) => `There is no module named “${id}”.`,
@@ -77,7 +87,8 @@ export const en: GalleryStrings = {
     lines: "Lines",
     inkWords: ["Text", "Muted", "Subtle"],
     accent: "Accent",
-    presetsHint: "The theme's own accent and the five presets a user can pick",
+    presetsHint:
+      "The theme's own accent and the five presets this theme lists; another theme's presets paint nothing here",
     themeAccent: "theme",
     sampleSend: "Send",
     selectedRow: "Selected",
@@ -180,6 +191,10 @@ export const en: GalleryStrings = {
       "ui-frame": "a ruled box with a head, a body, a foot and panes",
       "ui-underline-nav": "the selected-tab marker of a tab bar",
       "ui-shell": "the app window: a navigation column beside a main column",
+      "ui-icon-decor": "an icon its label already says: a theme may tint it or drop it",
+      "ui-tree":
+        "a list whose rows nest: a file tree, a work group's tool rows, the subagent graph",
+      "ui-field": "a labelled control row: a form field or a settings row",
     },
     hookSamples: {
       menu: ["Pin", "Rename", "Delete"],
@@ -188,6 +203,19 @@ export const en: GalleryStrings = {
       copy: "Copy",
       tabs: ["Overview", "Traces", "Files"],
       streaming: "Writing the answer",
+      tree: {
+        root: "claude-code-expert",
+        dir: "src",
+        files: ["rag.ts", "embed.ts"],
+        last: "README.md",
+      },
+      field: {
+        name: "Name",
+        value: "Docs Expert",
+        hint: "Shown in the sidebar and in messages.",
+        notify: "Notify when done",
+        notifyHint: "A system notification when a Task ends.",
+      },
     },
   },
   fonts: {

@@ -32,7 +32,8 @@
  * bridge that re-points Tailwind's `--color-gray-*` / `--color-white` so the app's existing
  * palette classes follow the theme; the dark rule, which declares only what dark changes (the
  * rest keeps its base value, since this file comes after `github.css` and so its base rule beats
- * that file's dark rule); and then this theme's recipes for the style hooks (hooks.ts).
+ * that file's dark rule); and then this theme's recipes for the style hooks (hooks.ts). After it,
+ * one `@layer ui-accent` block with the theme's own accent presets.
  */
 @layer ui-theme {
   /* Light: paper. */
@@ -172,6 +173,16 @@
     --ui-shell-gap: 0px;
     --ui-shell-radius: 0px;
     --ui-shell-shadow: 0 0 #0000;
+
+    /* Structure: a tree indents two characters of the mono face per level (1rem at the 13px
+       body) from the row inset, and its connector rules take the emphasis line so `├─` reads on
+       paper and on the warm black alike; a field is a table row with a 10rem label column and
+       three quarters of a rem before the value. */
+    --ui-tree-inset: 0.625rem;
+    --ui-tree-indent: 1rem;
+    --ui-tree-guide: var(--ui-line-emphasis);
+    --ui-field-label-w: 10rem;
+    --ui-field-gap: 0.75rem;
 
     /* Typography — families. Latin face first, so ASCII always renders in the theme's face; the
        chrome is the mono face with Noto behind it for Han, reading text is Plex Sans. */
@@ -424,8 +435,8 @@
    * the utilities its component also carries — that is what lets `.ui-live` re-time an
    * `animate-spin` and `.ui-frame` redraw a card's box.
    *
-   * Console gives a recipe to: eyebrow, display, live, frame, underline-nav, shell. `.ui-glass` is
-   * a no-op here: the overlay is opaque through the glass tokens.
+   * Console gives a recipe to: eyebrow, display, live, frame, underline-nav, shell, icon-decor,
+   * tree, field. `.ui-glass` is a no-op here: the overlay is opaque through the glass tokens.
    */
 
   /* Group label on the h6 rung: the chrome face, uppercase with label tracking, muted. */
@@ -586,5 +597,207 @@
     font-weight: 700;
     color: var(--ui-accent);
     pointer-events: none;
+  }
+
+  /* Decorative icons are not drawn: a navigation row is its label, a group header its eyebrow, a
+     menu row its verb, and the `>` before the selected row is the one mark. Icons that carry
+     information (status marks, file kinds, tool glyphs, avatars) never take the hook and stay. */
+  :root[data-theme="geek"] .ui-icon-decor {
+    display: none;
+  }
+
+  /* Nested rows connect with rules, the way `tree` prints them, and the box goes: the host's
+     border, fill, corner and shadow turn off, and so do the rules it draws between its rows. Each
+     row past the roots indents on the tree tokens and draws its elbow on its parent's column, half
+     an indent before its own content — `└` from the row's top to its middle (a vertical rule with
+     a short tick at the end), and, when the row is not the last of its level, the rule carries on
+     to the row's bottom, which makes `├`. A branch that follows a row that is not last continues
+     that row's rule alongside the rows it holds, so a deeper level hangs off a `│`; after a last
+     row there is nothing to continue. Nothing here is a glyph in the markup. */
+  :root[data-theme="geek"] .ui-tree {
+    border-color: transparent;
+    border-radius: 0;
+    background-color: transparent;
+    box-shadow: none;
+  }
+  :root[data-theme="geek"] .ui-tree > [data-depth],
+  :root[data-theme="geek"] .ui-tree > [data-branch] {
+    border-color: transparent;
+  }
+  :root[data-theme="geek"] .ui-tree [data-depth]:not([data-branch]) {
+    position: relative;
+    padding-inline-start: calc(var(--ui-tree-inset) + var(--ui-tree-indent) * var(--_depth));
+  }
+  :root[data-theme="geek"] .ui-tree [data-depth]:not([data-branch], [data-depth="0"])::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    height: 50%;
+    inset-inline-start: calc(var(--ui-tree-inset) + var(--ui-tree-indent) * (var(--_depth) - 0.5));
+    width: calc(var(--ui-tree-indent) * 0.5 - 0.1875rem);
+    border-inline-start: var(--ui-border-w) solid var(--ui-tree-guide);
+    border-bottom: var(--ui-border-w) solid var(--ui-tree-guide);
+    pointer-events: none;
+  }
+  :root[data-theme="geek"]
+    .ui-tree
+    [data-depth]:not([data-branch], [data-depth="0"], [data-last="true"])::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    bottom: 0;
+    inset-inline-start: calc(var(--ui-tree-inset) + var(--ui-tree-indent) * (var(--_depth) - 0.5));
+    border-inline-start: var(--ui-border-w) solid var(--ui-tree-guide);
+    pointer-events: none;
+  }
+  :root[data-theme="geek"] .ui-tree [data-branch] {
+    position: relative;
+  }
+  :root[data-theme="geek"]
+    .ui-tree
+    [data-depth]:not([data-last="true"])
+    + [data-branch]:not([data-depth="0"], [data-depth="1"])::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: calc(var(--ui-tree-inset) + var(--ui-tree-indent) * (var(--_depth) - 1.5));
+    border-inline-start: var(--ui-border-w) solid var(--ui-tree-guide);
+    pointer-events: none;
+  }
+
+  /* A frame whose body is a tree (a work group over its tool rows) gives up the TUI box: no
+     fill, no sides, no rule through the head, and the head loses its own fill, so the rows hang
+     off the head by their connector rules alone. A frame with no tree in it keeps its box. */
+  :root[data-theme="geek"] .ui-frame:has(> .ui-tree) {
+    background-color: transparent;
+  }
+  :root[data-theme="geek"] .ui-frame:has(> .ui-tree) > * {
+    border-color: transparent;
+  }
+  :root[data-theme="geek"] .ui-frame:has(> .ui-tree) > [data-slot="head"] {
+    background-color: transparent;
+  }
+  :root[data-theme="geek"] .ui-frame:has(> .ui-tree) > [data-slot="head"]::before,
+  :root[data-theme="geek"] .ui-frame:has(> .ui-tree) > [data-slot="head"]::after {
+    display: none;
+  }
+
+  /* A labelled control row is a table row: a fixed label column, the control left-aligned in the
+     next column and stretched to it (a text control fills it, a switch or a segmented control
+     keeps its own width), the hint under the control. The label takes the md control's block
+     padding so its line sits on the control's first line, and rows separate by the host's own
+     rules, so a page of them reads like a table. */
+  :root[data-theme="geek"] .ui-field {
+    display: grid;
+    grid-template-columns: var(--ui-field-label-w) minmax(0, 1fr);
+    column-gap: var(--ui-field-gap);
+    row-gap: var(--ui-stack-0);
+    align-items: start;
+  }
+  :root[data-theme="geek"] .ui-field > [data-slot="label"] {
+    grid-row: 1;
+    grid-column: 1;
+    min-width: 0;
+    padding-block: calc(var(--ui-control-py-md) + var(--ui-border-w));
+  }
+  :root[data-theme="geek"] .ui-field > [data-slot="control"] {
+    grid-row: 1;
+    grid-column: 2;
+    min-width: 0;
+    max-width: 100%;
+  }
+  :root[data-theme="geek"] .ui-field > [data-slot="hint"] {
+    grid-column: 2;
+  }
+}
+
+/*
+ * The user's accent presets (tokens.ts, `ACCENT_PRESETS.geek`): five terminal hues beside
+ * Console's own orange — phosphor green, cyan, magenta, gold, cobalt — each deep in light for a
+ * white label and bright in dark with black ink, the way the theme's dark tone fills are. A
+ * preset sets the six accent tokens and nothing else; the selectors match only Console's root, so
+ * a preset another theme lists paints nothing here. The dark rules declare what dark changes,
+ * which for a brightened hue is all six.
+ */
+@layer ui-accent {
+  :root[data-theme="geek"][data-accent="phosphor"] {
+    --ui-accent: #1f7a1f;
+    --ui-accent-hover: #1a661a;
+    --ui-accent-active: #155315;
+    --ui-accent-fg: #ffffff;
+    --ui-accent-muted: rgb(31 122 31 / 0.1);
+    --ui-accent-line: rgb(31 122 31 / 0.5);
+  }
+  :root[data-theme="geek"][data-accent="phosphor"].dark {
+    --ui-accent: #3ddc84;
+    --ui-accent-hover: #5ce69a;
+    --ui-accent-active: #2fc975;
+    --ui-accent-fg: #000000;
+    --ui-accent-muted: rgb(61 220 132 / 0.16);
+    --ui-accent-line: rgb(61 220 132 / 0.6);
+  }
+  :root[data-theme="geek"][data-accent="cyan"] {
+    --ui-accent: #0e7490;
+    --ui-accent-hover: #0b6079;
+    --ui-accent-active: #094d61;
+    --ui-accent-fg: #ffffff;
+    --ui-accent-muted: rgb(14 116 144 / 0.1);
+    --ui-accent-line: rgb(14 116 144 / 0.5);
+  }
+  :root[data-theme="geek"][data-accent="cyan"].dark {
+    --ui-accent: #22d3ee;
+    --ui-accent-hover: #4edcf2;
+    --ui-accent-active: #14bfd9;
+    --ui-accent-fg: #000000;
+    --ui-accent-muted: rgb(34 211 238 / 0.16);
+    --ui-accent-line: rgb(34 211 238 / 0.6);
+  }
+  :root[data-theme="geek"][data-accent="magenta"] {
+    --ui-accent: #b0177e;
+    --ui-accent-hover: #94136a;
+    --ui-accent-active: #7a1057;
+    --ui-accent-fg: #ffffff;
+    --ui-accent-muted: rgb(176 23 126 / 0.1);
+    --ui-accent-line: rgb(176 23 126 / 0.5);
+  }
+  :root[data-theme="geek"][data-accent="magenta"].dark {
+    --ui-accent: #ff6ac1;
+    --ui-accent-hover: #ff85cc;
+    --ui-accent-active: #f253b1;
+    --ui-accent-fg: #000000;
+    --ui-accent-muted: rgb(255 106 193 / 0.16);
+    --ui-accent-line: rgb(255 106 193 / 0.6);
+  }
+  :root[data-theme="geek"][data-accent="gold"] {
+    --ui-accent: #8a6d00;
+    --ui-accent-hover: #735b00;
+    --ui-accent-active: #5e4a00;
+    --ui-accent-fg: #ffffff;
+    --ui-accent-muted: rgb(138 109 0 / 0.1);
+    --ui-accent-line: rgb(138 109 0 / 0.5);
+  }
+  :root[data-theme="geek"][data-accent="gold"].dark {
+    --ui-accent: #f2c230;
+    --ui-accent-hover: #f5cd55;
+    --ui-accent-active: #e6b41c;
+    --ui-accent-fg: #000000;
+    --ui-accent-muted: rgb(242 194 48 / 0.16);
+    --ui-accent-line: rgb(242 194 48 / 0.6);
+  }
+  :root[data-theme="geek"][data-accent="cobalt"] {
+    --ui-accent: #003ee9;
+    --ui-accent-hover: #0034c4;
+    --ui-accent-active: #002ba3;
+    --ui-accent-fg: #ffffff;
+    --ui-accent-muted: rgb(0 62 233 / 0.1);
+    --ui-accent-line: rgb(0 62 233 / 0.5);
+  }
+  :root[data-theme="geek"][data-accent="cobalt"].dark {
+    --ui-accent: #5696fd;
+    --ui-accent-hover: #77aafe;
+    --ui-accent-active: #3d84f5;
+    --ui-accent-fg: #000000;
+    --ui-accent-muted: rgb(86 150 253 / 0.16);
+    --ui-accent-line: rgb(86 150 253 / 0.6);
   }
 }

@@ -353,11 +353,21 @@ export function WorkGroup({
         </span>
         {CHEVRON(open)}
       </div>
+      {/*
+        The rows hang off the group's head, so the body is a `ui-tree`: Console draws the
+        connector rules and drops the box, Frost indents against a soft rule, Primer keeps the
+        bordered body. Each row is one level down and the last one closes it.
+      */}
       {live && (
         <DisclosureBody open={live.open}>
-          <div data-slot="body" className="divide-y divide-line-muted border-t border-line">
-            {items.map((item) => (
-              <div key={item.id} data-reveal>
+          <div data-slot="body" className="ui-tree divide-y divide-line-muted border-t border-line">
+            {items.map((item, i) => (
+              <div
+                key={item.id}
+                data-reveal
+                data-depth={1}
+                data-last={i === items.length - 1 ? "true" : undefined}
+              >
                 {row(item)}
               </div>
             ))}
@@ -365,8 +375,16 @@ export function WorkGroup({
         </DisclosureBody>
       )}
       {!live && open && (
-        <div data-slot="body" className="divide-y divide-line-muted border-t border-line">
-          {items.map(row)}
+        <div data-slot="body" className="ui-tree divide-y divide-line-muted border-t border-line">
+          {items.map((item, i) => (
+            <div
+              key={item.id}
+              data-depth={1}
+              data-last={i === items.length - 1 ? "true" : undefined}
+            >
+              {row(item)}
+            </div>
+          ))}
         </div>
       )}
     </div>

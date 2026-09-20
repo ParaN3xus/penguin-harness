@@ -3,19 +3,18 @@
  *
  * - Sidebar: the session sidebar beside the chat header — the account switcher, nav rows with
  *   counts, the Sessions group label, a Workspace group and a time group of session rows with their
- *   marks (running, pinned, unread, scheduled), one row showing its hover actions, the user row;
+ *   marks (running, pinned, unread, scheduled), one row showing its hover actions, the user row.
+ *   Its scene opens it: the icon rail, a rail icon's tooltip, then the sidebar unfolding;
  * - Tabs & crumbs: a page header under its breadcrumbs, with underline tabs;
  * - Dock & rail: the chat with the right dock open — dock tabs, the panel actions and a panel;
- * - Collapsed: the sidebar folded to the icon rail, one icon showing its tooltip;
- * - Collapse and expand (live): the sidebar folding to the rail, a rail icon's tooltip, and the
- *   loop back out.
+ * - Collapsed: the sidebar folded to the icon rail, one icon showing its tooltip.
  */
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { Fixtures, SessionListItem } from "../fixtures";
 import { defineModule } from "../module";
 import type { SceneSpec } from "../module";
-import { reached, useScene } from "../scene";
+import { at, reached, useScene } from "../scene";
 import { AgentTile, AppShell, UserAvatar } from "../screens/parts";
 import { duration, tokens, usd } from "../screens/format";
 import {
@@ -115,18 +114,7 @@ function SessionRow({
   );
 }
 
-function SidebarFrame({ f }: { f: Fixtures }) {
-  return (
-    <aside
-      data-slot="nav"
-      className="flex w-64 shrink-0 flex-col border-r border-line bg-surface-muted"
-    >
-      <SidebarBody f={f} />
-    </aside>
-  );
-}
-
-/** What the sidebar holds, apart from its frame, so the live scene can fade it inside its own. */
+/** What the sidebar holds, apart from the column it sits in, which the scene widens and narrows. */
 function SidebarBody({ f }: { f: Fixtures }) {
   const c = f.copy.nav;
   const [workspace, earlier] = f.sessionGroups;
@@ -250,10 +238,52 @@ function ChatBody({ f }: { f: Fixtures }) {
   );
 }
 
+const EXPAND: SceneSpec = {
+  frames: [
+    { key: "rail", title: "Rail", hold: 1400 },
+    { key: "tooltip", title: "Tooltip", hold: 1400 },
+    { key: "expanded", title: "Expanded", hold: 1600 },
+  ],
+};
+
+/**
+ * The sidebar, and the scene that opens it: the icon rail; one rail icon's tooltip; then the
+ * column widens to the sidebar — its width moves through `data-layout-motion` while the rail's
+ * contents leave and the sidebar's arrive, each laid out at its own width so neither reflows on
+ * the way. The column clips while the width moves and stops clipping for the tooltip, so that can
+ * hang over the chat. Settled, it is the sidebar the variant shows when nothing is playing.
+ */
 function Sidebar({ f }: { f: Fixtures }) {
+  const clock = useScene();
+  const expanded = reached(clock, "expanded");
+  const tooltip = at(clock, "tooltip");
   return (
     <Window height="h-[39rem]">
-      <SidebarFrame f={f} />
+      <aside
+        data-slot="nav"
+        data-layout-motion
+        className={`relative flex shrink-0 flex-col border-r border-line bg-surface-muted ${
+          expanded ? "w-64" : "w-12"
+        } ${tooltip ? "" : "overflow-hidden"}`}
+      >
+        {/*
+          The sidebar's contents are laid out at their own width from the moment they mount and
+          the column clips them, so the widening column is what uncovers them — no entrance of
+          their own, and a settled card draws them at rest.
+        */}
+        {expanded && (
+          <div className="absolute inset-y-0 left-0 flex w-64 flex-col">
+            <SidebarBody f={f} />
+          </div>
+        )}
+        <Presence
+          show={!expanded}
+          side="left"
+          className="absolute inset-y-0 left-0 flex w-12 flex-col items-center gap-1 py-2"
+        >
+          <RailBody f={f} tooltip={tooltip} live />
+        </Presence>
+      </aside>
       <div data-slot="main" className="flex min-w-0 flex-1 flex-col">
         <ChatHead f={f} />
         <ChatBody f={f} />
@@ -336,13 +366,45 @@ function DockTabs({ f }: { f: Fixtures }) {
   );
 }
 
+/**
+ * The Session that started the run and the child Sessions hanging off it: a `ui-tree`, so Console
+ * rules the child to its parent and drops the indent, while Primer keeps today's step in.
+ */
+function CallGraph({ f }: { f: Fixtures }) {
+  const call = f.session.turns[1]!.items.find((i) => i.kind === "tool_call" && i.subagent);
+  const subagent = call?.kind === "tool_call" ? call.subagent : undefined;
+  const main = f.agents.find((a) => a.id === f.session.agentId)!;
+  return (
+    <div className="ui-tree grid grid-cols-[minmax(0,1fr)] content-start gap-1 border-r border-line p-3 text-sm">
+      <p className="pb-1 text-xs text-fg-muted">{f.copy.dock.topology}</p>
+      <span data-depth={0} className="flex items-center gap-2 px-1 py-1 text-fg-muted">
+        <AgentTile id={main.id} name={main.name} />
+        <span className="truncate">{main.name}</span>
+        <span className="font-mono text-xs text-fg-subtle">{f.session.id.slice(-6)}</span>
+      </span>
+      {subagent && (
+        <span
+          data-depth={1}
+          data-last="true"
+          className="ml-4 flex items-center gap-2 rounded-md bg-accent-muted px-2 py-1 text-fg"
+        >
+          <AgentTile id={subagent.agentId} name={subagent.agentName} />
+          <span className="min-w-0 flex-1 truncate font-(--ui-weight-medium)">
+            {subagent.agentName}
+          </span>
+          <RunSpinner label={f.copy.chat.runStates.running} />
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** The bottom dock: its tabs and panel actions in the head, the Subagents panel in the body. */
 function DockFrame({ f }: { f: Fixtures }) {
   const d = f.copy.dock;
   const call = f.session.turns[1]!.items.find((i) => i.kind === "tool_call" && i.subagent);
   const subagent = call?.kind === "tool_call" ? call.subagent : undefined;
   const reply = subagent?.transcript.find((i) => i.kind === "text");
-  const main = f.agents.find((a) => a.id === f.session.agentId)!;
   return (
     <section className="ui-frame flex h-64 shrink-0 flex-col border-t border-line bg-canvas">
       <div data-slot="head" className="flex items-center gap-2 border-b border-line px-2 py-1.5">
@@ -353,23 +415,7 @@ function DockFrame({ f }: { f: Fixtures }) {
         <IconButton label={d.close} icon="cross" size="sm" />
       </div>
       <div data-slot="body" className="grid min-h-0 flex-1 grid-cols-[16rem_minmax(0,1fr)]">
-        <div className="grid grid-cols-[minmax(0,1fr)] content-start gap-1 border-r border-line p-3 text-sm">
-          <p className="pb-1 text-xs text-fg-muted">{f.copy.dock.topology}</p>
-          <span className="flex items-center gap-2 px-1 py-1 text-fg-muted">
-            <AgentTile id={main.id} name={main.name} />
-            <span className="truncate">{main.name}</span>
-            <span className="font-mono text-xs text-fg-subtle">{f.session.id.slice(-6)}</span>
-          </span>
-          {subagent && (
-            <span className="ml-4 flex items-center gap-2 rounded-md bg-accent-muted px-2 py-1 text-fg">
-              <AgentTile id={subagent.agentId} name={subagent.agentName} />
-              <span className="min-w-0 flex-1 truncate font-(--ui-weight-medium)">
-                {subagent.agentName}
-              </span>
-              <RunSpinner label={f.copy.chat.runStates.running} />
-            </span>
-          )}
-        </div>
+        <CallGraph f={f} />
         {reply?.kind === "text" && (
           <p className="overflow-hidden p-3 font-sans text-sm leading-relaxed text-fg-muted">
             {reply.markdown}
@@ -465,59 +511,11 @@ function Collapsed({ f }: { f: Fixtures }) {
   );
 }
 
-const LIVE_COLLAPSE: SceneSpec = {
-  frames: [
-    { key: "expanded", title: "Expanded", hold: 1600 },
-    { key: "rail", title: "Rail", hold: 1400 },
-    { key: "tooltip", title: "Tooltip", hold: 1400 },
-  ],
-};
-
-/**
- * Collapse and expand: the sidebar folds to the icon rail — the nav column's width moves through
- * `data-layout-motion` while the sidebar's contents leave and the rail's arrive, each laid out at
- * its own width so neither reflows on the way — then one rail icon shows its tooltip. The loop
- * back to the first frame plays the expand. The column clips while its width moves, and stops
- * clipping once the rail has settled, so the tooltip can hang over the chat.
- */
-function LiveCollapse({ f }: { f: Fixtures }) {
-  const clock = useScene();
-  const rail = reached(clock, "rail");
-  const tooltip = reached(clock, "tooltip");
-  return (
-    <Window height="h-[32rem]">
-      <aside
-        data-slot="nav"
-        data-layout-motion
-        className={`relative shrink-0 border-r border-line bg-surface-muted ${rail ? "w-12" : "w-64"} ${
-          tooltip ? "" : "overflow-hidden"
-        }`}
-      >
-        <Presence show={!rail} side="left" className="absolute inset-y-0 left-0 flex w-64 flex-col">
-          <SidebarBody f={f} />
-        </Presence>
-        <Presence
-          show={rail}
-          side="left"
-          className="absolute inset-y-0 left-0 flex w-12 flex-col items-center gap-1 py-2"
-        >
-          <RailBody f={f} tooltip={tooltip} live />
-        </Presence>
-      </aside>
-      <div data-slot="main" className="flex min-w-0 flex-1 flex-col">
-        <ChatHead f={f} />
-        <ChatBody f={f} />
-      </div>
-    </Window>
-  );
-}
-
 const VARIANTS = {
   sidebar: Sidebar,
   "tabs-crumbs": TabsAndCrumbs,
   "dock-rail": DockAndRail,
   collapsed: Collapsed,
-  "live-collapse": LiveCollapse,
 } as const;
 
 export const module = defineModule({
@@ -527,11 +525,10 @@ export const module = defineModule({
     "The session sidebar with nav rows, counts and marked session rows; a page header with breadcrumbs and underline tabs; the dock with its tabs and the icon rail.",
   width: "wide",
   variants: [
-    { key: "sidebar", title: "Sidebar" },
+    { key: "sidebar", title: "Sidebar", scene: EXPAND },
     { key: "tabs-crumbs", title: "Tabs & crumbs" },
     { key: "dock-rail", title: "Dock & rail" },
     { key: "collapsed", title: "Collapsed" },
-    { key: "live-collapse", title: "Collapse and expand", scene: LIVE_COLLAPSE },
   ],
   parts: [
     "navigation-tabs",

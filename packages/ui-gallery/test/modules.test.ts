@@ -1,8 +1,8 @@
 /**
- * The gallery is fifteen modules (K-redesign §4.2): one file per `MODULE_IDS` entry, each listing
- * the catalog sections its Parts drawer shows, every section listed by its own module, every demo
- * reachable from some module, live variants after the static ones with addressable frames, and a
- * Chinese title for each module, variant, frame and section.
+ * The gallery is the modules `MODULE_IDS` names: one file per entry, each listing the catalog
+ * sections its Parts drawer shows, every section listed by its own module, every demo reachable
+ * from some module, a scene on every product module's default variant with addressable frames,
+ * and a Chinese title for each module, variant, frame and section.
  */
 import { describe, expect, it } from "vitest";
 import { CATALOG, catalogSection } from "../../ui/src/catalog";
@@ -11,6 +11,13 @@ import type { Module } from "../../ui/src/module";
 import { collectModules, pickVariant, storedVariantKey, VARIANT_KEY } from "../src/lib/modules";
 import { DEMOS, MODULES } from "../src/registry";
 import { zh } from "../src/strings";
+
+/**
+ * The gallery's own two modules render gallery machinery — the Foundations boards and the
+ * Screens thumbnails, which are frames of other routes — and have nothing to animate; every
+ * product module's default variant plays.
+ */
+const GALLERY_OWN = new Set<string>(["foundations", "screens"]);
 
 describe("the collected modules", () => {
   it("are one file per MODULE_IDS entry, in that order, with nothing to report", () => {
@@ -31,11 +38,22 @@ describe("the collected modules", () => {
     }
   });
 
-  it("put live variants after the static ones, each with two or more addressable frames", () => {
+  it("play: every product module's default variant carries a scene, and no variant is a live-* twin", () => {
     for (const { module } of MODULES.list) {
-      const live = module.variants.map((variant) => variant.scene !== undefined);
-      const lastStatic = live.lastIndexOf(false);
-      expect(live.slice(0, lastStatic + 1), `${module.id}: live after static`).not.toContain(true);
+      if (GALLERY_OWN.has(module.id)) continue;
+      expect(
+        module.variants[0]?.scene,
+        `${module.id}: the default variant has a scene`,
+      ).toBeDefined();
+      for (const variant of module.variants) {
+        // Round 1's separate live variants folded onto the static ones they end in.
+        expect(variant.key, `${module.id} ${variant.key}`).not.toMatch(/^live-/);
+      }
+    }
+  });
+
+  it("give every scene two or more addressable frames", () => {
+    for (const { module } of MODULES.list) {
       for (const variant of module.variants) {
         const keys = variant.scene?.frames.map((frame) => frame.key);
         if (keys === undefined) continue;
@@ -46,8 +64,9 @@ describe("the collected modules", () => {
     }
   });
 
-  it("open on Foundations, the vocabulary, and close on Screens, the sum", () => {
-    expect(MODULE_IDS[0]).toBe("foundations");
+  it("open on the hero, then Foundations, and close on Screens, the sum", () => {
+    expect(MODULE_IDS[0]).toBe("hero");
+    expect(MODULE_IDS[1]).toBe("foundations");
     expect(MODULE_IDS[MODULE_IDS.length - 1]).toBe("screens");
   });
 
@@ -72,8 +91,13 @@ describe("the collected modules", () => {
   });
 
   it("never share an address with a part: module ids have no `-`, part ids always do", () => {
-    for (const id of MODULE_IDS) expect(id).toMatch(/^[a-z]+$/);
-    for (const section of CATALOG) expect(section.id).toContain("-");
+    // `create-with-ai` and `empty-states` are the exceptions the picks' `v.<id>` form allows:
+    // a module id is still never a part id, since every part id names its module first.
+    for (const id of MODULE_IDS) expect(id).toMatch(/^[a-z]+(?:-[a-z]+)*$/);
+    for (const section of CATALOG) {
+      expect(section.id).toContain("-");
+      expect(MODULE_IDS as readonly string[], section.id).not.toContain(section.id);
+    }
   });
 
   it("have a Chinese title, description and variant titles, as does every section", () => {
@@ -88,7 +112,7 @@ describe("the collected modules", () => {
       expect(zh.catalog.sections[section.id], section.id).toBeDefined();
   });
 
-  it("have a Chinese title for every frame of every live variant, and for nothing else", () => {
+  it("have a Chinese title for every frame of every scene, and for nothing else", () => {
     for (const { module } of MODULES.list) {
       const frames: Record<string, string[]> = {};
       for (const variant of module.variants) {
@@ -157,10 +181,9 @@ describe("collectModules", () => {
         "m/files.module.tsx": {
           module: make("files", {
             variants: [
-              { key: "tree", title: "Tree" },
               {
-                key: "live-expand",
-                title: "Expand",
+                key: "tree",
+                title: "Tree",
                 scene: {
                   frames: [
                     { key: "closed", title: "Closed", hold: 1000 },
@@ -173,10 +196,7 @@ describe("collectModules", () => {
         },
         "m/status.module.tsx": {
           module: make("status", {
-            variants: [
-              { key: "live", title: "Live" },
-              { key: "live-run", title: "Run", scene: { frames: [oneFrame] } },
-            ],
+            variants: [{ key: "live", title: "Live", scene: { frames: [oneFrame] } }],
           }),
         },
         "x/actions.module.tsx": { module: make("actions") },
@@ -194,9 +214,9 @@ describe("collectModules", () => {
     expect(text).toMatch(/parts not in catalog\.ts: nope-part/);
     expect(text).toMatch(/module "actions" is already defined by m\/actions\.module\.tsx/);
     expect(text).toMatch(/module "conversation" has no conversation\.module\.tsx/);
-    expect(text).toMatch(/frame keys of "live-expand" must be unique lowercase words .*: Open/);
-    expect(text).toMatch(/frame holds of "live-expand" must be positive ms: Open/);
-    expect(text).toMatch(/live variant "live-run" needs at least two frames/);
+    expect(text).toMatch(/frame keys of "tree" must be unique lowercase words .*: Open/);
+    expect(text).toMatch(/frame holds of "tree" must be positive ms: Open/);
+    expect(text).toMatch(/scene of "live" needs at least two frames/);
     // A module with an unknown part still renders; its drawer lists what exists.
     expect(registry.list.map(({ module }) => module.id)).toEqual(["actions"]);
   });

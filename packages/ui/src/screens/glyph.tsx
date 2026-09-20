@@ -86,17 +86,26 @@ export const GLYPHS = {
 
 export type GlyphName = keyof typeof GLYPHS;
 
+/**
+ * `decor` names the part a decorative icon plays — one that says nothing its label does not
+ * already say. The renderer writes the `ui-icon-decor` hook for it, gated on the prop, so a call
+ * site says `decor="nav"` and nothing else; the hook guard reads the prop on the call site and
+ * holds the enclosing row or header to the hook's host list. An icon that carries information (a
+ * status mark, a file kind, a tool glyph) takes no `decor`.
+ */
 export function Glyph({
   name,
   size = 13,
   className = "",
   style,
+  decor,
 }: {
   name: GlyphName;
   /** Pixel size, the app's `ICON_SIZE` convention (icons do not scale with the root tier). */
   size?: number;
   className?: string;
   style?: CSSProperties;
+  decor?: "nav" | "group" | "menu" | "empty";
 }) {
   return (
     <svg
@@ -106,7 +115,8 @@ export function Glyph({
       fill="none"
       stroke="currentColor"
       aria-hidden
-      className={`block shrink-0 ${className}`}
+      data-role={decor}
+      className={`block shrink-0 ${decor ? "ui-icon-decor" : ""} ${className}`}
       style={{
         strokeWidth: "var(--ui-icon-stroke)",
         strokeLinecap: "var(--ui-icon-cap)" as CSSProperties["strokeLinecap"],

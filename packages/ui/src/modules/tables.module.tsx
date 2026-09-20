@@ -8,9 +8,29 @@ import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { Fixtures, ModelFixture } from "../fixtures";
 import { defineModule } from "../module";
+import type { SceneSpec } from "../module";
+import { reached, useScene } from "../scene";
 import { AgentTile } from "../screens/parts";
 import { tokens, usd } from "../screens/format";
-import { Badge, Button, GlyphIcon, GroupHeader, IconButton, KeyValue, Switch } from "./parts";
+import {
+  Badge,
+  Button,
+  GlyphIcon,
+  GroupHeader,
+  IconButton,
+  KeyValue,
+  Switch,
+  arriving,
+  useArrivals,
+} from "./parts";
+
+const LAND: SceneSpec = {
+  frames: [
+    { key: "head", title: "Header", hold: 800 },
+    { key: "rows", title: "Rows", hold: 2000 },
+    { key: "actions", title: "Actions", hold: 1200 },
+  ],
+};
 
 /** A table's header row: `band` is a filled row, `plain` a rule under the labels. */
 function TableHead({ band, children }: { band: boolean; children: ReactNode }) {
@@ -63,6 +83,11 @@ function ModelCell({ model, badge }: { model: ModelFixture; badge?: string }) {
   );
 }
 
+/**
+ * The models table. On the `band` variant a scene fills it: the header band alone, the six rows
+ * landing one after another, then the pointer on a row and its actions — the table this variant
+ * shows when nothing is playing.
+ */
 function Table({
   f,
   expanded,
@@ -71,8 +96,10 @@ function Table({
   /** A model id whose row is opened on its details. */
   expanded?: string;
 }) {
+  const clock = useScene();
   const m = f.copy.models;
   const models = f.models.slice(0, 6);
+  const landed = useArrivals(models.length, "rows");
   return (
     <div className="overflow-hidden rounded-lg border border-line">
       <table className="w-full border-collapse">
@@ -88,9 +115,9 @@ function Table({
           <th className="w-20" />
         </TableHead>
         <tbody>
-          {models.map((model, i) => {
+          {models.slice(0, landed).map((model, i) => {
             const open = model.modelId === expanded;
-            const hovered = expanded === undefined && i === 2;
+            const hovered = expanded === undefined && i === 2 && reached(clock, "actions");
             return (
               <ModelRows
                 key={model.modelId}
@@ -98,6 +125,7 @@ function Table({
                 model={model}
                 open={open}
                 hovered={hovered}
+                arrived={arriving(clock, "rows")}
                 expandable={expanded !== undefined}
               />
             );
@@ -113,19 +141,22 @@ function ModelRows({
   model,
   open,
   hovered,
+  arrived,
   expandable,
 }: {
   f: Fixtures;
   model: ModelFixture;
   open: boolean;
   hovered: boolean;
+  /** Set while the row is landing, so the theme brings it in. */
+  arrived?: true;
   expandable: boolean;
 }) {
   const m = f.copy.models;
   const cell = "border-t border-line px-3 py-2 text-right font-mono text-xs tabular-nums text-fg";
   return (
     <>
-      <tr className={hovered || open ? "bg-surface-muted" : ""}>
+      <tr data-reveal={arrived} className={hovered || open ? "bg-surface-muted" : ""}>
         {expandable && (
           <td className="border-t border-line pl-3 text-fg-subtle">
             <GlyphIcon name={open ? "chevronDown" : "chevronRight"} size={14} />
@@ -324,7 +355,7 @@ export const module = defineModule({
     "The models table with a band header, sortable columns and an expandable row; a plain vault table; key-value facts and installed plugins as list rows with a pager.",
   width: "wide",
   variants: [
-    { key: "band", title: "Band" },
+    { key: "band", title: "Band", scene: LAND },
     { key: "plain", title: "Plain" },
     { key: "dense", title: "Dense" },
     { key: "expandable", title: "Expandable" },

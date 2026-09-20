@@ -5,9 +5,12 @@
  * field errors, and the settings with the rows a server policy holds disabled. Static stand-ins for
  * W2's form controls and `PrefRow`.
  */
+import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { Fixtures, FormFieldFixture } from "../fixtures";
 import { defineModule } from "../module";
+import type { SceneSpec } from "../module";
+import { reached, useScene } from "../scene";
 import {
   Button,
   Checkbox,
@@ -24,37 +27,64 @@ import {
   Select,
   Switch,
   SwatchPicker,
+  arriving,
+  useArrivals,
 } from "./parts";
 
+const FILL: SceneSpec = {
+  frames: [
+    { key: "appearance", title: "Appearance", hold: 1600 },
+    { key: "general", title: "General", hold: 1600 },
+  ],
+};
+
+/**
+ * The settings, and the scene that fills them: the Appearance rows land one after another, each
+ * control already on the value it holds; then the General section arrives under them — the page
+ * this variant shows when nothing is playing.
+ */
 function SettingsForm({ f, disabled = false }: { f: Fixtures; disabled?: boolean }) {
+  const clock = useScene();
   const s = f.copy.settings;
   const auth = f.copy.auth;
   // The one field a server policy holds: shown, explained, not editable.
   const held = f.forms.fields.find((field) => field.disabled);
+  const appearance: readonly [string, ReactNode][] = [
+    [
+      "theme",
+      <PrefRow
+        label={s.theme}
+        hint={s.themeInfo}
+        control={<Segmented options={[s.light, s.dark, s.system]} value={2} />}
+      />,
+    ],
+    [
+      "font-size",
+      <PrefRow
+        label={s.fontSize}
+        control={<Segmented options={[s.fontSizes.sm, s.fontSizes.md, s.fontSizes.lg]} value={1} />}
+      />,
+    ],
+    [
+      "accent",
+      <PrefRow label={s.accent} control={<SwatchPicker value={0} swatches={f.forms.swatches} />} />,
+    ],
+    ["launcher", <PrefRow label={s.launcher} hint={s.launcherInfo} control={<Switch on />} />],
+    ["tool-aliases", <PrefRow label={s.toolAliases} info control={<Switch on={false} />} />],
+  ];
+  const landed = useArrivals(appearance.length, "appearance");
   return (
     <div className="mx-auto grid max-w-2xl gap-6">
       <RuledSection title={s.pages.appearance}>
         <div className="divide-y divide-line-muted">
-          <PrefRow
-            label={s.theme}
-            hint={s.themeInfo}
-            control={<Segmented options={[s.light, s.dark, s.system]} value={2} />}
-          />
-          <PrefRow
-            label={s.fontSize}
-            control={
-              <Segmented options={[s.fontSizes.sm, s.fontSizes.md, s.fontSizes.lg]} value={1} />
-            }
-          />
-          <PrefRow
-            label={s.accent}
-            control={<SwatchPicker value={0} swatches={f.forms.swatches} />}
-          />
-          <PrefRow label={s.launcher} hint={s.launcherInfo} control={<Switch on />} />
-          <PrefRow label={s.toolAliases} info control={<Switch on={false} />} />
+          {appearance.slice(0, landed).map(([key, row]) => (
+            <div key={key} data-reveal={arriving(clock, "appearance")}>
+              {row}
+            </div>
+          ))}
         </div>
       </RuledSection>
-      {disabled ? (
+      {!reached(clock, "general") ? null : disabled ? (
         <RuledSection title={s.groupServer}>
           <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
             <Notice tone="neutral" title={s.managedTitle}>
@@ -98,12 +128,21 @@ function SettingsForm({ f, disabled = false }: { f: Fixtures; disabled?: boolean
 }
 
 /**
- * One field of the dialog in its kind's control. Before the form is sent the invalid field is
- * still empty (its placeholder shows); after, it holds the wrong value and says what is wrong.
+ * One field of the dialog in its kind's control. `filled` is whether the invalid field holds a
+ * value yet — before the form is filled in, its placeholder shows — and `errors` whether the form
+ * has been sent and said what is wrong.
  */
-function FormField({ field, errors }: { field: FormFieldFixture; errors: boolean }) {
+function FormField({
+  field,
+  filled,
+  errors,
+}: {
+  field: FormFieldFixture;
+  filled: boolean;
+  errors: boolean;
+}) {
   const invalid = field.error !== undefined;
-  const value = invalid && !errors ? "" : field.value;
+  const value = invalid && !filled ? "" : field.value;
   const control =
     field.kind === "select" ? (
       <Select value={value} />
@@ -135,7 +174,16 @@ function FormField({ field, errors }: { field: FormFieldFixture; errors: boolean
   );
 }
 
-function DialogForm({ f, errors = false }: { f: Fixtures; errors?: boolean }) {
+function DialogForm({
+  f,
+  errors = false,
+  filled = errors,
+}: {
+  f: Fixtures;
+  errors?: boolean;
+  /** Whether the fields hold their values; a form says what is wrong only once it is filled in. */
+  filled?: boolean;
+}) {
   const form = f.forms;
   const [first, ...rest] = form.fields.filter((field) => !field.disabled);
   return (
@@ -164,13 +212,13 @@ function DialogForm({ f, errors = false }: { f: Fixtures; errors?: boolean }) {
       >
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 px-5 py-2">
           <div className="grid grid-cols-2 gap-4">
-            {first && <FormField field={first} errors={errors} />}
+            {first && <FormField field={first} filled={filled} errors={errors} />}
             <Field label={form.search.label}>
               <SearchInput placeholder={form.search.placeholder} />
             </Field>
           </div>
           {rest.map((field) => (
-            <FormField key={field.name} field={field} errors={errors} />
+            <FormField key={field.name} field={field} filled={filled} errors={errors} />
           ))}
           <div className="grid grid-cols-2 gap-4">
             {form.groups.map((group) => (
@@ -207,10 +255,27 @@ function DialogForm({ f, errors = false }: { f: Fixtures; errors?: boolean }) {
   );
 }
 
+const VALIDATE: SceneSpec = {
+  frames: [
+    { key: "filled", title: "Filled", hold: 1400 },
+    { key: "errors", title: "Errors", hold: 1600 },
+  ],
+};
+
+/**
+ * The same dialog, filled in and sent: the fields hold their values with the form still willing to
+ * take them; then it is sent, the two that do not pass say what is wrong and the submit button is
+ * held — the state this variant shows when nothing is playing.
+ */
+function Validate({ f }: { f: Fixtures }) {
+  const clock = useScene();
+  return <DialogForm f={f} filled errors={reached(clock, "errors")} />;
+}
+
 const VARIANTS = {
   settings: (f: Fixtures) => <SettingsForm f={f} />,
   "dialog-form": (f: Fixtures) => <DialogForm f={f} />,
-  errors: (f: Fixtures) => <DialogForm f={f} errors />,
+  errors: (f: Fixtures) => <Validate f={f} />,
   disabled: (f: Fixtures) => <SettingsForm f={f} disabled />,
 } as const;
 
@@ -221,9 +286,9 @@ export const module = defineModule({
     "The Appearance and General settings as preference rows, and a dialog form with every field type, its errors and its disabled state.",
   width: "wide",
   variants: [
-    { key: "settings", title: "Settings" },
+    { key: "settings", title: "Settings", scene: FILL },
     { key: "dialog-form", title: "Dialog form" },
-    { key: "errors", title: "Errors" },
+    { key: "errors", title: "Errors", scene: VALIDATE },
     { key: "disabled", title: "Disabled" },
   ],
   parts: [

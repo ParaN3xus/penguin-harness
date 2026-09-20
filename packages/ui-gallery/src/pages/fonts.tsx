@@ -11,8 +11,9 @@ import { ModeSwitch, ViewControls } from "../chrome/rail";
 import { ChromeIcon } from "../chrome/icons";
 import { SPECIMENS } from "../foundations/specimens";
 import { BASE } from "../lib/location";
-import { THEME_NAMES, TIER_PX } from "../lib/themes";
+import { TIER_PX } from "../lib/themes";
 import { formatGalleryQuery } from "../lib/url-state";
+import { useText } from "../preview";
 import { FONT_LICENSES, licencePath } from "../sources";
 import { useGallery } from "../state";
 
@@ -83,6 +84,7 @@ function Licence({ path }: { path: string }) {
 
 export function FontsPage() {
   const { S, state, mode, tokens } = useGallery();
+  const text = useText();
   const faces = useFaces();
   const licences = Object.keys(FONT_LICENSES).sort();
   const query = formatGalleryQuery({ ...state, variants: {} });
@@ -117,7 +119,7 @@ export function FontsPage() {
               const values = tokens[themeId][mode];
               return (
                 <div key={themeId} className="g-font-theme">
-                  <h3>{THEME_NAMES[themeId]}</h3>
+                  <h3>{text.theme(themeId)}</h3>
                   {ROLES.map((role) => {
                     const family = values[role];
                     return (

@@ -22,7 +22,12 @@
  */
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { DEFAULT_THEME_ID, THEME_IDS } from "@prismshadow/penguin-ui";
+import {
+  ACCENT_PRESET_IDS,
+  ACCENT_PRESETS,
+  DEFAULT_THEME_ID,
+  THEME_IDS,
+} from "@prismshadow/penguin-ui";
 import type { ThemeId } from "@prismshadow/penguin-ui";
 import { applyThemeAttributes, THEME_STORAGE_KEYS } from "@prismshadow/penguin-ui/boot";
 import type { AccentChoice, FontScale as UiFontScale } from "@prismshadow/penguin-ui/boot";
@@ -95,19 +100,15 @@ function initialFontScale(): FontScale {
   return "md";
 }
 
+/**
+ * Any preset any theme lists is kept as stored: the theme files scope their presets to their own
+ * root, so one the active theme does not list paints nothing (the theme's own accent shows) and
+ * comes back when that theme is active again.
+ */
 function initialAccent(): Accent {
   const stored = localStorage.getItem(ACCENT_KEY);
-  if (
-    stored === "neutral" ||
-    stored === "blue" ||
-    stored === "green" ||
-    stored === "violet" ||
-    stored === "rose" ||
-    stored === "amber"
-  ) {
-    return stored;
-  }
-  return "neutral";
+  if (stored === "neutral") return stored;
+  return ACCENT_PRESET_IDS.find((id) => id === stored) ?? "neutral";
 }
 
 function initialTerminalMode(): TerminalThemeMode {
@@ -237,12 +238,12 @@ export function useTheme(): ThemeContextValue {
   return ctx;
 }
 
-/** Display swatches for theme color presets (neutral uses a neutral gray). */
+/**
+ * Display swatches for theme color presets (neutral uses a neutral gray). The app runs the
+ * default theme, so it offers that theme's presets — the five it has always had — read from the
+ * package; a theme picker, when the app grows one, lists the active theme's instead.
+ */
 export const ACCENT_SWATCHES: ReadonlyArray<{ value: Accent; color: string }> = [
   { value: "neutral", color: "#6b7280" },
-  { value: "blue", color: "#2563eb" },
-  { value: "green", color: "#15803d" },
-  { value: "violet", color: "#7c3aed" },
-  { value: "rose", color: "#be123c" },
-  { value: "amber", color: "#b45309" },
+  ...ACCENT_PRESETS[DEFAULT_THEME_ID].map((preset) => ({ value: preset.id, color: preset.swatch })),
 ];

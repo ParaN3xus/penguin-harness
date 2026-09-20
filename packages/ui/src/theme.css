@@ -9,26 +9,29 @@
  * What lives here is theme-independent: the `dark` variant, the cascade layer order, the bridge
  * from the `--ui-*` token contract (tokens.ts) to Tailwind utilities, the base rules that read
  * tokens, the motion rules behind the `data-presence` / `data-backdrop` / `data-reveal` /
- * `data-layout-motion` attributes, and the user's accent presets. Token VALUES live only in
- * `themes/*.css`.
+ * `data-layout-motion` attributes, and the depth ladder the `ui-tree` recipes measure with. Token
+ * VALUES live only in `themes/*.css`, and so do the user's accent presets: each theme lists its
+ * own, in `@layer ui-accent`, scoped to that theme (tokens.ts, `ACCENT_PRESETS`).
  *
  * Attributes on <html>: `class="dark"` (mode), `data-theme` (absent = github), `data-accent`
- * (absent = the theme's own accent), `data-motion="reduced"` (the gallery's switch; the app
- * answers the media query instead). The pre-paint script in boot.ts sets the first three before
- * the first frame; the app's theme provider keeps them in sync afterwards.
+ * (absent = the theme's own accent; an id the active theme does not list paints nothing, which
+ * is the same), `data-motion="reduced"` (the gallery's switch; the app answers the media query
+ * instead). The pre-paint script in boot.ts sets the first three before the first frame; the
+ * app's theme provider keeps them in sync afterwards.
  */
 
 /* Dark mode is the `dark` class on <html>, not the media query: the user can pin either mode. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Appended after Tailwind's own `theme, base, components, utilities`. A theme's blocks live in
-   ui-theme and the accent presets in ui-accent, so a preset beats a theme's `.dark` block by layer
-   order alone — `:root[data-theme="x"].dark` would otherwise out-rank `:root[data-accent="blue"]`
-   on specificity. The token blocks and the presets declare custom properties only, so sitting
-   after `utilities` never lets them override a utility's declaration. The one thing in ui-theme
-   that does override utilities is a theme's style-hook recipes (hooks.ts), and they sit there for
-   exactly that: `.ui-live` re-times its host's `animate-spin`, `.ui-glass` replaces its host's
-   opaque fill, `.ui-shell` re-paints its host's columns. */
+   ui-theme and its accent presets in ui-accent, so a preset beats the theme's `.dark` block by
+   layer order alone — `:root[data-theme="x"].dark` would otherwise tie with
+   `:root[data-theme="x"][data-accent="blue"]` on specificity and win by coming later. The token
+   blocks and the presets declare custom properties only, so sitting after `utilities` never lets
+   them override a utility's declaration. The one thing in ui-theme that does override utilities
+   is a theme's style-hook recipes (hooks.ts), and they sit there for exactly that: `.ui-live`
+   re-times its host's `animate-spin`, `.ui-glass` replaces its host's opaque fill, `.ui-shell`
+   re-paints its host's columns, `.ui-field` re-lays its host's row. */
 @layer ui-theme, ui-accent;
 
 /*
@@ -349,47 +352,40 @@
   }
 }
 
-/* The user's accent presets: the same six accent tokens in both modes and in every theme. No
-   `data-accent` (the stored `neutral`) leaves the theme's own accent in place. */
-@layer ui-accent {
-  :root[data-accent="blue"] {
-    --ui-accent: #2563eb;
-    --ui-accent-hover: #1d4ed8;
-    --ui-accent-active: #1e40af;
-    --ui-accent-fg: #ffffff;
-    --ui-accent-muted: rgb(37 99 235 / 0.12);
-    --ui-accent-line: rgb(37 99 235 / 0.5);
+/* The `ui-tree` depth ladder, shared by the themes' recipes: a row or a branch carrying
+   `data-depth` gets its depth as a number a recipe can multiply — CSS cannot read an attribute as
+   a number, so the eight levels the product nests to are spelled out, and anything deeper draws as
+   the eighth. This sets no length: a host indents its own rows by
+   `calc(var(--ui-tree-inset) + var(--ui-tree-indent) * depth)`, and a theme's recipe draws its
+   rules on the columns that formula gives. `--_depth` is private to the recipes (not a token). It
+   sits in ui-theme so a theme's own `.ui-tree` rules, which come later in the layer, may read or
+   override it; Primer, with no tree recipe, is untouched by it. */
+@layer ui-theme {
+  .ui-tree [data-depth] {
+    --_depth: 8;
   }
-  :root[data-accent="green"] {
-    --ui-accent: #15803d; /* green-700: white text clears AA */
-    --ui-accent-hover: #166534;
-    --ui-accent-active: #14532d;
-    --ui-accent-fg: #ffffff;
-    --ui-accent-muted: rgb(21 128 61 / 0.12);
-    --ui-accent-line: rgb(21 128 61 / 0.5);
+  .ui-tree [data-depth="0"] {
+    --_depth: 0;
   }
-  :root[data-accent="violet"] {
-    --ui-accent: #7c3aed;
-    --ui-accent-hover: #6d28d9;
-    --ui-accent-active: #5b21b6;
-    --ui-accent-fg: #ffffff;
-    --ui-accent-muted: rgb(124 58 237 / 0.12);
-    --ui-accent-line: rgb(124 58 237 / 0.5);
+  .ui-tree [data-depth="1"] {
+    --_depth: 1;
   }
-  :root[data-accent="rose"] {
-    --ui-accent: #be123c; /* rose-700: white text clears AA */
-    --ui-accent-hover: #9f1239;
-    --ui-accent-active: #881337;
-    --ui-accent-fg: #ffffff;
-    --ui-accent-muted: rgb(190 18 60 / 0.12);
-    --ui-accent-line: rgb(190 18 60 / 0.5);
+  .ui-tree [data-depth="2"] {
+    --_depth: 2;
   }
-  :root[data-accent="amber"] {
-    --ui-accent: #b45309; /* amber-700: white text clears AA */
-    --ui-accent-hover: #92400e;
-    --ui-accent-active: #78350f;
-    --ui-accent-fg: #ffffff;
-    --ui-accent-muted: rgb(180 83 9 / 0.12);
-    --ui-accent-line: rgb(180 83 9 / 0.5);
+  .ui-tree [data-depth="3"] {
+    --_depth: 3;
+  }
+  .ui-tree [data-depth="4"] {
+    --_depth: 4;
+  }
+  .ui-tree [data-depth="5"] {
+    --_depth: 5;
+  }
+  .ui-tree [data-depth="6"] {
+    --_depth: 6;
+  }
+  .ui-tree [data-depth="7"] {
+    --_depth: 7;
   }
 }

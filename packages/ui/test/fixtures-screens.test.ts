@@ -95,6 +95,31 @@ describe("fixtures", () => {
       expect(row.test(catalog), `${m.provider}/${m.modelId}`).toBe(true);
     }
   });
+
+  it("hold one coherent creation: what is proposed is what the review writes", () => {
+    const c = en.createWithAi;
+    expect(c.review.changes.length).toBeGreaterThan(1);
+    // Everything a creation writes lands inside the Agent State it reports at the end, so the
+    // "where it landed" line accounts for every row of the review.
+    for (const change of c.review.changes) {
+      expect(change.path.startsWith(c.created.path), change.path).toBe(true);
+    }
+    // Every Skill the proposal card lists is a row the reader can refuse.
+    for (const skill of c.proposal.agent.skills) {
+      expect(
+        c.review.changes.some((change) => change.kind === "install" && change.path.includes(skill)),
+        skill,
+      ).toBe(true);
+    }
+  });
+
+  it("leave the first-run checklist half done, so both step marks are renderable", () => {
+    const steps = en.emptyStates.firstRun.steps;
+    expect(steps.some((step) => step.done)).toBe(true);
+    expect(steps.some((step) => !step.done)).toBe(true);
+    // Three prompts: an empty Session lays them out in one row of three.
+    expect(en.emptyStates.firstSession.examples).toHaveLength(3);
+  });
 });
 
 describe("screens", () => {

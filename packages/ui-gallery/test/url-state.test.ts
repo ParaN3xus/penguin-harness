@@ -11,14 +11,16 @@ import {
 describe("gallery URL state", () => {
   it("reads every field and round-trips through the canonical query", () => {
     const search =
-      "?theme=geek&mode=dark&tier=lg&lang=zh&compare=conversation&motion=reduced&v.conversation=approval&v.actions-button=danger.sm";
+      "?theme=geek&mode=dark&tier=lg&lang=zh&accent=blue&compare=conversation&view=phone&motion=reduced&v.conversation=approval&v.actions-button=danger.sm";
     const state = parseGalleryState(search);
     expect(state).toEqual({
       theme: "geek",
       mode: "dark",
       tier: "lg",
       lang: "zh",
+      accent: "blue",
       compare: "conversation",
+      view: "phone",
       motion: "reduced",
       variants: { conversation: "approval", "actions-button": "danger.sm" },
     });
@@ -33,13 +35,17 @@ describe("gallery URL state", () => {
     expect(parseGalleryState("").compare).toBe(false);
   });
 
-  it("always writes the four preferences and only the flags that are set", () => {
-    expect(formatGalleryQuery(DEFAULT_STATE)).toBe("?theme=github&mode=light&tier=md&lang=en");
-    expect(formatGalleryQuery({ ...DEFAULT_STATE, compare: true, motion: "reduced" })).toBe(
-      "?theme=github&mode=light&tier=md&lang=en&compare=1&motion=reduced",
+  it("always writes the five preferences and only the flags that are set", () => {
+    expect(formatGalleryQuery(DEFAULT_STATE)).toBe(
+      "?theme=github&mode=light&tier=md&lang=en&accent=neutral",
+    );
+    expect(
+      formatGalleryQuery({ ...DEFAULT_STATE, compare: true, view: "phone", motion: "reduced" }),
+    ).toBe(
+      "?theme=github&mode=light&tier=md&lang=en&accent=neutral&compare=1&view=phone&motion=reduced",
     );
     expect(formatGalleryQuery({ ...DEFAULT_STATE, compare: "tables" })).toBe(
-      "?theme=github&mode=light&tier=md&lang=en&compare=tables",
+      "?theme=github&mode=light&tier=md&lang=en&accent=neutral&compare=tables",
     );
   });
 
@@ -49,7 +55,7 @@ describe("gallery URL state", () => {
         { ...DEFAULT_STATE, theme: "modern" },
         { module: "status", variant: "notices" },
       ),
-    ).toBe("?theme=modern&mode=light&tier=md&lang=en&module=status&variant=notices");
+    ).toBe("?theme=modern&mode=light&tier=md&lang=en&accent=neutral&module=status&variant=notices");
   });
 
   it("sorts picks so one view has one URL", () => {
@@ -60,13 +66,26 @@ describe("gallery URL state", () => {
   });
 
   it("falls back to the remembered value, then the default, for anything unknown", () => {
-    expect(parseGalleryState("?theme=nope&mode=sepia&tier=xl&lang=fr")).toEqual(DEFAULT_STATE);
-    expect(parseGalleryState("?theme=nope", { theme: "modern", lang: "zh" })).toMatchObject({
+    expect(
+      parseGalleryState("?theme=nope&mode=sepia&tier=xl&lang=fr&accent=plaid&view=tv"),
+    ).toEqual(DEFAULT_STATE);
+    expect(
+      parseGalleryState("?theme=nope", { theme: "modern", lang: "zh", accent: "blue" }),
+    ).toMatchObject({
       theme: "modern",
       lang: "zh",
+      accent: "blue",
     });
     // The URL beats the remembered value.
     expect(parseGalleryState("?theme=geek", { theme: "modern" }).theme).toBe("geek");
+  });
+
+  it("keeps an accent preset whichever theme is active, so switching themes never loses it", () => {
+    // Primer's `blue` rides along under Console; the provider resolves what the root carries.
+    expect(parseGalleryState("?theme=geek&accent=blue")).toMatchObject({
+      theme: "geek",
+      accent: "blue",
+    });
   });
 
   it("ignores empty and nameless picks", () => {

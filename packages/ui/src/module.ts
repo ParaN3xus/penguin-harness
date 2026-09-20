@@ -13,9 +13,9 @@
  *   });
  *
  * A module is one realistic composition built from the fixtures, not a list of atoms: the gallery
- * renders exactly fifteen of them, in {@link MODULE_IDS} order, each on its own card with a pill per
- * variant. The atoms still exist — a component's `*.demo.tsx` (demo.ts) — and live in the module's
- * Parts drawer, listed by `parts`.
+ * renders exactly the ids in {@link MODULE_IDS}, in that order, each on its own card with a pill
+ * per variant. The atoms still exist — a component's `*.demo.tsx` (demo.ts) — and live in the
+ * module's Parts drawer, listed by `parts`.
  *
  * Before a component exists, a module composes static stand-ins (the screens' parts and
  * `modules/parts.tsx`); each wave swaps a stand-in for the component it imitates. The module file
@@ -26,22 +26,26 @@
  * `/embed?module=conversation&variant=approval`, screenshot file names and quoted feedback all use
  * them. A key is lowercase words joined by `-`, never a `.`.
  *
- * A variant is static (one moment of the interface) or live: a live variant carries a `scene`, an
- * ordered list of frames the gallery plays on a clock, looping, and a live variant comes after the
- * module's static ones. A frame is a state of the composition, not a keyframe: `render` reads the
- * clock (`useScene()` and friends, scene.tsx) and draws the state the current frame names, and the
- * theme's CSS animates the change from one frame to the next through the motion hooks the markup
- * carries (`data-presence`, `data-reveal`, `data-layout-motion`). So a scene never writes a
- * duration or an easing — the same frames move differently in each theme, and not at all under
- * reduced motion. Frame keys are addresses too (`/embed?…&frame=rail`,
- * `<module>--<variant>@<frame>.png`) and stay put while the frames' insides change; every frame
- * must also read well as a still, since screenshots are taken paused on each one.
+ * A variant is one moment of the interface, and may carry a `scene`: the ordered frames that lead
+ * up to that moment, played once on the gallery's clock when the reader presses play. Every
+ * module's first (default) variant carries one, and so does any other variant where the change is
+ * worth watching. A scene's last frame renders exactly what the variant renders without a clock:
+ * the card shows that settled state until play is pressed, and after the scene has run. A frame is
+ * a state of the composition, not a keyframe: `render` reads the clock (`useScene()` and friends,
+ * scene.tsx) and draws the state the current frame names, and the theme's CSS animates the change
+ * from one frame to the next through the motion hooks the markup carries (`data-presence`,
+ * `data-reveal`, `data-layout-motion`). So a scene never writes a duration or an easing — the same
+ * frames move differently in each theme, and not at all under reduced motion. Frame keys are
+ * addresses too (`/embed?…&frame=rail`, `<module>--<variant>@<frame>.png`) and stay put while the
+ * frames' insides change; every frame must also read well as a still, since screenshots are taken
+ * paused on each one.
  */
 import type { ReactNode } from "react";
 import type { DemoContext } from "./demo";
 
-/** The gallery's sections, in page order: the vocabulary first, the whole screens last. */
+/** The gallery's sections, in page order: the hero, then the vocabulary, then whole screens. */
 export const MODULE_IDS = [
+  "hero",
   "foundations",
   "conversation",
   "composer",
@@ -50,10 +54,13 @@ export const MODULE_IDS = [
   "status",
   "forms",
   "overlays",
+  "dialogs",
   "tables",
   "stats",
   "content",
   "files",
+  "create-with-ai",
+  "empty-states",
   "pages",
   "company",
   "screens",
@@ -61,7 +68,7 @@ export const MODULE_IDS = [
 
 export type ModuleId = (typeof MODULE_IDS)[number];
 
-/** One state of a live variant. */
+/** One state of a scene. */
 export interface SceneFrame {
   /** Address: lowercase words joined by `-`, unique within the scene. */
   key: string;
@@ -72,7 +79,10 @@ export interface SceneFrame {
 }
 
 export interface SceneSpec {
-  /** At least two, in play order; the last one loops back to the first. */
+  /**
+   * At least two, in play order. The last frame is the settled state — what the variant renders
+   * without a clock — and the scene stops there; nothing loops.
+   */
   frames: readonly SceneFrame[];
 }
 
@@ -82,7 +92,10 @@ export interface ModuleVariant {
   /** English. The gallery's Chinese dictionary translates it. */
   title: string;
   description?: string;
-  /** Present: a live variant, played frame by frame on the gallery's clock. */
+  /**
+   * The frames that lead up to this variant's state, played once when the reader asks. Required on
+   * a module's first variant; elsewhere only where the change is worth watching.
+   */
   scene?: SceneSpec;
 }
 

@@ -1,6 +1,7 @@
 /**
- * `/` — the gallery: the rail beside one long page of the fifteen modules in `MODULE_IDS` order,
- * opened by a title and one sentence.
+ * `/` — the gallery: the rail beside one long page of the modules in `MODULE_IDS` order, opened
+ * by the hero, each section a title and one sentence over its card. The page's own words are in
+ * the rail; the main column is the modules.
  */
 import { useEffect, useRef } from "react";
 import { ModuleSection } from "../chrome/section";
@@ -17,7 +18,7 @@ export function GalleryPage() {
   const active = useScrollSpy(IDS);
   const scrolled = useRef(false);
 
-  // The hash target moves while previews fill in (token-driven layout, compare frames reporting
+  // The hash target moves while previews fill in (token-driven layout, framed embeds reporting
   // their heights), so jump once the tokens have resolved and keep the target pinned while the
   // page above it keeps resizing — until the reader scrolls or a few seconds pass.
   useEffect(() => {
@@ -52,22 +53,18 @@ export function GalleryPage() {
       <div className="g-frame" data-wide={state.compare !== false || undefined}>
         <Rail activeId={active} />
         <main className="g-main">
-          <header className="g-intro g-chrome">
-            <h1>{S.intro.title}</h1>
-            <p>{S.intro.body}</p>
-            {PROBLEMS.length > 0 && (
-              <div className="g-problems">
-                <strong>{S.intro.problems}</strong>
-                <ul>
-                  {PROBLEMS.map((problem) => (
-                    <li key={problem}>
-                      <code>{problem}</code>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </header>
+          {PROBLEMS.length > 0 && (
+            <div className="g-problems g-chrome">
+              <strong>{S.intro.problems}</strong>
+              <ul>
+                {PROBLEMS.map((problem) => (
+                  <li key={problem}>
+                    <code>{problem}</code>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {MODULES.list.map((entry) => (
             <ModuleSection
               key={entry.module.id}

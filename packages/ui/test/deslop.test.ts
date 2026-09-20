@@ -64,9 +64,10 @@ const POLICY: DeslopPolicy = {
   pulseHomes: ["dot.tsx", "skeleton.tsx", "streaming-caret.tsx"],
   // Rule 11: the one Spinner (K-redesign §5.1).
   spinnerHomes: ["components/icons/spinner/spinner.tsx"],
-  // Rule 20: tokens only; hex colours in identity data and the avatar palette.
+  // Rule 20: tokens only; hex colours in identity data, the avatar palette, and the contract, whose
+  // accent presets carry the swatch a picker paints for a preset the active theme does not apply.
   tokensOnly: true,
-  hexHomes: ["fixtures/", "avatar.ts"],
+  hexHomes: ["fixtures/", "avatar.ts", "tokens.ts"],
 };
 
 /** Occurrences a named wave removes, by root-relative path. The package starts with none. */

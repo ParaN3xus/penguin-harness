@@ -2,7 +2,8 @@
  * Pages & sections: how a page is put together.
  *
  * - Settings: the Plugin library page — page frame, page header with its "?" and toolbar, a ruled
- *   section holding one level of cards, and a collapsed section below;
+ *   section holding one level of cards, and a collapsed section below. Its scene builds the page
+ *   section by section, the cards landing one after another;
  * - Entity: a model's page — the entity header (logo, name, id, badges, a link) above ruled
  *   sections of facts and of the agents that use it;
  * - Empty: the Agents page before any exists — the page's empty state, and a section's empty slot.
@@ -14,6 +15,8 @@ import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { Fixtures } from "../fixtures";
 import { defineModule } from "../module";
+import type { SceneSpec } from "../module";
+import { reached, useScene } from "../scene";
 import { AgentTile } from "../screens/parts";
 import { tokens, usd } from "../screens/format";
 import {
@@ -28,7 +31,17 @@ import {
   RuledSection,
   SearchInput,
   Switch,
+  arriving,
+  useArrivals,
 } from "./parts";
+
+const BUILD: SceneSpec = {
+  frames: [
+    { key: "header", title: "Header", hold: 900 },
+    { key: "installed", title: "Installed", hold: 1600 },
+    { key: "marketplaces", title: "Marketplaces", hold: 1200 },
+  ],
+};
 
 /** The page's scroll container and width cap. */
 function PageFrame({ children }: { children: ReactNode }) {
@@ -46,8 +59,15 @@ function CollapsibleSection({ title, count }: { title: string; count: number }) 
   );
 }
 
+/**
+ * The Plugin library page, and the scene that builds it: the page header with its toolbar; the
+ * Installed section, its cards landing one after another; then the folded Marketplaces section —
+ * the page this variant shows when nothing is playing.
+ */
 function Settings({ f }: { f: Fixtures }) {
+  const clock = useScene();
   const p = f.copy.plugins;
+  const landed = useArrivals(f.plugins.length, "installed");
   return (
     <PageFrame>
       <PageHeader
@@ -64,28 +84,36 @@ function Settings({ f }: { f: Fixtures }) {
           </>
         }
       />
-      <RuledSection title={p.installed} description={p.installedHint} count={f.plugins.length}>
-        <div className="grid grid-cols-2 gap-3">
-          {f.plugins.map((row) => (
-            <Card key={row.name} className="grid grid-cols-[minmax(0,1fr)] gap-3 p-4">
-              <div className="flex items-start gap-3">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-muted text-fg">
-                  <GlyphIcon name={row.icon} size={16} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-(--ui-weight-medium) text-fg">
-                    {row.name}
-                  </span>
-                  <span className="block font-mono text-xs text-fg-subtle">{row.version}</span>
-                </span>
-                <Switch on={row.enabled} />
+      {reached(clock, "installed") && (
+        <RuledSection title={p.installed} description={p.installedHint} count={f.plugins.length}>
+          <div className="grid grid-cols-2 gap-3">
+            {f.plugins.slice(0, landed).map((row) => (
+              <div key={row.name} data-reveal={arriving(clock, "installed")}>
+                <Card className="grid h-full grid-cols-[minmax(0,1fr)] gap-3 p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-muted text-fg">
+                      <GlyphIcon name={row.icon} size={16} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-(--ui-weight-medium) text-fg">
+                        {row.name}
+                      </span>
+                      <span className="block font-mono text-xs text-fg-subtle">{row.version}</span>
+                    </span>
+                    <Switch on={row.enabled} />
+                  </div>
+                  <p className="text-sm text-fg-muted">{row.description}</p>
+                </Card>
               </div>
-              <p className="text-sm text-fg-muted">{row.description}</p>
-            </Card>
-          ))}
+            ))}
+          </div>
+        </RuledSection>
+      )}
+      {reached(clock, "marketplaces") && (
+        <div data-reveal={arriving(clock, "marketplaces")}>
+          <CollapsibleSection title={p.marketplaces} count={f.pluginLibrary.marketplaces} />
         </div>
-      </RuledSection>
-      <CollapsibleSection title={p.marketplaces} count={f.pluginLibrary.marketplaces} />
+      )}
     </PageFrame>
   );
 }
@@ -202,7 +230,7 @@ export const module = defineModule({
     "A settings-style page: the page header, ruled sections, a card grid and a collapsible section; an entity page; an empty page.",
   width: "wide",
   variants: [
-    { key: "settings", title: "Settings" },
+    { key: "settings", title: "Settings", scene: BUILD },
     { key: "entity", title: "Entity" },
     { key: "empty", title: "Empty" },
   ],

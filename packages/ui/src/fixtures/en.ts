@@ -344,6 +344,21 @@ export const en: Fixtures = buildFixtures("en", {
       description: "Reads rendered docs and reports dead links and wrong citations",
     },
   },
+  hero: {
+    title: "Hand a Task to an Agent, and watch it work.",
+    pitch:
+      "PenguinHarness runs every Task as a Session you can open: the prompt, the steps it took, the files it changed and what it cost.",
+    primary: "Download the desktop app",
+    secondary: "Read the docs",
+    empty: {
+      title: "No Session yet",
+      body: "Say what you want done. The Agent plans the steps, runs the tools and keeps the whole trail.",
+      examples: [
+        "Collect the Claude Code docs and answer questions with citations.",
+        "Check that every citation opens a real file, and add a test.",
+      ],
+    },
+  },
   session: {
     title: "Build Claude Code docs expert",
     turn1: {
@@ -629,6 +644,138 @@ Run \`{run}\`, then open {url}.`,
   usage: {
     days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     buckets: { cacheRead: "Cache read", cacheWrite: "Cache write", output: "Output" },
+  },
+  dialogs: {
+    form: {
+      nameLabel: "Name",
+      nameValue: "Citation Checker",
+      nameHint: "Letters, numbers and dashes; it becomes the agent's id.",
+      approvalLabel: "Approvals",
+      approvalHint: "What it may run on its own, and what it asks you about first.",
+      submit: "Create agent",
+    },
+    full: {
+      title: "Choose a Workspace",
+      hint: "The agent reads and writes files here.",
+      choose: "Use this folder",
+    },
+    sheet: { title: "Message actions" },
+  },
+  createWithAi: {
+    panel: {
+      runsAs: (agent) => `Runs as ${agent} in a new chat.`,
+      placeholder: "Describe the agent you want.",
+      draft:
+        "A report writer that turns our weekly ticket export into a short report the team will read, with the numbers it used.",
+      examplesLabel: "Examples",
+      examples: [
+        {
+          title: "Note keeper",
+          description: "Files what you tell it, and answers from your own notes.",
+        },
+        {
+          title: "Docs RAG agent",
+          description: "Indexes a docs folder and answers with citations.",
+        },
+        {
+          title: "Report writer",
+          description: "Turns a week of data into a report someone will read.",
+        },
+      ],
+      previewLabel: "Full prompt",
+      tail: "Create this agent in the current Project with the agent-initialization skill: take default_agent's system_config.yaml as the base, write its name, description and AGENTS.md, install only the Skills it needs from the plugin library, and leave every other agent alone. Finish with the new agent's id and how to start a chat with it.",
+      open: "Open in a new chat",
+    },
+    proposal: {
+      intro:
+        "Here is the agent I would create. Check the name and the Skills before I write anything.",
+      agent: {
+        name: "Report Writer",
+        description: "Writes the weekly ticket report in plain words, with the numbers behind it.",
+        instructions:
+          "Write for the team, not for a model: one paragraph on what changed, then the table. Every number names the query it came from, and anything you could not find out is said out loud.",
+      },
+      labels: {
+        instructions: "Instructions",
+        skills: "Skills",
+        model: "Model",
+        approval: "Approvals",
+      },
+      accept: "Looks right",
+    },
+    review: {
+      title: (changes) => `${changes} changes in this Project`,
+      kinds: { new: "New", install: "Install" },
+      notes: {
+        config: "Its name, its description and the model it runs on.",
+        agentsMd: "The instructions above, as the file it reads every turn.",
+        analysis: "Reads the ticket export and does the counting.",
+        humanizer: "Keeps the report out of model voice.",
+      },
+      accepted: "Accepted",
+      confirm: "Create them",
+    },
+    created: {
+      title: (name) => `${name} is ready`,
+      body: "Its Agent State was written to the path below. Start a chat to try it, or open it to change the prompt.",
+      open: "Open the agent",
+      start: "Start a chat",
+    },
+  },
+  emptyStates: {
+    firstSession: {
+      title: "What should we build?",
+      body: "Describe a task in your own words. The agent reads the Workspace, runs what it needs and shows every step it took.",
+      examplesLabel: "Try one of these",
+      examples: [
+        {
+          title: "Ask the corpus",
+          prompt: "Which docs explain hook events, and which one can block a tool call?",
+        },
+        {
+          title: "Fix a flaky test",
+          prompt:
+            "The BM25 tokenizer test passes and fails on the same input — find out why and fix it.",
+        },
+        {
+          title: "Package the app",
+          prompt: "Package the app as a Docker image and put the run command in the README.",
+        },
+      ],
+    },
+    noResults: {
+      query: "gemini",
+      title: "Nothing matches that search",
+      body: "Try a shorter word, or clear the search to see every model.",
+      clear: "Clear search",
+    },
+    firstRun: {
+      title: "Finish setting up",
+      body: "A Project needs a model and an agent before a Task can run. The rest can wait.",
+      steps: [
+        {
+          title: "Add a model provider",
+          body: "A key and a base URL; the built-in catalog fills in the rest.",
+          action: "Open Models",
+        },
+        {
+          title: "Create an agent",
+          body: "A model, a prompt and the tools it may use.",
+          action: "New agent",
+        },
+        {
+          title: "Start a Session",
+          body: "Describe a task and watch every step it takes.",
+          action: "New chat",
+        },
+        {
+          title: "Install a plugin",
+          body: "Plugins add Skills and MCP servers to every agent that enables them.",
+          action: "Open the library",
+        },
+      ],
+      progress: (done, total) => `${done} of ${total} done`,
+    },
   },
   slashCommands: {
     compact: "Summarize the conversation to free context",

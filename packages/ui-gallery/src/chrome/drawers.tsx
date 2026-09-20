@@ -17,7 +17,6 @@ import { formatBreadcrumb } from "../lib/breadcrumb";
 import { composite, contrastRatio, toHex } from "../lib/color";
 import { contrastFloor, contrastTargets } from "../lib/contrast";
 import { formatVariantKey, parseVariantKey, pickLabels } from "../lib/demos";
-import { THEME_NAMES } from "../lib/themes";
 import { paintColor } from "../lib/token-probe";
 import type { TokenValues } from "../lib/token-probe";
 import { sortTokens, tokensReadBy } from "../lib/tokens-read";
@@ -41,19 +40,18 @@ function PartCard({
   section: ComponentSection;
   demo: Demo;
 }) {
-  const { state, mode, update } = useGallery();
+  const { state, update } = useGallery();
   const text = useText();
   const key = state.variants[section.id];
   const pick = parseVariantKey(demo.axes, demo.matrix, key);
   const { title, description } = text.part(section);
   const crumb = formatBreadcrumb({
-    theme: state.theme,
-    module: module.title,
-    part: section.title,
+    theme: text.theme(state.theme),
+    module: text.module(module).title,
+    part: title,
     variant: Object.keys(demo.axes ?? {}).length > 0 ? pickLabels(demo.axes, pick) : undefined,
-    mode,
-    lang: state.lang,
     tier: state.tier,
+    ...text.qualifiers(),
   });
   const onPick = (next: string) => {
     const fallback = formatVariantKey(
@@ -71,7 +69,7 @@ function PartCard({
       <div className="g-preview g-part-preview">
         <DemoView demo={demo} pick={pick} />
       </div>
-      <div className="g-card-foot g-chrome">
+      <div className="g-card-foot g-part-foot g-chrome">
         <Breadcrumb text={crumb} />
         <AxisPills axes={demo.axes} matrix={demo.matrix} pick={pick} onPick={onPick} />
       </div>
@@ -177,6 +175,7 @@ export function TokensDrawer({
   measureKey: string;
 }) {
   const { S, tokens, state, mode } = useGallery();
+  const text = useText();
   const [copied, copy] = useCopy();
   const measured = useMeasuredTokens(root, measureKey);
   const declared = module.parts.flatMap((id) => DEMOS.byId.get(id)?.demo.tokensUsed ?? []);
@@ -185,7 +184,7 @@ export function TokensDrawer({
   return (
     <div className="g-drawer-panel">
       <div className="g-drawer-title">
-        {S.section.tokensIn(`${THEME_NAMES[state.theme]} · ${S.rail.modes[mode]}`, names.length)}
+        {S.section.tokensIn(`${text.theme(state.theme)} · ${S.rail.modes[mode]}`, names.length)}
       </div>
       {measured === null ? (
         <p className="g-muted">{S.intro.resolving}</p>

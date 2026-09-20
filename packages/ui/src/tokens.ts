@@ -47,12 +47,81 @@ export const THEME_MODES = ["light", "dark"] as const;
 export type ThemeModeName = (typeof THEME_MODES)[number];
 
 /**
- * The user's accent presets. Each overrides the theme's own accent in `@layer ui-accent`
- * (`theme.css`); `neutral` is the absence of a preset — no `data-accent` attribute — and
- * resolves to the active theme's accent.
+ * One accent preset a theme lists: its id (the `data-accent` value, lowercase, the same in both
+ * languages) and its swatch — the `--ui-accent` its light rule sets, spelled exactly as the theme
+ * file spells it, so a picker can paint the swatch without a stylesheet probe. A theme's dark rule
+ * may lift the preset (a dark theme wants a lighter fill with dark ink); the swatch is the light
+ * one, and a test holds it equal to the CSS.
  */
-export const ACCENT_PRESETS = ["blue", "green", "violet", "rose", "amber"] as const;
-export type AccentPreset = (typeof ACCENT_PRESETS)[number];
+export interface AccentPresetSpec {
+  readonly id: string;
+  readonly swatch: string;
+}
+
+/**
+ * The user's accent presets, per theme (user decision, 2026-09-19). Each theme declares its own
+ * list and values in its own file, in `@layer ui-accent`, on `:root[data-accent="<id>"]` scoped to
+ * that theme; a preset overrides the six accent tokens and nothing else. `neutral` is the absence
+ * of a preset — no `data-accent` attribute — and resolves to the active theme's accent.
+ *
+ * A stored choice outlives the theme that listed it: the root carries `data-accent` for any known
+ * id, a theme's preset rules match only their own theme, so a preset the active theme does not
+ * list paints nothing (the theme's own accent shows, as `neutral` would) and comes back when the
+ * user returns to a theme that lists it. Primer keeps the five ids and values the Web App has
+ * always had, so nothing there moves; Frost's five are warm and muted, Console's five are terminal
+ * hues.
+ */
+export const ACCENT_PRESETS = {
+  github: [
+    { id: "blue", swatch: "#2563eb" },
+    { id: "green", swatch: "#15803d" },
+    { id: "violet", swatch: "#7c3aed" },
+    { id: "rose", swatch: "#be123c" },
+    { id: "amber", swatch: "#b45309" },
+  ],
+  modern: [
+    { id: "ocean", swatch: "#3b6ea8" },
+    { id: "clay", swatch: "#b8552f" },
+    { id: "plum", swatch: "#7a4d8f" },
+    { id: "honey", swatch: "#96660f" },
+    { id: "slate", swatch: "#5c6470" },
+  ],
+  geek: [
+    { id: "phosphor", swatch: "#1f7a1f" },
+    { id: "cyan", swatch: "#0e7490" },
+    { id: "magenta", swatch: "#b0177e" },
+    { id: "gold", swatch: "#8a6d00" },
+    { id: "cobalt", swatch: "#003ee9" },
+  ],
+} as const satisfies Readonly<Record<ThemeId, readonly AccentPresetSpec[]>>;
+
+/** Every preset id any theme lists. */
+export type AccentPreset = (typeof ACCENT_PRESETS)[ThemeId][number]["id"];
+
+/** The preset ids each theme lists, in the theme's own order — what a picker offers. */
+export const THEME_ACCENT_PRESETS: Readonly<Record<ThemeId, readonly AccentPreset[]>> = {
+  github: ACCENT_PRESETS.github.map((preset) => preset.id),
+  modern: ACCENT_PRESETS.modern.map((preset) => preset.id),
+  geek: ACCENT_PRESETS.geek.map((preset) => preset.id),
+};
+
+/** Every id once, across the themes — what a stored value is validated against. */
+export const ACCENT_PRESET_IDS: readonly AccentPreset[] = [
+  ...new Set(THEME_IDS.flatMap((id) => THEME_ACCENT_PRESETS[id])),
+];
+
+/**
+ * What a stored choice paints under a theme: the preset when the theme lists it, otherwise
+ * `null` — the theme's own accent, exactly as `neutral`. The CSS resolves the same way on its
+ * own; this is for a picker that must show which swatch is in effect.
+ */
+export function resolveAccent(
+  themeId: ThemeId,
+  choice: string | null | undefined,
+): AccentPreset | null {
+  const listed = THEME_ACCENT_PRESETS[themeId];
+  return (listed as readonly string[]).includes(choice ?? "") ? (choice as AccentPreset) : null;
+}
 
 /** Semantic tones. `busy` is a JS alias of `success` (see the web app's `tone.ts`), not a token. */
 export const TONES = ["success", "attention", "danger", "done", "neutral", "info"] as const;
@@ -212,6 +281,22 @@ export const TOKEN_GROUPS = [
       "--ui-shell-gap",
       "--ui-shell-radius",
       "--ui-shell-shadow",
+    ],
+  },
+  {
+    id: "structure",
+    title: "Structure — trees and fields",
+    // What the `ui-tree` and `ui-field` hooks measure with: a tree row's base inset and its
+    // indent per level (a host indents its rows by these two, so every theme's connector rules
+    // land on the same columns), the colour of a connector or guide rule, and a field's label
+    // column width (Console's tabular rows) and the gap between its label and its control.
+    // Primer's values are today's file tree and form rows.
+    names: [
+      "--ui-tree-inset",
+      "--ui-tree-indent",
+      "--ui-tree-guide",
+      "--ui-field-label-w",
+      "--ui-field-gap",
     ],
   },
   {

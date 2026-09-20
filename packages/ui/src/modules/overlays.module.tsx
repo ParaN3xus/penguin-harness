@@ -2,12 +2,12 @@
  * Overlays: what opens over the chat, each on the same settled transcript.
  *
  * - Menu: a message's context menu (compact rows, separators, a danger item, shortcuts), the dock's
- *   add-panel menu (rows with descriptions), an info popover and a tooltip;
+ *   add-panel menu (rows with descriptions), an info popover and a tooltip — its scene opens them,
+ *   each layer coming in from the edge it hangs off;
  * - Dialog: the paged settings dialog over the dimmed chat, a discard confirmation above it;
  * - Drawer: a Trace file's details in a side drawer;
- * - Toasts: the stack in the corner;
- * - Palette: the command palette as it opens — its commands and recent chats, and key hints;
- * - Open and close (live): a reply's menu, the confirmation it leads to, and the toast after.
+ * - Toasts: the stack in the corner, its scene stacking them one after another;
+ * - Palette: the command palette as it opens — its commands and recent chats, and key hints.
  *
  * Static stand-ins for W3's `Menu`, `FloatingPanel`, `InfoPopover`, `Tooltip`, `Modal`,
  * `PagedDialog`, `ConfirmModal`, `Drawer` and `Toaster`, and W8's `CommandPalette`.
@@ -19,11 +19,9 @@ import { defineModule } from "../module";
 import type { SceneSpec } from "../module";
 import { at, reached, useScene } from "../scene";
 import { bytes } from "../screens/format";
-import { Markdown } from "../screens/markdown";
-import { AgentTile, DisclosureBody } from "../screens/parts";
-import { Turn, UserBubble } from "../screens/transcript";
+import { AgentTile } from "../screens/parts";
+import { Turn } from "../screens/transcript";
 import {
-  Backdrop,
   Button,
   FloatingPanel,
   GlyphIcon,
@@ -84,75 +82,103 @@ function Stage({
 }
 
 /**
- * W3's `InfoPopover`, open: the circled "?" that sits after the title it explains, and the panel it
+ * W3's `InfoPopover`: the circled "?" that sits after the title it explains, and the panel it
  * discloses. The app portals the panel; here it hangs below the row that holds the title (the
- * nearest positioned box).
+ * nearest positioned box), and comes in from that row's edge.
  */
-function InfoPopover({ f }: { f: Fixtures }) {
+function InfoPopover({ f, open }: { f: Fixtures; open: boolean }) {
   const s = f.copy.settings;
   return (
     <>
       <GlyphIcon name="help" size={14} />
-      <FloatingPanel className="absolute right-0 top-[calc(100%+0.375rem)] w-72">
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-1 px-2 py-1.5 text-sm font-(--ui-weight-body)">
-          <p className="text-fg-muted">{s.toolAliasesInfo}</p>
-          <p className="pt-1">
-            <Link external>{f.copy.common.learnMore}</Link>
-          </p>
-        </div>
-      </FloatingPanel>
+      <Presence
+        show={open}
+        side="top"
+        className="absolute right-0 top-[calc(100%+0.375rem)] z-10 w-72"
+      >
+        <FloatingPanel>
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-1 px-2 py-1.5 text-sm font-(--ui-weight-body)">
+            <p className="text-fg-muted">{s.toolAliasesInfo}</p>
+            <p className="pt-1">
+              <Link external>{f.copy.common.learnMore}</Link>
+            </p>
+          </div>
+        </FloatingPanel>
+      </Presence>
     </>
   );
 }
 
+const OPEN: SceneSpec = {
+  frames: [
+    { key: "idle", title: "Idle", hold: 900 },
+    { key: "menu", title: "Menu", hold: 1400 },
+    { key: "panels", title: "Panels", hold: 1600 },
+  ],
+};
+
+/**
+ * Menus, and the scene that opens them: the quiet chat on its own; the message's menu drops under
+ * its trigger and the tooltip comes off the button it names; then the dock's add-panel menu and
+ * the "?" of the row it explains. Settled, that is the view this variant shows.
+ */
 function Menus({ f }: { f: Fixtures }) {
+  const clock = useScene();
   const tooltip = f.copy.chat.sendToBackground;
+  const menu = reached(clock, "menu");
+  const panels = reached(clock, "panels");
   return (
     <Stage f={f} className="items-start justify-between">
       <div className="grid grid-cols-[minmax(0,1fr)] w-60 gap-6">
-        <FloatingPanel>
-          {f.menus.message.map((item, i) =>
-            item === "separator" ? (
-              <MenuSeparator key={i} />
-            ) : (
-              <MenuItem
-                key={item.label}
-                icon={item.icon}
-                label={item.label}
-                shortcut={item.shortcut}
-                danger={item.danger}
-                active={i === 1}
-              />
-            ),
-          )}
-        </FloatingPanel>
+        <Presence show={menu} side="top">
+          <FloatingPanel>
+            {f.menus.message.map((item, i) =>
+              item === "separator" ? (
+                <MenuSeparator key={i} />
+              ) : (
+                <MenuItem
+                  key={item.label}
+                  icon={item.icon}
+                  label={item.label}
+                  shortcut={item.shortcut}
+                  danger={item.danger}
+                  active={i === 1}
+                />
+              ),
+            )}
+          </FloatingPanel>
+        </Presence>
         <span className="flex items-center gap-2">
           <IconButton label={tooltip} icon="arrowDownLine" hovered />
-          <Tooltip label={tooltip} />
+          <Presence show={menu} side="left" as="span" className="inline-flex">
+            <Tooltip label={tooltip} />
+          </Presence>
         </span>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)] w-80 justify-items-end gap-6">
-        <FloatingPanel className="w-full">
-          <MenuLabel>{f.copy.dock.newPanel}</MenuLabel>
-          {f.menus.panels.map((panel, i) =>
-            panel === "separator" ? (
-              <MenuSeparator key={i} />
-            ) : (
-              <MenuItem
-                key={panel.label}
-                icon={panel.icon}
-                label={panel.label}
-                description={panel.description}
-                active={i === 0}
-              />
-            ),
-          )}
-        </FloatingPanel>
+        <Presence show={panels} side="top" className="w-full">
+          <FloatingPanel className="w-full">
+            <MenuLabel>{f.copy.dock.newPanel}</MenuLabel>
+            {f.menus.panels.map((panel, i) =>
+              panel === "separator" ? (
+                <MenuSeparator key={i} />
+              ) : (
+                <MenuItem
+                  key={panel.label}
+                  icon={panel.icon}
+                  label={panel.label}
+                  description={panel.description}
+                  active={i === 0}
+                />
+              ),
+            )}
+          </FloatingPanel>
+        </Presence>
         {/* Where this "?" lives in the app: the Appearance row it explains. */}
         <div className="relative flex w-full items-center justify-between gap-4 rounded-md border border-line bg-surface px-3 py-2.5">
           <div className="flex items-center gap-1 text-sm font-(--ui-weight-medium) text-fg">
             {f.copy.settings.toolAliases}
-            <InfoPopover f={f} />
+            <InfoPopover f={f} open={panels} />
           </div>
           <Switch on={false} />
         </div>
@@ -297,18 +323,39 @@ function Drawer({ f }: { f: Fixtures }) {
   );
 }
 
+const STACK: SceneSpec = {
+  frames: [
+    { key: "first", title: "First", hold: 1200 },
+    { key: "stack", title: "Stack", hold: 1800 },
+  ],
+};
+
+/** The frame each toast arrives on; any beyond the last land with it. */
+const STACK_FRAMES = ["first", "stack"] as const;
+
+/**
+ * The corner stack, and the scene that fills it: one toast, then the next under it. A toast is
+ * marked as arrived only on the frame it lands on, so the settled stack is at rest.
+ */
 function Toasts({ f }: { f: Fixtures }) {
+  const clock = useScene();
   return (
     <Stage f={f} className="flex-col items-end gap-2">
-      {f.notices.toasts.map((toast) => (
-        <Toast
-          key={toast.title}
-          tone={toast.tone}
-          title={toast.title}
-          description={toast.body}
-          action={toast.action ? <Link>{toast.action}</Link> : undefined}
-        />
-      ))}
+      {f.notices.toasts.map((toast, i) => {
+        const frame = STACK_FRAMES[Math.min(i, STACK_FRAMES.length - 1)]!;
+        if (!reached(clock, frame)) return null;
+        return (
+          // The width a `Toast` takes in this corner, so the toast inside keeps it as it lands.
+          <div key={toast.title} data-reveal={at(clock, frame) || undefined} className="w-80">
+            <Toast
+              tone={toast.tone}
+              title={toast.title}
+              description={toast.body}
+              action={toast.action ? <Link>{toast.action}</Link> : undefined}
+            />
+          </div>
+        );
+      })}
     </Stage>
   );
 }
@@ -381,110 +428,12 @@ function Palette({ f }: { f: Fixtures }) {
   );
 }
 
-const LIVE_OPEN_CLOSE: SceneSpec = {
-  frames: [
-    { key: "idle", title: "Idle", hold: 900 },
-    { key: "menu", title: "Menu", hold: 1400 },
-    { key: "dialog", title: "Dialog", hold: 2000 },
-    { key: "toast", title: "Toast", hold: 1800 },
-  ],
-};
-
-/**
- * Open and close: the reply's "…" opens its menu under it, the pointer on "Delete message"; the
- * menu closes as the confirmation opens over its backdrop; the dialog leaves, the reply folds
- * away and a toast says so from the corner. Each layer comes and goes through `Presence`, from
- * the edge it opens from; the loop back to the first frame brings the reply back.
- */
-function LiveOpenClose({ f }: { f: Fixtures }) {
-  const clock = useScene();
-  const turn = f.session.turns[1]!;
-  const prompt = turn.items.find((i) => i.id === "u2");
-  const reply = turn.items.find((i) => i.id === "tx4");
-  const menu = at(clock, "menu");
-  const dialog = at(clock, "dialog");
-  const deleted = reached(clock, "toast");
-  const d = f.copy.chat.deleteMessage;
-  return (
-    <div className="relative h-[32rem] overflow-hidden rounded-lg border border-line bg-canvas">
-      <div className="h-full overflow-hidden px-10 py-4">
-        <div className="mx-auto max-w-2xl">
-          {prompt?.kind === "user" && <UserBubble item={prompt} dense={false} />}
-          {reply?.kind === "text" && (
-            <DisclosureBody open={!deleted}>
-              <div className="my-3">
-                <Markdown text={reply.markdown} />
-              </div>
-            </DisclosureBody>
-          )}
-          {!deleted && (
-            <div className="flex items-center gap-1">
-              <IconButton label={f.copy.chat.copy} icon="copy" size="sm" />
-              <IconButton label={f.copy.chat.fork} icon="fork" size="sm" />
-              <span className="relative">
-                <IconButton label={f.copy.common.more} icon="more" size="sm" pressed={menu} />
-                <Presence
-                  show={menu}
-                  side="top"
-                  className="absolute left-0 top-full z-10 mt-1 w-60"
-                >
-                  <FloatingPanel>
-                    {f.menus.message.map((item, i) =>
-                      item === "separator" ? (
-                        <MenuSeparator key={i} />
-                      ) : (
-                        <MenuItem
-                          key={item.label}
-                          icon={item.icon}
-                          label={item.label}
-                          shortcut={item.shortcut}
-                          danger={item.danger}
-                          active={item.danger}
-                        />
-                      ),
-                    )}
-                  </FloatingPanel>
-                </Presence>
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-      <Backdrop show={dialog} />
-      <div className="absolute inset-0 flex items-center justify-center p-6">
-        <Presence show={dialog} side="center" className="w-full max-w-sm">
-          <Modal
-            title={d.title}
-            description={d.body}
-            footer={
-              <>
-                <Button variant="secondary" size="sm">
-                  {f.copy.common.cancel}
-                </Button>
-                <Button variant="danger" size="sm">
-                  {d.confirm}
-                </Button>
-              </>
-            }
-          />
-        </Presence>
-      </div>
-      <div className="absolute inset-x-0 bottom-0 flex justify-end p-6">
-        <Presence show={deleted} side="bottom" className="w-80 max-w-full">
-          <Toast tone="success" title={d.deleted} />
-        </Presence>
-      </div>
-    </div>
-  );
-}
-
 const VARIANTS = {
   menu: Menus,
   dialog: Dialogs,
   drawer: Drawer,
   toasts: Toasts,
   palette: Palette,
-  "live-open-close": LiveOpenClose,
 } as const;
 
 export const module = defineModule({
@@ -494,12 +443,11 @@ export const module = defineModule({
     "What opens over the chat: a context menu, an info popover and a tooltip; a dialog; a drawer; the toast stack; the command palette.",
   width: "wide",
   variants: [
-    { key: "menu", title: "Menu" },
+    { key: "menu", title: "Menu", scene: OPEN },
     { key: "dialog", title: "Dialog" },
     { key: "drawer", title: "Drawer" },
-    { key: "toasts", title: "Toasts" },
+    { key: "toasts", title: "Toasts", scene: STACK },
     { key: "palette", title: "Palette" },
-    { key: "live-open-close", title: "Open and close", scene: LIVE_OPEN_CLOSE },
   ],
   parts: [
     "overlays-modal",

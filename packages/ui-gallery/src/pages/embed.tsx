@@ -1,22 +1,26 @@
 /**
- * One card alone, on a real themed root — the unit the compare frames and `scripts/shots.mjs`
- * render:
+ * One card alone, on a real themed root — the unit the framed previews (compare mode, the phone
+ * view) and `scripts/shots.mjs` render:
  *
- *   /embed?module=<module-id>&variant=<key>&theme=&mode=&tier=&lang=
- *   /embed?module=<module-id>&variant=<live-key>&frame=<frame-key>&play=0|1&…
- *   /embed?demo=<part-id>&variant=<key>&theme=&mode=&tier=&lang=
+ *   /embed?module=<module-id>&variant=<key>&theme=&mode=&tier=&lang=&accent=
+ *   /embed?module=<module-id>&variant=<key>&frame=<frame-key>&play=0|1&…
+ *   /embed?demo=<part-id>&variant=<key>&theme=&mode=&tier=&lang=&accent=
  *
- * A live variant holds still on its last frame unless `frame` or `play` say otherwise (see
- * lib/live.ts); in a compare frame (`sync=1`) it follows the clock of the card around it instead.
+ * A variant with a scene holds still, settled on its last frame, unless `frame` or `play` say
+ * otherwise (see lib/live.ts); inside a card's frame (`sync=1`) it follows the clock of the card
+ * around it instead, and sends the composition's own commands for that clock up to the card. The
+ * root font size is the page's own: `tier=` applies to `<html>` here as on the main page, so a
+ * framed preview is sized like the card's.
  *
  * It posts its height to a parent frame (`{ type: "gallery:height" }`) and marks
  * `<html data-gallery-ready>` once tokens are resolved and fonts have loaded, which is what the
  * screenshot script waits for. `#embed-root` carries what the script needs to walk the picks:
- * `data-kind`, `data-renderable`, `data-variants` (a module's keys), `data-frames` and
- * `data-frame` (a live variant's frame keys and the one showing), or `data-axes` and `data-matrix`
- * (a demo's).
+ * `data-kind`, `data-renderable`, `data-variants` (a module's keys), `data-frames`, `data-frame`
+ * and `data-settled` (a scene's frame keys, the one showing, and whether it is the settled last
+ * one), or `data-axes` and `data-matrix` (a demo's).
  */
 import { useEffect, useRef } from "react";
+import { isSettled } from "../../../ui/src/scene";
 import { useFollowedClock, useScenePlayer } from "../chrome/player";
 import { parseVariantKey } from "../lib/demos";
 import { parseEmbedCue } from "../lib/live";
@@ -48,7 +52,8 @@ export function EmbedPage() {
     variant?.key ?? "",
     reduced,
   );
-  const clock = sync ? followed : own.clock;
+  const clock = sync ? followed.clock : own.clock;
+  const controls = sync ? followed.controls : own.controls;
 
   useEffect(() => {
     const el = root.current;
@@ -87,14 +92,16 @@ export function EmbedPage() {
         data-module={entry.module.id}
         data-renderable="true"
         data-width={entry.module.width}
+        data-view={state.view}
         data-variant={variant.key}
         data-variants={JSON.stringify(entry.module.variants.map((v) => v.key))}
         data-frames={
           variant.scene ? JSON.stringify(variant.scene.frames.map((f) => f.key)) : undefined
         }
         data-frame={clock?.frame}
+        data-settled={clock ? isSettled(clock.frames, clock) : undefined}
       >
-        <ModuleView module={entry.module} variant={variant} clock={clock} />
+        <ModuleView module={entry.module} variant={variant} clock={clock} controls={controls} />
       </div>
     );
   }
@@ -106,6 +113,7 @@ export function EmbedPage() {
         className="g-preview g-embed"
         data-kind="demo"
         data-renderable="true"
+        data-view={state.view}
         data-axes={JSON.stringify(demo.axes ?? {})}
         data-matrix={Boolean(demo.matrix)}
       >

@@ -130,9 +130,11 @@
   color: var(--ui-fg-subtle);
 }
 
+/* Six columns where they fit (the theme's own accent and its five presets); at phone width the
+   columns wrap to two or three rows rather than squeezing the samples. */
 .gf-accents {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
   gap: 1rem 0.75rem;
 }
 .gf-accent {
@@ -1193,6 +1195,134 @@
   .gh-tab[aria-selected="true"] {
     color: var(--ui-fg);
     font-weight: var(--ui-weight-medium);
+  }
+
+  /* ui-icon-decor: a sidebar's rows, group header and a menu row, each glyph beside its label. */
+  .gh-nav {
+    display: grid;
+    gap: 0.125rem;
+    max-width: 16rem;
+    padding: 0.375rem;
+    border: 1px solid var(--ui-line);
+    border-radius: var(--ui-radius-lg);
+    background-color: var(--ui-surface-muted);
+  }
+  .gh-nav-row {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-stack-1);
+    padding: var(--ui-row-py) calc(var(--ui-space-unit) * 2.5);
+    border-radius: var(--ui-radius-md);
+    font-size: var(--ui-text-body-size);
+    line-height: var(--ui-text-body-lh);
+    color: var(--ui-fg-muted);
+  }
+  .gh-nav-row[aria-current] {
+    background-color: var(--ui-accent-muted);
+    color: var(--ui-fg);
+    font-weight: var(--ui-weight-medium);
+  }
+  .gh-nav-glyph {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--ui-fg-subtle);
+  }
+  .gh-nav-row[aria-current] .gh-nav-glyph {
+    color: var(--ui-fg);
+  }
+  .gh-nav-group {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-stack-0);
+    padding: 0.75rem calc(var(--ui-space-unit) * 2) 0.25rem;
+  }
+  .gh-nav-group-label {
+    font-size: var(--ui-h6-size);
+    line-height: var(--ui-h6-lh);
+    font-weight: var(--ui-h6-weight);
+    color: var(--ui-fg-muted);
+  }
+  .gh-nav-menu {
+    color: var(--ui-fg);
+  }
+
+  /* ui-tree: Primer's bordered box with the host's own indent; a theme's recipe adds its rules
+     or takes the box away. Rows are one line high, so an elbow lands on their middle. */
+  .gh-tree {
+    max-width: 18rem;
+    padding: 0.25rem;
+    border: 1px solid var(--ui-line);
+    border-radius: var(--ui-radius-md);
+    background-color: var(--ui-surface);
+  }
+  .gh-tree-row {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    height: 1.75rem;
+    padding-inline-end: 0.5rem;
+    border-radius: var(--ui-radius-sm);
+    font-size: var(--ui-text-body-size);
+    line-height: var(--ui-text-body-lh);
+    color: var(--ui-fg);
+    white-space: nowrap;
+  }
+  .gh-tree-row .gf-glyph {
+    color: var(--ui-fg-muted);
+  }
+  .gh-tree-gap {
+    width: 0.75rem;
+    flex-shrink: 0;
+  }
+  .gh-tree-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ui-field: a form field stacks (label, control, hint) and a settings row puts its label beside
+     the control — Primer's two layouts, which Frost and Console each re-lay their own way. */
+  .gh-fields {
+    display: grid;
+    gap: 1rem;
+    max-width: 24rem;
+  }
+  .gh-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.375rem;
+  }
+  .gh-field-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding-block: 0.5rem;
+    border-top: 1px solid var(--ui-line-muted);
+  }
+  .gh-field-label {
+    display: grid;
+    gap: 0.125rem;
+    min-width: 0;
+    font-size: var(--ui-text-body-size);
+    line-height: var(--ui-text-body-lh);
+    font-weight: var(--ui-weight-medium);
+    color: var(--ui-fg);
+  }
+  .gh-field-sub {
+    font-weight: var(--ui-weight-body);
+  }
+  /* A filled text control, drawn like .gf-input but in this layer, so a field recipe may stretch it. */
+  .gh-field-input {
+    display: flex;
+    width: 100%;
+    padding: var(--ui-control-py-sm) var(--ui-control-px-sm);
+    border: 1px solid var(--ui-line-emphasis);
+    border-radius: var(--ui-radius-md);
+    background-color: var(--ui-surface);
+    color: var(--ui-fg);
+    font-size: var(--ui-text-small-size);
+    line-height: var(--ui-text-small-lh);
   }
 }
 @keyframes gf-blink {

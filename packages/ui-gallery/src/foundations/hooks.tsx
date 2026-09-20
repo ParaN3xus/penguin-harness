@@ -1,18 +1,23 @@
 /**
- * Foundations › Hooks: the seven style hooks (`packages/ui/src/hooks.ts`), each on the minimal
+ * Foundations › Hooks: the ten style hooks (`packages/ui/src/hooks.ts`), each on the minimal
  * markup its recipes select on — `.ui-frame` children carry `data-slot`, `.ui-live` carries
  * `data-live`, `.ui-underline-nav` holds `[role=tab]` items, `.ui-display` sits on an `h1`,
- * `.ui-shell` holds a `nav` and a `main` slot — so a theme's hooks can be reviewed before any
- * component carries them. The specimens live here, in the gallery, rather than in a package
- * module: a package file applies a hook only inside the component that hosts it.
+ * `.ui-shell` holds a `nav` and a `main` slot, `.ui-icon-decor` sits on the icon with its
+ * `data-role`, `.ui-tree` rows carry `data-depth` and `data-last` with a `data-branch` under a
+ * parent, `.ui-field` children carry the `label` / `control` / `hint` slots — so a theme's hooks
+ * can be reviewed before any component carries them. The specimens live here, in the gallery,
+ * rather than in a package module: a package file applies a hook only inside the component that
+ * hosts it.
  *
  * The base look of each sample lives in `@layer components` (foundations.css): a hook's recipe sits
- * in `@layer ui-theme` and must win over it, exactly as it wins over a component's utilities.
+ * in `@layer ui-theme` and must win over it, exactly as it wins over a component's utilities. The
+ * tree sample indents its rows the way a host does — by the inset and the indent tokens — so the
+ * three themes' guides land on the same columns as in the modules.
  */
 import { HOOKS } from "@prismshadow/penguin-ui";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useGallery } from "../state";
-import { ShellSpecimen } from "./shared";
+import { Glyph, NAV_GLYPHS, SAMPLE_GLYPHS, ShellSpecimen } from "./shared";
 import { SPECIMENS } from "./specimens";
 
 function Hook({ name, children }: { name: (typeof HOOKS)[number]; children: ReactNode }) {
@@ -25,6 +30,42 @@ function Hook({ name, children }: { name: (typeof HOOKS)[number]; children: Reac
       </div>
       <div className="gf-hook-body">{children}</div>
     </section>
+  );
+}
+
+/** A host's own indent for a tree row: what every module's rows spell, from the two tree tokens. */
+const indent = (depth: number): CSSProperties => ({
+  paddingInlineStart: `calc(var(--ui-tree-inset) + var(--ui-tree-indent) * ${depth})`,
+});
+
+function TreeRow({
+  depth,
+  last = false,
+  dir = false,
+  open = false,
+  children,
+}: {
+  depth: number;
+  last?: boolean;
+  dir?: boolean;
+  open?: boolean;
+  children: string;
+}) {
+  return (
+    <div
+      className="gh-tree-row"
+      data-depth={depth}
+      data-last={last || undefined}
+      style={indent(depth)}
+    >
+      {dir ? (
+        <Glyph d={open ? SAMPLE_GLYPHS.chevronDown : SAMPLE_GLYPHS.chevronRight} size={12} />
+      ) : (
+        <span className="gh-tree-gap" />
+      )}
+      <Glyph d={dir ? SAMPLE_GLYPHS.folder : SAMPLE_GLYPHS.file} size={14} />
+      <span className="gh-tree-name">{children}</span>
+    </div>
   );
 }
 
@@ -119,6 +160,84 @@ export function HooksBoard() {
 
       <Hook name="ui-shell">
         <ShellSpecimen />
+      </Hook>
+
+      {/* Three navigation rows (the first selected), a group header and a menu row, each with a
+          glyph its label already says: Frost tints them by role, Console drops them. */}
+      <Hook name="ui-icon-decor">
+        <div className="gh-nav">
+          {S.foundations.motionSpecimens.sidebarRows.map((row, i) => (
+            <span key={row} className="gh-nav-row" aria-current={i === 0 ? "page" : undefined}>
+              <span className="ui-icon-decor gh-nav-glyph" data-role="nav">
+                <Glyph d={NAV_GLYPHS[i % NAV_GLYPHS.length] ?? NAV_GLYPHS[0]} size={16} />
+              </span>
+              {row}
+            </span>
+          ))}
+          <span className="gh-nav-group">
+            <span className="ui-icon-decor gh-nav-glyph" data-role="group">
+              <Glyph d={SAMPLE_GLYPHS.folder} size={14} />
+            </span>
+            <span className="ui-eyebrow gh-nav-group-label">{t.group}</span>
+          </span>
+          <span className="gh-nav-row gh-nav-menu">
+            <span className="ui-icon-decor gh-nav-glyph" data-role="menu">
+              <Glyph d={SAMPLE_GLYPHS.pin} size={14} />
+            </span>
+            {t.menu[0]}
+          </span>
+        </div>
+      </Hook>
+
+      {/* A file tree: a root, a folder with two files in a branch, and a last file. */}
+      <Hook name="ui-tree">
+        <div className="ui-tree gh-tree">
+          <TreeRow depth={0} dir open>
+            {t.tree.root}
+          </TreeRow>
+          <div data-branch data-depth={1}>
+            <TreeRow depth={1} dir open>
+              {t.tree.dir}
+            </TreeRow>
+            <div data-branch data-depth={2}>
+              {t.tree.files.map((file, i) => (
+                <TreeRow key={file} depth={2} last={i === t.tree.files.length - 1}>
+                  {file}
+                </TreeRow>
+              ))}
+            </div>
+            <TreeRow depth={1} last>
+              {t.tree.last}
+            </TreeRow>
+          </div>
+        </div>
+      </Hook>
+
+      {/* A form field (label, control, hint) and a settings row (label with its hint, a switch):
+          Primer keeps each host's own layout, Frost stacks both, Console tabulates both. */}
+      <Hook name="ui-field">
+        <div className="gh-fields">
+          <div className="ui-field gh-field">
+            <span data-slot="label" className="gh-field-label">
+              {t.field.name}
+            </span>
+            <div data-slot="control">
+              <span className="gh-field-input">{t.field.value}</span>
+            </div>
+            <span data-slot="hint" className="gf-caption">
+              {t.field.hint}
+            </span>
+          </div>
+          <div className="ui-field gh-field-row">
+            <div data-slot="label" className="gh-field-label">
+              {t.field.notify}
+              <span className="gf-caption gh-field-sub">{t.field.notifyHint}</span>
+            </div>
+            <div data-slot="control">
+              <span className="gf-switch" data-on />
+            </div>
+          </div>
+        </div>
       </Hook>
     </div>
   );

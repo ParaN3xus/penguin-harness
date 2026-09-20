@@ -12,6 +12,8 @@ const PATHS = {
   sun: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4",
   moon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
   monitor: "M3 4h18v12H3zM8 20h8M12 16v4",
+  phone:
+    "M8 2.5h8a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V4A1.5 1.5 0 0 1 8 2.5zM10.5 18h3",
   external: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
   back: "M15 18 9 12l6-6",
   type: "M4 7V4h16v3M9 20h6M12 4v16",
@@ -21,6 +23,8 @@ const PATHS = {
   restart: "M3 12a9 9 0 1 0 2.64-6.36L3 8M3 3v5h5",
   previous: "M19 20 9 12l10-8zM5 19V5",
   next: "m5 4 10 8-10 8zM19 5v14",
+  menu: "M4 7h16M4 12h16M4 17h16",
+  close: "M6 6l12 12M18 6 6 18",
 } as const;
 
 export type ChromeIconName = keyof typeof PATHS;

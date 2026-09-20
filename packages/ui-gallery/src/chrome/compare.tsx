@@ -1,73 +1,108 @@
 /**
- * Compare: one `/embed` frame per theme — real roots, so `:root[data-theme]`, fonts and scrollbars
- * behave as in the app — each reporting its content height so a frame never scrolls. A `narrow`
- * module's frames sit side by side; a `wide` module's stack at full width, because three
- * transcripts or tables at a third of the column are unreadable.
+ * Framed previews: one `/embed` frame per theme — real roots, so `:root[data-theme]`, the root
+ * font size, fonts and scrollbars behave as in the app — each reporting its content height so a
+ * frame never scrolls. Two views use them:
  *
- * A live variant's frames all follow the card's clock (`sync=1`): each frame says when it is
- * listening, and gets the card's timeline then and on every change after.
+ * - compare: all three themes. A `narrow` module's frames sit side by side; a `wide` module's
+ *   stack at full width, because three transcripts or tables at a third of the column are
+ *   unreadable.
+ * - phone: a 390 px frame per theme (one, or three when comparing), a plain frame with no device
+ *   drawing, so a composition lays out at phone width — a real viewport, which is the only thing
+ *   the responsive classes answer to — and the themes can be compared there too.
+ *
+ * A scene's frames all follow the card's clock (`sync=1`): each frame says when it is listening,
+ * and gets the card's timeline then and on every change after; a composition's own move inside a
+ * frame comes back as a command the card's clock runs.
  */
-import { THEME_IDS } from "@prismshadow/penguin-ui";
 import type { ThemeId } from "@prismshadow/penguin-ui";
 import { useEffect, useRef, useState } from "react";
 import type { Module, ModuleVariant } from "../../../ui/src/module";
-import type { SceneClock } from "../../../ui/src/scene";
+import { isSettled } from "../../../ui/src/scene";
+import type { SceneClock, SceneCommand } from "../../../ui/src/scene";
 import { formatBreadcrumb } from "../lib/breadcrumb";
-import { clockMessage, CLOCK_READY } from "../lib/live";
+import { clockMessage, CLOCK_READY, readControlMessage } from "../lib/live";
 import { BASE } from "../lib/location";
-import { THEME_NAMES } from "../lib/themes";
-import { formatGalleryQuery } from "../lib/url-state";
+import { formatGalleryQuery, PHONE_WIDTH } from "../lib/url-state";
+import { useText } from "../preview";
 import { useGallery } from "../state";
 import { Breadcrumb } from "./pills";
 
-export function CompareFrames({
+export function ThemeFrames({
   module,
   variant,
   clock = null,
+  control,
   frames,
+  themes,
+  phone,
 }: {
   module: Module;
   variant: ModuleVariant;
-  /** A live variant's clock, owned by the card; the frames follow it. */
+  /** A scene's clock, owned by the card; the frames follow it. */
   clock?: SceneClock | null;
+  /** Runs a command a framed composition sends up for that clock. */
+  control?: (command: SceneCommand) => void;
   /** Filled with each theme's frame, for the tokens drawer to measure the active theme's copy. */
   frames?: Map<ThemeId, HTMLIFrameElement>;
+  /** The active theme alone, or all three when comparing. */
+  themes: readonly ThemeId[];
+  /** Frame each theme at phone width. */
+  phone: boolean;
 }) {
   return (
-    <div className="g-compare" data-width={module.width}>
-      {THEME_IDS.map((theme) => (
-        <CompareFrame
+    <div
+      className="g-framed"
+      data-width={module.width}
+      data-compare={themes.length > 1 || undefined}
+      data-phone={phone || undefined}
+    >
+      {themes.map((theme) => (
+        <ThemeFrame
           key={theme}
           module={module}
           variant={variant}
           clock={clock}
+          control={control}
           theme={theme}
           frames={frames}
+          phone={phone}
+          captioned={themes.length > 1}
         />
       ))}
     </div>
   );
 }
 
-function CompareFrame({
+function ThemeFrame({
   module,
   variant,
   clock,
+  control,
   theme,
   frames,
+  phone,
+  captioned,
 }: {
   module: Module;
   variant: ModuleVariant;
   clock: SceneClock | null;
+  control?: (command: SceneCommand) => void;
   theme: ThemeId;
   frames?: Map<ThemeId, HTMLIFrameElement>;
+  phone: boolean;
+  /** Name the theme above the frame: only when there is more than one to tell apart. */
+  captioned: boolean;
 }) {
-  const { S, state, mode } = useGallery();
+  const { S, state } = useGallery();
+  const text = useText();
   const frame = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(432);
   /** What the frame should hold now, re-sent when the frame says it is listening. */
   const message = useRef<ReturnType<typeof clockMessage> | null>(null);
   message.current = clock ? clockMessage(module.id, variant.key, clock) : null;
+  /** The card's reducer, for a command the frame's composition sends up. */
+  const relay = useRef(control);
+  relay.current = control;
   const post = () => {
     if (message.current)
       frame.current?.contentWindow?.postMessage(message.current, window.location.origin);
@@ -81,26 +116,31 @@ function CompareFrame({
       if (data?.type === "gallery:height" && typeof data.height === "number")
         setHeight(Math.ceil(data.height));
       else if (data?.type === CLOCK_READY) post();
+      else {
+        const command = readControlMessage(data, module.id, variant.key);
+        if (command) relay.current?.(command);
+      }
     };
     window.addEventListener("message", onMessage);
     return () => {
       window.removeEventListener("message", onMessage);
       if (frames?.get(theme) === el) frames?.delete(theme);
     };
-    // `post` reads refs only.
+    // `post` and `relay` read refs only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frames, theme]);
+  }, [frames, theme, module.id, variant.key]);
   // Every change of the card's clock reaches the frame at once.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(post, [clock]);
+  const paused = clock && !clock.playing && !isSettled(clock.frames, clock);
+  const currentFrame = clock?.frames[clock.index];
   const crumb = formatBreadcrumb({
-    theme,
-    module: module.title,
-    variant: [variant.title],
-    frame: clock && !clock.playing ? clock.frames[clock.index]?.title : undefined,
-    mode,
-    lang: state.lang,
+    theme: text.theme(theme),
+    module: text.module(module).title,
+    variant: [text.variant(module, variant)],
+    frame: paused && currentFrame ? text.frame(module, variant, currentFrame) : undefined,
     tier: state.tier,
+    ...text.qualifiers(),
   });
   // Nothing about the clock goes into the src: a new frame must not reload the document.
   const src = `${BASE}/embed${formatGalleryQuery(
@@ -108,17 +148,19 @@ function CompareFrame({
     { module: module.id, variant: variant.key, ...(variant.scene ? { sync: "1" } : {}) },
   )}`;
   return (
-    <figure className="g-compare-item">
-      <figcaption className="g-chrome">
-        <span className="g-compare-theme">{THEME_NAMES[theme]}</span>
-        <Breadcrumb text={crumb} className="g-crumb-compact" />
-      </figcaption>
+    <figure className="g-framed-item">
+      {captioned && (
+        <figcaption className="g-chrome">
+          <span className="g-framed-theme">{text.theme(theme)}</span>
+          <Breadcrumb text={crumb} className="g-crumb-compact" />
+        </figcaption>
+      )}
       <iframe
         ref={frame}
-        title={S.section.compareFrame(THEME_NAMES[theme])}
+        title={S.section.compareFrame(text.theme(theme))}
         src={src}
         loading="lazy"
-        style={{ height }}
+        style={{ height, width: phone ? PHONE_WIDTH : undefined }}
       />
     </figure>
   );

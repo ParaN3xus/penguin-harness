@@ -10,7 +10,7 @@
  * The inline copy in index.html must equal {@link BOOT_SCRIPT} byte for byte; a test asserts it.
  * Change the constants here, then paste the regenerated string there.
  */
-import { ACCENT_PRESETS, DEFAULT_THEME_ID, THEME_IDS } from "./tokens";
+import { ACCENT_PRESET_IDS, DEFAULT_THEME_ID, THEME_IDS } from "./tokens";
 import type { AccentPreset, ThemeId } from "./tokens";
 
 /** localStorage keys. `penguin.theme` predates themes and stores the MODE (light / dark / system). */
@@ -32,7 +32,14 @@ export const FONT_SCALE_PX: Readonly<Record<FontScale, string>> = {
 
 export const DEFAULT_FONT_SCALE: FontScale = "md";
 
-/** `neutral` is the stored value for "no preset": the theme's own accent, no `data-accent`. */
+/**
+ * `neutral` is the stored value for "no preset": the theme's own accent, no `data-accent`. Any
+ * other known id is written to the root as it is, whichever theme is active: a theme's preset
+ * rules match only their own theme, so an id the active theme does not list paints nothing (the
+ * theme's own accent shows) and takes effect again when the user returns to a theme that lists
+ * it. The resolution lives in the CSS, and `resolveAccent` (tokens.ts) only mirrors it for a
+ * picker.
+ */
 export type AccentChoice = "neutral" | AccentPreset;
 
 export interface ThemeAttributes {
@@ -78,7 +85,7 @@ export const BOOT_SCRIPT =
   `var t=s.getItem(${JSON.stringify(THEME_STORAGE_KEYS.themeId)});` +
   `if(${JSON.stringify(NON_DEFAULT_THEMES)}.indexOf(t)>=0)d.dataset.theme=t;` +
   `var a=s.getItem(${JSON.stringify(THEME_STORAGE_KEYS.accent)});` +
-  `if(${JSON.stringify(ACCENT_PRESETS)}.indexOf(a)>=0)d.dataset.accent=a;` +
+  `if(${JSON.stringify(ACCENT_PRESET_IDS)}.indexOf(a)>=0)d.dataset.accent=a;` +
   `var f=${JSON.stringify(FONT_SCALE_PX)}[s.getItem(${JSON.stringify(THEME_STORAGE_KEYS.fontScale)})];` +
   `d.style.fontSize=typeof f==="string"?f:${JSON.stringify(FONT_SCALE_PX[DEFAULT_FONT_SCALE])}` +
   "}catch(e){}})()";

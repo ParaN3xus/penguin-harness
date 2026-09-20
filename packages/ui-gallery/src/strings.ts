@@ -1,27 +1,32 @@
 /**
  * Gallery chrome copy (bilingual): this file holds the Chinese dictionary `zh` and the
  * `GalleryStrings` shape; the English dictionary lives in strings-en.ts. These strings are the
- * gallery's own and never reach the product. Theme names (Primer / Frost / Console), component
- * names, token names and breadcrumbs stay English in both.
+ * gallery's own and never reach the product. Theme display names are per language (通用 / 白领 /
+ * 极客 here, Primer / Frost / Console in English) and so are breadcrumbs; theme ids, component
+ * names, token names, accent preset ids and axis values stay English in both.
  *
- * `catalog` translates the module files' titles, descriptions, variant titles and live variants'
- * frame titles, and catalog.ts's section titles and descriptions. English reads those files
- * directly, so only `zh` fills it; a test checks it covers every module, variant, frame and
- * section.
+ * `catalog` translates the module files' titles, descriptions, variant titles and scenes' frame
+ * titles, and catalog.ts's section titles and descriptions. English reads those files directly,
+ * so only `zh` fills it; a test checks it covers every module, variant, frame and section.
  */
-import type { HookName, ToneName } from "@prismshadow/penguin-ui";
+import type { HookName, ThemeId, ToneName } from "@prismshadow/penguin-ui";
 import type { ModuleId } from "../../ui/src/module";
 
 export const zh = {
   brand: {
     title: "Penguin UI",
-    subtitle: "模块",
+    tagline: "共享 UI 包的每个模块，在三套主题下的真实界面。",
   },
   rail: {
     theme: "主题",
+    themeNames: { github: "通用", modern: "白领", geek: "极客" } as Record<ThemeId, string>,
     mode: "明暗",
+    accent: "强调色",
+    accentTheme: "随主题",
     size: "字号",
     language: "语言",
+    viewport: "视口",
+    viewports: { desktop: "桌面", phone: "手机" },
     langNames: { en: "EN", zh: "中文" },
     modes: { light: "浅色", dark: "深色", system: "跟随系统" },
     sizeTitle: (px: number) => `根字号 ${px}px`,
@@ -29,12 +34,18 @@ export const zh = {
     reducedMotion: "减弱动效",
     fonts: "字体与许可",
     modules: "模块",
+    menu: "打开菜单",
+    closeMenu: "关闭菜单",
     feedbackTitle: "反馈",
     feedbackBody: "引用卡片左下角的路径，或用标题行的链接按钮复制地址。",
+    feedbackExample: "白领 › 对话 › 待审批 · 深色",
+  },
+  /** The breadcrumb's own words; everything else in it is a name from elsewhere. */
+  crumb: {
+    modes: { light: "浅色", dark: "深色" },
+    phone: "手机",
   },
   intro: {
-    title: "组件画廊",
-    body: "共享 UI 包的十五个模块，每个都是用同一份模拟数据拼成的真实界面，可在三套主题、明暗、三档字号与中英文之间切换，每个变体都有可引用的地址。",
     resolving: "正在解析令牌…",
     problems: "模块与演示的问题",
   },
@@ -59,12 +70,12 @@ export const zh = {
     label: "播放控制",
     play: "播放",
     pause: "暂停",
-    restart: "从头播放",
+    replay: "重播",
     previous: "上一帧",
     next: "下一帧",
     frames: "帧",
     rate: "播放速度",
-    live: "动态变体：按时钟逐帧播放",
+    scene: "带动画：按播放键观看",
   },
   embed: {
     unknownModule: (id: string) => `没有名为「${id}」的模块。`,
@@ -89,7 +100,7 @@ export const zh = {
     lines: "线条",
     inkWords: ["正文", "次要", "弱化"] as readonly string[],
     accent: "强调色",
-    presetsHint: "主题自带的强调色，与用户可选的五个预设",
+    presetsHint: "主题自带的强调色，与当前主题列出的五个预设；别的主题的预设在这里不生效",
     themeAccent: "主题",
     sampleSend: "发送",
     selectedRow: "选中",
@@ -188,6 +199,9 @@ export const zh = {
       "ui-frame": "带头部、主体、底部与窗格的细线框",
       "ui-underline-nav": "标签栏中选中项的标记",
       "ui-shell": "应用窗口：导航列与主列",
+      "ui-icon-decor": "标签已经说明了的图标：主题可以着色或不画",
+      "ui-tree": "行会嵌套的列表：文件树、工作组的工具行、子 Agent 调用图",
+      "ui-field": "带标签的控件行：表单字段或设置行",
     } as Record<HookName, string>,
     hookSamples: {
       menu: ["置顶", "重命名", "删除"] as readonly string[],
@@ -196,6 +210,19 @@ export const zh = {
       copy: "复制",
       tabs: ["概览", "轨迹", "文件"] as readonly string[],
       streaming: "正在写回答",
+      tree: {
+        root: "claude-code-expert",
+        dir: "src",
+        files: ["rag.ts", "embed.ts"] as readonly string[],
+        last: "README.md",
+      },
+      field: {
+        name: "名称",
+        value: "Docs Expert",
+        hint: "在侧栏与消息中显示的名字。",
+        notify: "完成时通知",
+        notifyHint: "Task 结束时弹出系统通知。",
+      },
     },
   },
   fonts: {
@@ -216,6 +243,21 @@ export const zh = {
   },
   catalog: {
     modules: {
+      hero: {
+        title: "首屏",
+        description:
+          "开场：产品名、一句标题、一句说明和两个按钮，下面是一扇能用的应用窗口——点会话行切换对话记录，点停靠标签切换面板，输入框可以写提示词并发送。",
+        variants: { settled: "已完成", empty: "空窗口" },
+        frames: {
+          settled: {
+            idle: "静止",
+            prompt: "输入提示词",
+            working: "运行中",
+            answer: "生成回答",
+            settled: "已完成",
+          },
+        },
+      },
       foundations: {
         title: "基础",
         description:
@@ -235,20 +277,13 @@ export const zh = {
         title: "对话",
         description:
           "一个 Task 的对话记录：带附件的用户消息、含表格与代码的定稿正文、带思考与工具行的工作组、展开的差异、运行中的子 Agent、待审批的命令与统计行。",
-        variants: {
-          streaming: "流式输出",
-          settled: "已完成",
-          approval: "待审批",
-          failed: "失败",
-          "live-stream": "流式回复",
-        },
+        variants: { streaming: "流式输出", settled: "已完成", approval: "待审批", failed: "失败" },
         frames: {
-          "live-stream": {
+          streaming: {
             sent: "已发送",
             thinking: "思考中",
             tools: "工具调用",
             streaming: "生成中",
-            settled: "已完成",
           },
         },
       },
@@ -262,10 +297,9 @@ export const zh = {
           chips: "附件标签",
           "slash-menu": "斜杠菜单",
           "model-picker": "模型选择",
-          "live-send": "输入并发送",
         },
         frames: {
-          "live-send": { empty: "空白", typing: "输入中", ready: "就绪", running: "运行中" },
+          idle: { typing: "输入中", ready: "就绪", sent: "已发送" },
         },
       },
       navigation: {
@@ -277,10 +311,9 @@ export const zh = {
           "tabs-crumbs": "标签页与路径",
           "dock-rail": "停靠面板与图标栏",
           collapsed: "折叠",
-          "live-collapse": "收起与展开",
         },
         frames: {
-          "live-collapse": { expanded: "展开", rail: "图标栏", tooltip: "悬停提示" },
+          sidebar: { rail: "图标栏", tooltip: "悬停提示", expanded: "展开" },
         },
       },
       actions: {
@@ -293,6 +326,9 @@ export const zh = {
           "dense-row": "紧凑行",
           states: "状态",
         },
+        frames: {
+          toolbar: { header: "页头", search: "搜索栏", agents: "Agent 列表" },
+        },
       },
       status: {
         title: "状态与反馈",
@@ -302,10 +338,9 @@ export const zh = {
           settled: "已结束",
           notices: "提示",
           "loading-empty": "加载与空状态",
-          "live-run": "运行到结束",
         },
         frames: {
-          "live-run": { queued: "排队中", running: "运行中", settled: "已结束" },
+          live: { queued: "排队中", running: "运行中", outcomes: "各自的结果" },
         },
       },
       forms: {
@@ -318,6 +353,10 @@ export const zh = {
           errors: "错误",
           disabled: "禁用",
         },
+        frames: {
+          settings: { appearance: "外观", general: "通用" },
+          errors: { filled: "已填写", errors: "错误" },
+        },
       },
       overlays: {
         title: "浮层",
@@ -329,10 +368,19 @@ export const zh = {
           drawer: "抽屉",
           toasts: "通知",
           palette: "命令面板",
-          "live-open-close": "打开与关闭",
         },
         frames: {
-          "live-open-close": { idle: "静止", menu: "菜单", dialog: "对话框", toast: "通知" },
+          menu: { idle: "静止", menu: "菜单", panels: "面板菜单" },
+          toasts: { first: "第一条", stack: "堆叠" },
+        },
+      },
+      dialogs: {
+        title: "弹窗与确认",
+        description:
+          "为了发问而盖在页面上的那一层：写明后果的删除确认、装着表单的对话框、整窗的目录浏览器，以及手机上改为从底部升起的抽屉。",
+        variants: { confirm: "确认", form: "表单", full: "整窗", sheet: "底部抽屉" },
+        frames: {
+          confirm: { trigger: "触发", dialog: "弹窗" },
         },
       },
       tables: {
@@ -340,38 +388,81 @@ export const zh = {
         description:
           "带底色表头、可排序列与可展开行的模型表；朴素表头的密钥表；键值信息，以及以列表行呈现、带分页的已安装插件。",
         variants: { band: "底色表头", plain: "朴素表头", dense: "紧凑", expandable: "可展开" },
+        frames: {
+          band: { head: "表头", rows: "数据行", actions: "行内操作" },
+        },
       },
       stats: {
         title: "统计与图表",
         description:
           "一份 Trace 的数字：总览、统计块与统计小片、上下文环与迷你折线；执行时间线与图例；按天的花费与预算。",
         variants: { overview: "概览", timeline: "时间线", usage: "用量" },
+        frames: {
+          overview: { tiles: "统计块", summary: "总览", gauges: "仪表" },
+        },
       },
       content: {
         title: "Markdown 与代码",
         description:
           "Markdown 写成的文档回答（标题、链接、行内代码、表格、公式与引用），代码块、统一差异视图与命令日志。",
         variants: { prose: "正文", code: "代码", diff: "差异", log: "日志" },
+        frames: {
+          prose: { intro: "开头", scopes: "检索范围", table: "表格", note: "注记" },
+        },
       },
       files: {
         title: "文件与目录树",
         description:
           "Workspace 的文件面板：带搜索、刷新与上传的目录树；带路径的文件预览；拖放遮罩。",
-        variants: { tree: "目录树", preview: "预览", drop: "拖放", "live-expand": "展开目录" },
+        variants: { tree: "目录树", preview: "预览", drop: "拖放" },
         frames: {
-          "live-expand": { closed: "收起", open: "展开", selected: "选中" },
+          tree: { closed: "收起", open: "展开", selected: "选中" },
+        },
+      },
+      "create-with-ai": {
+        title: "用 AI 创建",
+        description:
+          "把想要的东西说出来，交给智能体去建：填好提示词后交给新对话的面板、模型给出的智能体方案、它将要写下的内容，以及建好之后落在哪里。",
+        variants: {
+          prompt: "提示词",
+          proposal: "方案",
+          review: "确认清单",
+          created: "已创建",
+        },
+        frames: {
+          prompt: { empty: "空白", typing: "输入中", sent: "已发送", proposal: "方案" },
+        },
+      },
+      "empty-states": {
+        title: "空状态与引导",
+        description:
+          "还没有内容的界面该说什么：新对话的示例提示词、没有条目的列表、没有命中的搜索，以及首次使用的清单。",
+        variants: {
+          "first-session": "首次对话",
+          "empty-list": "空列表",
+          "no-results": "无结果",
+          "first-run": "首次使用",
+        },
+        frames: {
+          "first-session": { loading: "加载中", empty: "空状态", picked: "已选择" },
         },
       },
       pages: {
         title: "页面与分区",
         description: "设置类页面：页头、细线分区、卡片网格与可折叠分区；实体页；空页面。",
         variants: { settings: "设置页", entity: "实体页", empty: "空页面" },
+        frames: {
+          settings: { header: "页头", installed: "已安装", marketplaces: "插件市场" },
+        },
       },
       company: {
         title: "公司看板",
         description:
           "公司模式的界面：工单看板、带执行结果的周日历、带员工状态的组织架构图，以及群聊。",
         variants: { board: "看板", calendar: "日历", org: "组织", channel: "群聊" },
+        frames: {
+          board: { proposed: "已提议", progress: "进行中", review: "评审中" },
+        },
       },
       screens: {
         title: "整页",
@@ -385,7 +476,7 @@ export const zh = {
           title: string;
           description: string;
           variants: Record<string, string>;
-          /** A live variant's frame titles: variant key → frame key → title. */
+          /** A scene's frame titles: variant key → frame key → title. */
           frames?: Record<string, Record<string, string>>;
         }
       >

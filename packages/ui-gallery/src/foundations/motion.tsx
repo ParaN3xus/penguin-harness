@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnimationEvent, CSSProperties, ReactNode } from "react";
 import { useGallery } from "../state";
-import { BoardGroup, ReplayButton } from "./shared";
+import { BoardGroup, NAV_GLYPHS, ReplayButton } from "./shared";
 import { SPECIMENS } from "./specimens";
 
 const DURATIONS = ["fast", "base", "slow"] as const;
@@ -173,12 +173,6 @@ function RevealSpecimen({ run }: { run: number }) {
   );
 }
 
-const ROW_GLYPHS = [
-  "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z",
-  "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
-  "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z",
-] as const;
-
 function LayoutSpecimen({ run }: { run: number }) {
   const { S } = useGallery();
   const [rail, setRail] = useState(false);
@@ -216,7 +210,7 @@ function LayoutSpecimen({ run }: { run: number }) {
                 className="gf-glyph"
                 style={{ strokeWidth: "var(--ui-icon-stroke)" }}
               >
-                <path d={ROW_GLYPHS[i] ?? ROW_GLYPHS[0]} />
+                <path d={NAV_GLYPHS[i] ?? NAV_GLYPHS[0]} />
               </svg>
               <span className="gf-layout-label">{row}</span>
             </span>

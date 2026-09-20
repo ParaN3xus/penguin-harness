@@ -498,7 +498,11 @@ export const TURN2_LANES: readonly TraceLane[] = [
 // Notices, forms, menus, secrets, plugins, the palette and usage (K-redesign §4.6)
 // ---------------------------------------------------------------------------
 
-/** The accent presets `theme.css` declares, in the order the swatch picker draws them. */
+/**
+ * The accent presets Primer declares, in the order the swatch picker draws them. Mock data for the
+ * Appearance composition, so it stays the theme the Web App ships; a theme lists its own presets in
+ * its own file (tokens.ts exports them all).
+ */
 export const ACCENT_SWATCHES: readonly { id: string; color: string }[] = [
   { id: "theme", color: "var(--ui-accent)" },
   { id: "blue", color: "#2563eb" },

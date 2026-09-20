@@ -1,20 +1,22 @@
 /**
- * Live variants in the gallery's addresses and messages — pure, so the rules are unit-tested.
+ * Scenes in the gallery's addresses and messages — pure, so the rules are unit-tested.
  *
- *   /embed?module=navigation&variant=live-collapse                  paused on the last frame
- *   /embed?module=navigation&variant=live-collapse&frame=rail       paused on `rail`
- *   /embed?module=navigation&variant=live-collapse&play=1           playing from the first frame
- *   /embed?module=navigation&variant=live-collapse&frame=rail&play=1
+ *   /embed?module=navigation&variant=sidebar                  settled: paused on the last frame
+ *   /embed?module=navigation&variant=sidebar&frame=rail       paused on `rail`
+ *   /embed?module=navigation&variant=sidebar&play=1           playing from the first frame, once
+ *   /embed?module=navigation&variant=sidebar&frame=rail&play=1
  *
  * An embed is a screenshot unit before it is anything else, so by default it holds still on the
- * frame a scene settles into; `frame=` picks another (an unknown key reads as the last frame). A
- * compare frame carries `sync=1` instead: its clock belongs to the card around it, which posts its
- * timeline as `gallery:clock` messages — the frame's src never changes with the frame, so it never
- * reloads mid-scene.
+ * frame a scene settles into — which is the variant itself; `frame=` picks another (an unknown key
+ * reads as the last frame). A frame inside a card (compare mode, the phone view) carries `sync=1`
+ * instead: its clock belongs to the card around it, which posts its timeline as `gallery:clock`
+ * messages — the frame's src never changes with the frame, so it never reloads mid-scene — and a
+ * composition's own move on that clock goes back up as a `gallery:control` message, one command
+ * the card's reducer runs as if its transport had asked.
  */
 import type { SceneFrame } from "../../../ui/src/module";
 import { frameIndexOf } from "../../../ui/src/scene";
-import type { SceneTimeline } from "../../../ui/src/scene";
+import type { SceneCommand, SceneTimeline } from "../../../ui/src/scene";
 
 export interface SceneCue {
   index: number;
@@ -32,9 +34,9 @@ export function parseEmbedCue(frames: readonly SceneFrame[], search: string): Sc
   return { index: index === -1 ? last : index, playing };
 }
 
-/** The card → compare frame message: the one clock, for one module variant. */
+/** The card → framed embed message: the one clock, for one module variant. */
 export const CLOCK_MESSAGE = "gallery:clock";
-/** Compare frame → card: "I am listening", answered with the current timeline. */
+/** Framed embed → card: "I am listening", answered with the current timeline. */
 export const CLOCK_READY = "gallery:clock-ready";
 
 export interface ClockMessage {
@@ -75,4 +77,46 @@ export function readClockMessage(
   if (typeof playing !== "boolean" || !finite(index) || !finite(rate) || rate <= 0) return null;
   if (!finite(frameStartedAt) || !finite(pausedElapsed)) return null;
   return { index, playing, rate, frameStartedAt, pausedElapsed };
+}
+
+/** Framed embed → card: a composition's command for the card's clock. */
+export const CONTROL_MESSAGE = "gallery:control";
+
+export interface ControlMessage {
+  type: typeof CONTROL_MESSAGE;
+  module: string;
+  variant: string;
+  command: SceneCommand;
+}
+
+export function controlMessage(
+  module: string,
+  variant: string,
+  command: SceneCommand,
+): ControlMessage {
+  return { type: CONTROL_MESSAGE, module, variant, command };
+}
+
+/** What a composition may ask for from inside a frame: the controls' commands, nothing else. */
+const RELAYED_COMMANDS = new Set(["play", "pause", "restart", "settle", "playFrom"]);
+
+/**
+ * The command a message carries for this module variant, or null for anything else — a stray
+ * message, a malformed one, or a command the controls never send.
+ */
+export function readControlMessage(
+  data: unknown,
+  module: string,
+  variant: string,
+): SceneCommand | null {
+  if (typeof data !== "object" || data === null) return null;
+  const message = data as Partial<ControlMessage>;
+  if (message.type !== CONTROL_MESSAGE || message.module !== module || message.variant !== variant)
+    return null;
+  const command = message.command as { type?: unknown; index?: unknown } | undefined;
+  if (typeof command?.type !== "string" || !RELAYED_COMMANDS.has(command.type)) return null;
+  if (command.type === "playFrom") {
+    return finite(command.index) ? { type: "playFrom", index: command.index } : null;
+  }
+  return { type: command.type as "play" | "pause" | "restart" | "settle" };
 }

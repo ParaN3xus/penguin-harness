@@ -26,7 +26,8 @@
  * bridge that re-points Tailwind's `--color-gray-*` / `--color-white` so the app's existing
  * palette classes follow the theme; the dark rule, which declares only what dark changes (the
  * rest keeps its base value, since this file comes after `github.css` and so its base rule beats
- * that file's dark rule); and then this theme's recipes for the style hooks (hooks.ts).
+ * that file's dark rule); and then this theme's recipes for the style hooks (hooks.ts). After it,
+ * one `@layer ui-accent` block with the theme's own accent presets.
  */
 @layer ui-theme {
   :root[data-theme="modern"] {
@@ -171,6 +172,15 @@
     --ui-shell-gap: 0.75rem;
     --ui-shell-radius: 1.25rem;
     --ui-shell-shadow: 0 1px 2px rgb(48 46 45 / 0.04), 0 16px 40px -16px rgb(48 46 45 / 0.18);
+
+    /* Structure: a roomy tree (a 0.75rem inset, 1.125rem per level) against a soft guide in the
+       line colour; a field stacks its label over its control with a half-rem between, so the
+       label column is unused. */
+    --ui-tree-inset: 0.75rem;
+    --ui-tree-indent: 1.125rem;
+    --ui-tree-guide: var(--ui-line);
+    --ui-field-label-w: auto;
+    --ui-field-gap: 0.5rem;
 
     /* Typography — families. MiSans sets Latin and Chinese alike; the system CJK faces stay ahead
        of the generic fallbacks for the rare ideograph MiSans's slices do not carry. Chrome and
@@ -437,7 +447,8 @@
    * `animate-spin`, `.ui-glass` replace a panel's opaque fill and `.ui-shell` re-paint the
    * window's columns.
    *
-   * Frost gives all seven a recipe: glass, eyebrow, display, live, frame, underline-nav, shell.
+   * Frost gives all ten a recipe: glass, eyebrow, display, live, frame, underline-nav, shell,
+   * icon-decor, tree, field.
    */
 
   /* Frosted transient layer: menus, popovers, tooltips, the modal card, the floating composer and
@@ -550,6 +561,63 @@
     margin-inline-start: 0;
   }
 
+  /* Decorative icons carry colour, by role: the accent on a navigation row, an empty state's
+     illustration and wherever no role is named (so the user's accent preset recolours them too),
+     the muted ink on a group header, and a menu row's own ink — a danger row's icon stays as red
+     as its label, so no rule is written for `menu`. Ink only: the icon never gets a tinted chip
+     of its own colour behind it. */
+  :root[data-theme="modern"] .ui-icon-decor:not([data-role="menu"]) {
+    color: var(--ui-accent);
+  }
+  :root[data-theme="modern"] .ui-icon-decor[data-role="group"] {
+    color: var(--ui-fg-muted);
+  }
+
+  /* Nested rows sit against a soft guide inside the host's own card: each row past the roots
+     indents on the tree tokens and draws a hairline down its parent's column — half an indent
+     before its own content — and a branch continues its parent's guide alongside the rows it
+     holds, so every ancestor's guide runs the whole way down. No elbows and no box of its own. */
+  :root[data-theme="modern"] .ui-tree [data-depth]:not([data-branch]) {
+    position: relative;
+    padding-inline-start: calc(var(--ui-tree-inset) + var(--ui-tree-indent) * var(--_depth));
+  }
+  :root[data-theme="modern"] .ui-tree [data-depth]:not([data-branch], [data-depth="0"])::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: calc(var(--ui-tree-inset) + var(--ui-tree-indent) * (var(--_depth) - 0.5));
+    border-inline-start: var(--ui-border-w) solid var(--ui-tree-guide);
+    pointer-events: none;
+  }
+  :root[data-theme="modern"] .ui-tree [data-branch] {
+    position: relative;
+  }
+  :root[data-theme="modern"]
+    .ui-tree
+    [data-branch]:not([data-depth="0"], [data-depth="1"])::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: calc(var(--ui-tree-inset) + var(--ui-tree-indent) * (var(--_depth) - 1.5));
+    border-inline-start: var(--ui-border-w) solid var(--ui-tree-guide);
+    pointer-events: none;
+  }
+
+  /* A labelled control row stacks: the label above, the control stretched across the row, a
+     half-rem between them and the hint under the control. A settings row lays out the same way
+     as a form field, so a page of them reads as one roomy form. */
+  :root[data-theme="modern"] .ui-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--ui-field-gap);
+    column-gap: 0;
+    align-items: start;
+  }
+  :root[data-theme="modern"] .ui-field > [data-slot="control"] {
+    justify-self: stretch;
+    min-width: 0;
+  }
+
   /* MiSans ships Regular (400) and Medium (500) only. A heavier request renders in Medium rather
      than as a synthesized bold, which smears Han strokes; Frost's own weights stop at 500. */
   :root[data-theme="modern"] {
@@ -559,5 +627,95 @@
   /* Scrollbar thumbs show only while the pointer is over their scroller (--ui-scrollbar-visibility). */
   :root[data-theme="modern"] :not(:hover) {
     scrollbar-color: transparent var(--ui-scrollbar-track);
+  }
+}
+
+/*
+ * The user's accent presets (tokens.ts, `ACCENT_PRESETS.modern`): five warm, muted hues beside
+ * Frost's own forest green, each deep enough in light for a white label and lifted in dark with
+ * the canvas as ink, the way the theme's own accent flips. A preset sets the six accent tokens and
+ * nothing else; the selectors match only Frost's root, so a preset another theme lists paints
+ * nothing here. The dark rules declare what dark changes, which for a lifted hue is all six.
+ */
+@layer ui-accent {
+  :root[data-theme="modern"][data-accent="ocean"] {
+    --ui-accent: #3b6ea8;
+    --ui-accent-hover: #2f5a8a;
+    --ui-accent-active: #264a72;
+    --ui-accent-fg: #ffffff;
+    --ui-accent-muted: rgb(59 110 168 / 0.14);
+    --ui-accent-line: rgb(59 110 168 / 0.35);
+  }
+  :root[data-theme="modern"][data-accent="ocean"].dark {
+    --ui-accent: #7fa9df;
+    --ui-accent-hover: #96bbe8;
+    --ui-accent-active: #6a97cf;
+    --ui-accent-fg: #0f0e0d;
+    --ui-accent-muted: rgb(127 169 223 / 0.18);
+    --ui-accent-line: rgb(127 169 223 / 0.45);
+  }
+  :root[data-theme="modern"][data-accent="clay"] {
+    --ui-accent: #b8552f;
+    --ui-accent-hover: #9d4726;
+    --ui-accent-active: #843b1f;
+    --ui-accent-fg: #ffffff;
+    --ui-accent-muted: rgb(184 85 47 / 0.14);
+    --ui-accent-line: rgb(184 85 47 / 0.35);
+  }
+  :root[data-theme="modern"][data-accent="clay"].dark {
+    --ui-accent: #e08a66;
+    --ui-accent-hover: #e89d80;
+    --ui-accent-active: #d27a55;
+    --ui-accent-fg: #0f0e0d;
+    --ui-accent-muted: rgb(224 138 102 / 0.18);
+    --ui-accent-line: rgb(224 138 102 / 0.45);
+  }
+  :root[data-theme="modern"][data-accent="plum"] {
+    --ui-accent: #7a4d8f;
+    --ui-accent-hover: #663f78;
+    --ui-accent-active: #543365;
+    --ui-accent-fg: #ffffff;
+    --ui-accent-muted: rgb(122 77 143 / 0.14);
+    --ui-accent-line: rgb(122 77 143 / 0.35);
+  }
+  :root[data-theme="modern"][data-accent="plum"].dark {
+    --ui-accent: #b78fd0;
+    --ui-accent-hover: #c6a4db;
+    --ui-accent-active: #a97fc4;
+    --ui-accent-fg: #0f0e0d;
+    --ui-accent-muted: rgb(183 143 208 / 0.18);
+    --ui-accent-line: rgb(183 143 208 / 0.45);
+  }
+  :root[data-theme="modern"][data-accent="honey"] {
+    --ui-accent: #96660f;
+    --ui-accent-hover: #7d550c;
+    --ui-accent-active: #67460a;
+    --ui-accent-fg: #ffffff;
+    --ui-accent-muted: rgb(150 102 15 / 0.14);
+    --ui-accent-line: rgb(150 102 15 / 0.35);
+  }
+  :root[data-theme="modern"][data-accent="honey"].dark {
+    --ui-accent: #d9ab4a;
+    --ui-accent-hover: #e2ba66;
+    --ui-accent-active: #cc9d3a;
+    --ui-accent-fg: #0f0e0d;
+    --ui-accent-muted: rgb(217 171 74 / 0.18);
+    --ui-accent-line: rgb(217 171 74 / 0.45);
+  }
+  :root[data-theme="modern"][data-accent="slate"] {
+    --ui-accent: #5c6470;
+    --ui-accent-hover: #4c535d;
+    --ui-accent-active: #3f454e;
+    --ui-accent-fg: #ffffff;
+    --ui-accent-muted: rgb(92 100 112 / 0.14);
+    --ui-accent-line: rgb(92 100 112 / 0.35);
+  }
+  :root[data-theme="modern"][data-accent="slate"].dark {
+    --ui-accent: #9ea6b3;
+    --ui-accent-hover: #b0b7c2;
+    --ui-accent-active: #8f97a4;
+    --ui-accent-fg: #0f0e0d;
+    --ui-accent-muted: rgb(158 166 179 / 0.18);
+    --ui-accent-line: rgb(158 166 179 / 0.45);
   }
 }

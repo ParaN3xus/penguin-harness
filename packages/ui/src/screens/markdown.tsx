@@ -196,6 +196,20 @@ export function Markdown({
   );
 }
 
+/**
+ * The prose a reply is written in, around a single paragraph a scene streams into chunk by chunk
+ * ({@link StreamText}). It repeats what {@link Markdown} gives a one-paragraph reply, and sits
+ * beside it so the two stay one look: a scene's last frame has to draw what the settled variant
+ * draws.
+ */
+export function StreamedProse({ children }: { children: ReactNode }) {
+  return (
+    <div className="text-base font-sans leading-relaxed text-fg [overflow-wrap:break-word]">
+      <p className="my-2 leading-[1.7] first:mt-0 last:mb-0">{children}</p>
+    </div>
+  );
+}
+
 /** The live caret after streaming text. Console turns it into a stepped block via `.ui-live`. */
 export function StreamingCaret() {
   return (

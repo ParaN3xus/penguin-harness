@@ -7,12 +7,40 @@
 import { fixturesFor } from "../fixtures";
 import type { Fixtures } from "../fixtures";
 import { defineModule } from "../module";
+import type { SceneSpec } from "../module";
+import { reached, useScene } from "../scene";
 import { AgentTile } from "../screens/parts";
-import { Button, GlyphIcon, Heading, IconButton, Kbd, Link, Modal, SearchInput } from "./parts";
+import {
+  Button,
+  GlyphIcon,
+  Heading,
+  IconButton,
+  Kbd,
+  Link,
+  Modal,
+  SearchInput,
+  arriving,
+  useArrivals,
+} from "./parts";
 import type { ButtonState, ButtonVariant } from "./parts";
 
+const OPEN_PAGE: SceneSpec = {
+  frames: [
+    { key: "header", title: "Header", hold: 900 },
+    { key: "search", title: "Search", hold: 1000 },
+    { key: "agents", title: "Agents", hold: 1600 },
+  ],
+};
+
+/**
+ * The Agents page toolbar, and the scene that builds it: the title with the pair of create
+ * buttons; the search row and its icon buttons under them; then the agents themselves, one row
+ * after another — the page this variant shows when nothing is playing.
+ */
 function Toolbar({ f }: { f: Fixtures }) {
+  const clock = useScene();
   const a = f.copy.agents;
+  const landed = useArrivals(f.agents.length, "agents");
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -26,14 +54,20 @@ function Toolbar({ f }: { f: Fixtures }) {
           {a.newAgent}
         </Button>
       </div>
-      <div className="flex items-center gap-2">
-        <SearchInput placeholder={a.search} />
-        <IconButton label={f.copy.nav.filterSessions} icon="sliders" />
-        <IconButton label={f.copy.common.more} icon="more" />
-      </div>
+      {reached(clock, "search") && (
+        <div data-reveal={arriving(clock, "search")} className="flex items-center gap-2">
+          <SearchInput placeholder={a.search} />
+          <IconButton label={f.copy.nav.filterSessions} icon="sliders" />
+          <IconButton label={f.copy.common.more} icon="more" />
+        </div>
+      )}
       <ul className="grid grid-cols-[minmax(0,1fr)]">
-        {f.agents.map((agent) => (
-          <li key={agent.id} className="flex items-center gap-3 border-t border-line-muted py-2.5">
+        {f.agents.slice(0, landed).map((agent) => (
+          <li
+            key={agent.id}
+            data-reveal={arriving(clock, "agents")}
+            className="flex items-center gap-3 border-t border-line-muted py-2.5"
+          >
             <AgentTile id={agent.id} name={agent.name} size={24} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-(--ui-weight-medium) text-fg">
@@ -207,7 +241,7 @@ export const module = defineModule({
     "Buttons where they occur: a page toolbar, a dialog footer, a dense row's hover actions with links, keys and a copy button, and every variant in every state.",
   width: "narrow",
   variants: [
-    { key: "toolbar", title: "Toolbar" },
+    { key: "toolbar", title: "Toolbar", scene: OPEN_PAGE },
     { key: "footer", title: "Footer" },
     { key: "dense-row", title: "Dense row" },
     { key: "states", title: "States" },

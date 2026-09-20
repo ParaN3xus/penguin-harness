@@ -1,11 +1,20 @@
 /**
  * One module on the gallery page: the header (`Title — description` and its link / parts / tokens /
- * code buttons), the card (the composition on the theme's canvas, or three compare frames), the
- * card's foot (the variant pills, a live variant's transport, and the quotable breadcrumb), and the
- * drawers. A live variant's clock belongs to the card, which plays it while it is on screen.
+ * code buttons), the card (the composition on the theme's canvas — or framed embeds, when
+ * comparing themes or at phone width), the card's foot (the quotable breadcrumb, the variant
+ * pills, and the transport when the variant has a scene), and the drawers.
+ *
+ * The scene's clock belongs to the card. It starts settled and moves only from the transport;
+ * the framed embeds follow it, so compare mode and the phone view play the same frame at the same
+ * moment as the card would.
+ *
+ * The hero module is the page's opening: its card bleeds to the main column's edges and carries no
+ * frame of its own.
  */
+import { THEME_IDS } from "@prismshadow/penguin-ui";
 import type { ThemeId } from "@prismshadow/penguin-ui";
 import { memo, useRef, useState } from "react";
+import { isSettled } from "../../../ui/src/scene";
 import { formatBreadcrumb } from "../lib/breadcrumb";
 import { absoluteUrl } from "../lib/location";
 import type { CollectedModule } from "../lib/modules";
@@ -13,7 +22,7 @@ import { pickVariant, storedVariantKey } from "../lib/modules";
 import { comparesModule, formatGalleryQuery, withVariant } from "../lib/url-state";
 import { ModuleView, useText } from "../preview";
 import { useGallery } from "../state";
-import { CompareFrames } from "./compare";
+import { ThemeFrames } from "./compare";
 import { useCopy } from "./copy";
 import { CodeDrawer, PartsDrawer, TokensDrawer } from "./drawers";
 import { ChromeIcon } from "./icons";
@@ -72,11 +81,10 @@ export const ModuleSection = memo(function ModuleSection({
   const frames = useRef(new Map<ThemeId, HTMLIFrameElement>());
   const variant = pickVariant(module, pickKey);
   const compare = comparesModule(state, module.id);
+  const phone = state.view === "phone";
+  const framed = compare || phone;
   const { title, description } = text.module(module);
-  const player = useScenePlayer(variant.scene, {
-    reduced: state.motion === "reduced",
-    autoplay: true,
-  });
+  const player = useScenePlayer(variant.scene, { reduced: state.motion === "reduced" });
   const { clock } = player;
 
   const toggle = (drawer: Drawer) =>
@@ -93,22 +101,28 @@ export const ModuleSection = memo(function ModuleSection({
     const query = formatGalleryQuery({ ...state, compare: compare ? module.id : false, variants });
     return absoluteUrl(`/${query}#${module.id}`);
   };
+  const paused = clock && !clock.playing && !isSettled(clock.frames, clock);
+  const currentFrame = clock?.frames[clock.index];
   const crumb = formatBreadcrumb({
-    theme: state.theme,
-    module: module.title,
-    variant: [variant.title],
-    frame: clock && !clock.playing ? clock.frames[clock.index]?.title : undefined,
-    mode,
-    lang: state.lang,
+    theme: text.theme(state.theme),
+    module: title,
+    variant: [text.variant(module, variant)],
+    frame: paused && currentFrame ? text.frame(module, variant, currentFrame) : undefined,
     tier: state.tier,
+    ...text.qualifiers(),
   });
   const measureRoot = () =>
-    compare
+    framed
       ? (frames.current.get(state.theme)?.contentDocument?.getElementById("embed-root") ?? null)
       : preview.current;
 
   return (
-    <section id={module.id} className="g-section" data-width={module.width}>
+    <section
+      id={module.id}
+      className="g-section"
+      data-width={module.width}
+      data-hero={module.id === "hero" || undefined}
+    >
       <header className="g-section-head g-chrome">
         <h2 className="g-section-title">{title}</h2>
         <p className="g-section-desc">{description}</p>
@@ -140,23 +154,38 @@ export const ModuleSection = memo(function ModuleSection({
         </span>
       </header>
 
-      <div ref={player.observe} className="g-card">
-        {compare ? (
-          <CompareFrames module={module} variant={variant} clock={clock} frames={frames.current} />
+      <div className="g-card">
+        {framed ? (
+          <ThemeFrames
+            module={module}
+            variant={variant}
+            clock={clock}
+            control={player.control}
+            frames={frames.current}
+            themes={compare ? THEME_IDS : [state.theme]}
+            phone={phone}
+          />
         ) : (
           <div ref={preview} className="g-preview" data-module={module.id}>
-            <ModuleView module={module} variant={variant} clock={clock} />
+            <ModuleView
+              module={module}
+              variant={variant}
+              clock={clock}
+              controls={player.controls}
+            />
           </div>
         )}
-        <div
-          className="g-card-foot g-chrome"
-          data-compare={compare || undefined}
-          data-scene={clock ? true : undefined}
-        >
-          {!compare && <Breadcrumb text={crumb} />}
+        <div className="g-card-foot g-chrome" data-scene={clock ? true : undefined}>
+          <Breadcrumb text={crumb} />
           <VariantPills module={module} current={variant} onPick={onPick} />
           {clock && (
-            <Transport module={module} variant={variant} clock={clock} control={player.control} />
+            <Transport
+              module={module}
+              variant={variant}
+              clock={clock}
+              ran={player.ran}
+              control={player.control}
+            />
           )}
         </div>
       </div>
@@ -168,7 +197,15 @@ export const ModuleSection = memo(function ModuleSection({
             <TokensDrawer
               module={module}
               root={measureRoot}
-              measureKey={[variant.key, state.theme, mode, state.lang, compare].join("|")}
+              measureKey={[
+                variant.key,
+                state.theme,
+                mode,
+                state.accent,
+                state.lang,
+                state.tier,
+                framed,
+              ].join("|")}
             />
           )}
           {open.has("code") && <CodeDrawer path={entry.path} />}

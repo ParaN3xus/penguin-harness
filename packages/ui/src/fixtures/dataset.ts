@@ -64,13 +64,20 @@ import type {
   CalendarEventFixture,
   ChatItem,
   CommandGroupFixture,
+  CreateChangeFixture,
+  CreateWithAiFixture,
+  DialogsFixture,
   DocsAnswerFixture,
   EmployeeFixture,
+  EmptyStatesFixture,
+  ExamplePromptFixture,
+  FirstRunStepFixture,
   FixtureAgent,
   FixtureLang,
   Fixtures,
   FormFieldFixture,
   FormGroupFixture,
+  HeroFixture,
   MenuEntryFixture,
   NoticeFixture,
   PlanStepFixture,
@@ -80,6 +87,25 @@ import type {
   TypeSpecimens,
   VaultEntryFixture,
 } from "./types";
+
+/** The Agent "Create with AI" proposes, and the Skills it asks the plugin library for. */
+const NEW_AGENT_ID = "report-writer";
+const NEW_AGENT_SKILLS = ["data-analysis", "humanizer"] as const;
+const NEW_AGENT_STATE = `agents/${NEW_AGENT_ID}/agent_state/`;
+
+/** What it would write, in the order the review lists it; the words come from the locale. */
+const CREATE_CHANGES = [
+  { key: "config", path: `${NEW_AGENT_STATE}system_config.yaml`, kind: "new" },
+  { key: "agentsMd", path: `${NEW_AGENT_STATE}AGENTS.md`, kind: "new" },
+  { key: "analysis", path: `${NEW_AGENT_STATE}skills/data-analysis/`, kind: "install" },
+  { key: "humanizer", path: `${NEW_AGENT_STATE}skills/humanizer/`, kind: "install" },
+] as const;
+
+/** The mark on each example prompt of an empty Session, in the order the locale writes them. */
+const FIRST_SESSION_ICONS = ["search", "wrench", "terminal"] as const;
+
+/** Which first-run steps are already done: the current step is the first one that is not. */
+const FIRST_RUN_DONE = [true, true, false, false] as const;
 
 /** Everything a locale writes. Keys name the slot a string fills; see `buildFixtures`. */
 export interface FixtureProse {
@@ -187,6 +213,46 @@ export interface FixtureProse {
     days: readonly string[];
     buckets: Record<"cacheRead" | "cacheWrite" | "output", string>;
   };
+  /** Everything a dialog says beyond the page it interrupts. */
+  dialogs: DialogsFixture;
+  createWithAi: {
+    panel: CreateWithAiFixture["panel"];
+    proposal: {
+      intro: string;
+      /** The Agent's own words; its id and its Skills are ids, so they are not written here. */
+      agent: Omit<CreateWithAiFixture["proposal"]["agent"], "id" | "skills">;
+      labels: CreateWithAiFixture["proposal"]["labels"];
+      accept: string;
+    };
+    review: {
+      title: (changes: number) => string;
+      kinds: CreateWithAiFixture["review"]["kinds"];
+      /** One line per entry of `CREATE_CHANGES`, by its key. */
+      notes: Record<(typeof CREATE_CHANGES)[number]["key"], string>;
+      accepted: string;
+      confirm: string;
+    };
+    created: Omit<CreateWithAiFixture["created"], "path">;
+  };
+  emptyStates: {
+    firstSession: {
+      title: string;
+      body: string;
+      examplesLabel: string;
+      /** One per mark in `FIRST_SESSION_ICONS`, in its order. */
+      examples: readonly Omit<ExamplePromptFixture, "icon">[];
+    };
+    noResults: EmptyStatesFixture["noResults"];
+    firstRun: {
+      title: string;
+      body: string;
+      /** One per flag in `FIRST_RUN_DONE`, in its order. */
+      steps: readonly Omit<FirstRunStepFixture, "done">[];
+      progress: (done: number, total: number) => string;
+    };
+  };
+  /** The hero's own lines; everything in the window it shows comes from the dataset above. */
+  hero: HeroFixture;
   specimens: TypeSpecimens;
 }
 
@@ -947,6 +1013,49 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
       },
     },
     docsAnswer: { ...prose.docsAnswer, formula: BM25_FORMULA },
+    dialogs: prose.dialogs,
+    createWithAi: {
+      panel: prose.createWithAi.panel,
+      proposal: {
+        intro: prose.createWithAi.proposal.intro,
+        agent: {
+          id: NEW_AGENT_ID,
+          ...prose.createWithAi.proposal.agent,
+          skills: NEW_AGENT_SKILLS,
+        },
+        labels: prose.createWithAi.proposal.labels,
+        accept: prose.createWithAi.proposal.accept,
+      },
+      review: {
+        title: prose.createWithAi.review.title,
+        kinds: prose.createWithAi.review.kinds,
+        changes: CREATE_CHANGES.map((change): CreateChangeFixture => ({
+          path: change.path,
+          kind: change.kind,
+          note: prose.createWithAi.review.notes[change.key],
+        })),
+        accepted: prose.createWithAi.review.accepted,
+        confirm: prose.createWithAi.review.confirm,
+      },
+      created: { ...prose.createWithAi.created, path: NEW_AGENT_STATE },
+    },
+    emptyStates: {
+      firstSession: {
+        ...prose.emptyStates.firstSession,
+        examples: prose.emptyStates.firstSession.examples.map(
+          (example, i): ExamplePromptFixture => ({ icon: FIRST_SESSION_ICONS[i]!, ...example }),
+        ),
+      },
+      noResults: prose.emptyStates.noResults,
+      firstRun: {
+        ...prose.emptyStates.firstRun,
+        steps: prose.emptyStates.firstRun.steps.map((step, i): FirstRunStepFixture => ({
+          ...step,
+          done: FIRST_RUN_DONE[i] ?? false,
+        })),
+      },
+    },
+    hero: prose.hero,
     specimens: prose.specimens,
   };
 

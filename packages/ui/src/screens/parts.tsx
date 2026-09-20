@@ -352,9 +352,10 @@ export function Sidebar({ f, activeSessionId }: { f: Fixtures; activeSessionId?:
           <Glyph name="chevronDown" size={14} className="text-fg-subtle" />
         </span>
       </div>
+      {/* A nav row's glyph repeats its label, so it is decorative: a theme may tint or drop it. */}
       <nav className="shrink-0 space-y-1 px-2 pt-2">
         <span className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-(--ui-weight-medium) text-fg">
-          <Glyph name="newChat" size={16} className="text-fg-muted" />
+          <Glyph name="newChat" size={16} decor="nav" className="text-fg-muted" />
           {c.newChat}
         </span>
         <div className="pt-1.5" />
@@ -363,7 +364,7 @@ export function Sidebar({ f, activeSessionId }: { f: Fixtures; activeSessionId?:
             key={item.key}
             className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-fg-muted"
           >
-            <Glyph name={item.glyph} size={16} className="text-fg-subtle" />
+            <Glyph name={item.glyph} size={16} decor="nav" className="text-fg-subtle" />
             {c[item.key]}
           </span>
         ))}
@@ -391,7 +392,7 @@ export function Sidebar({ f, activeSessionId }: { f: Fixtures; activeSessionId?:
         {f.sessionGroups.map((group, gi) => (
           <div key={group.key} className="pt-3">
             <div className="flex items-center gap-1 px-1.5 py-1 text-xs text-fg-subtle">
-              <Glyph name={gi === 0 ? "folder" : "clock"} size={15} />
+              <Glyph name={gi === 0 ? "folder" : "clock"} size={15} decor="group" />
               <span className="font-(--ui-weight-strong) text-fg-muted">{group.label}</span>
               <span className="tabular-nums">{group.items.length}</span>
               <Glyph name="chevronDown" size={12} />

@@ -10,11 +10,14 @@ import { ChromeIcon } from "../chrome/icons";
 import { formatBreadcrumb } from "../lib/breadcrumb";
 import { BASE } from "../lib/location";
 import { formatGalleryQuery } from "../lib/url-state";
+import { useText } from "../preview";
+import { MODULES } from "../registry";
 import { SCREENS } from "../screens";
 import { useGallery } from "../state";
 
 export function ScreenPage({ name }: { name: string }) {
-  const { S, state, mode, tokens } = useGallery();
+  const { S, state, tokens } = useGallery();
+  const text = useText();
   const [copied, copy] = useCopy();
   const screen = SCREENS[name];
   const bare = new URLSearchParams(window.location.search).get("bare") === "1";
@@ -26,13 +29,17 @@ export function ScreenPage({ name }: { name: string }) {
     });
   }, [tokens]);
 
+  // The Screens module's own names, so the toolbar quotes the same address as its card.
+  const screens = MODULES.byId.get("screens")?.module;
+  const screenVariant = screens?.variants.find((variant) => variant.key === screen?.id);
   const crumb = formatBreadcrumb({
-    theme: state.theme,
-    module: "Screens",
-    variant: [screen?.title ?? name],
-    mode,
-    lang: state.lang,
+    theme: text.theme(state.theme),
+    module: screens ? text.module(screens).title : "Screens",
+    variant: [
+      screens && screenVariant ? text.variant(screens, screenVariant) : (screen?.title ?? name),
+    ],
     tier: state.tier,
+    ...text.qualifiers(),
   });
   const variants: Record<string, string> =
     screen && screen.id !== Object.keys(SCREENS)[0] ? { screens: screen.id } : {};

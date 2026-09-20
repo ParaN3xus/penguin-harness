@@ -12,8 +12,10 @@
  * - a tone's ink (`tone-*-fg`) as a glyph or status word on the four page surfaces — 3:1, except
  *   `neutral`, the one tone allowed to recede where its meaning is already in text;
  * - a tone's ink on its own tint (`tone-*-bg`, a badge) and a solid badge's label on its fill — 4.5:1;
- * - the accent's label on the accent at rest and on hover (the primary button), for the theme's own
- *   accent and every user preset in theme.css — 4.5:1;
+ * - the accent's label on the accent at rest and on hover (the primary button) — 4.5:1 — and the
+ *   accent as a mark on the page and the card (a selected row's `>`, a link-coloured glyph) —
+ *   3:1; both for the theme's own accent and, in the second suite, for every preset the theme
+ *   lists, overlaid on the theme's values for that mode (a dark lift included);
  * - text and muted text on the shell's two columns, composited onto the field behind the window
  *   (Frost's navigation column is transparent on the field) — 4.5:1. The field's two washes are
  *   gradients this suite cannot read; a theme keeps them faint enough that the muted ink still
@@ -27,7 +29,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ACCENT_PRESETS, DEFAULT_THEME_ID, THEME_IDS, THEME_MODES, TONES } from "../src/tokens";
+import {
+  DEFAULT_THEME_ID,
+  THEME_ACCENT_PRESETS,
+  THEME_IDS,
+  THEME_MODES,
+  TONES,
+} from "../src/tokens";
 import type { ThemeId, ThemeModeName, TokenName } from "../src/tokens";
 import {
   BLACK,
@@ -37,11 +45,9 @@ import {
   contrastRatio,
   formatColor,
   parseColor,
-  parseCssRules,
   resolveThemeValue,
-  selectorList,
 } from "../src/testing";
-import type { Rgba, ThemeFileAnalysis } from "../src/testing";
+import type { AccentPresetRules, Rgba, ThemeFileAnalysis } from "../src/testing";
 import { SRC_DIR } from "./helpers/paths";
 
 interface Pair {
@@ -65,6 +71,14 @@ interface ContrastException {
 const EXCEPTIONS: readonly ContrastException[] = [];
 
 const PAGE_SURFACES = ["--ui-canvas", "--ui-surface", "--ui-surface-muted", "--ui-inset"] as const;
+
+/** What an accent must clear, the theme's own or a preset's: its label on it, and it as a mark. */
+const ACCENT_PAIRS: readonly Pair[] = [
+  { fg: "--ui-accent-fg", bg: "--ui-accent", min: 4.5 },
+  { fg: "--ui-accent-fg", bg: "--ui-accent-hover", min: 4.5 },
+  { fg: "--ui-accent", bg: "--ui-canvas", min: 3 },
+  { fg: "--ui-accent", bg: "--ui-surface", min: 3 },
+];
 
 const PAIRS: readonly Pair[] = [
   ...[...PAGE_SURFACES, "--ui-overlay" as const].map((bg) => ({
@@ -97,8 +111,7 @@ const PAIRS: readonly Pair[] = [
       min: 4.5 as const,
     },
   ]),
-  { fg: "--ui-accent-fg", bg: "--ui-accent", min: 4.5 },
-  { fg: "--ui-accent-fg", bg: "--ui-accent-hover", min: 4.5 },
+  ...ACCENT_PAIRS,
   ...(["--ui-shell-nav-bg", "--ui-shell-main-bg"] as const).flatMap((bg) => [
     { fg: "--ui-fg" as const, bg, min: 4.5 as const },
     { fg: "--ui-fg-muted" as const, bg, min: 4.5 as const },
@@ -141,8 +154,6 @@ function measure(
   const ratio = contrastRatio(fg, bg);
   return { ratio, detail: `${formatColor(composite(fg, bg))} on ${formatColor(bg)}` };
 }
-
-const read = (rel: string) => readFileSync(join(SRC_DIR, rel), "utf8");
 
 function themeAnalysis(id: ThemeId): ThemeFileAnalysis | null {
   const path = join(SRC_DIR, "themes", `${id}.css`);
@@ -200,41 +211,46 @@ describe("theme contrast", () => {
   }
 });
 
-describe("accent presets (theme.css)", () => {
-  const presets = new Map<string, Map<string, string>>();
-  for (const rule of parseCssRules(read("theme.css"))) {
-    if (!rule.atRules.includes("@layer ui-accent")) continue;
-    for (const selector of selectorList(rule.selector)) {
-      const accent = /^:root\[data-accent="([\w-]+)"\]$/.exec(selector)?.[1];
-      if (accent === undefined) continue;
-      const values = presets.get(accent) ?? new Map<string, string>();
-      for (const d of rule.declarations) values.set(d.name, d.value);
-      presets.set(accent, values);
+describe("accent presets, per theme", () => {
+  // A preset replaces the six accent tokens under its theme, in both modes (a dark rule lifts it
+  // where the theme says so), and everything else stays the theme's: so each preset is measured
+  // on its own theme's surfaces for that mode, exactly as the theme's own accent is above.
+  for (const id of THEME_IDS) {
+    const theme = themeAnalysis(id);
+    if (theme === null) {
+      it.skip(`src/themes/${id}.css — PENDING, presets not checked: no tokens declared yet`, () => {});
+      continue;
     }
-  }
 
-  it("defines a rule for every preset in tokens.ts, and no other", () => {
-    expect([...presets.keys()].sort()).toEqual([...ACCENT_PRESETS].sort());
-  });
-
-  for (const accent of ACCENT_PRESETS) {
-    it(`${accent}: its label clears 4.5:1 on the accent at rest and on hover, in both modes`, () => {
-      const values = presets.get(accent) ?? new Map<string, string>();
-      const failures: string[] = [];
-      for (const bg of ["--ui-accent", "--ui-accent-hover"]) {
-        const fg = parseColor(values.get("--ui-accent-fg") ?? "");
-        const fill = parseColor(values.get(bg) ?? "");
-        if (fg === null || fill === null) {
-          failures.push(`--ui-accent-fg on ${bg}: not a readable colour pair`);
-          continue;
-        }
-        // Presets apply in both modes; a translucent fill would show the page through it.
-        for (const base of [WHITE, BLACK]) {
-          const ratio = contrastRatio(fg, composite(fill, base));
-          if (ratio < 4.5) failures.push(`--ui-accent-fg on ${bg}: ${ratio.toFixed(2)}:1`);
-        }
-      }
-      expect(failures, `\n${failures.join("\n")}\n`).toEqual([]);
+    it(`${id}: declares a rule for every preset tokens.ts lists for it, and no other`, () => {
+      expect([...theme.accents.keys()]).toEqual([...THEME_ACCENT_PRESETS[id]]);
     });
+
+    for (const accent of THEME_ACCENT_PRESETS[id]) {
+      for (const mode of THEME_MODES) {
+        it(`${id} ${mode} · ${accent}: its label clears 4.5:1 on it, and it clears 3:1 as a mark`, () => {
+          const preset: AccentPresetRules | null = theme.accents.get(accent) ?? null;
+          expect(preset, `${accent} has no rule`).not.toBeNull();
+          const resolve: Resolve = (name) => {
+            const value = resolveThemeValue(name, mode, theme, defaultTheme, preset);
+            if (value === null) return `${name} does not resolve to a value`;
+            return (
+              parseColor(value) ?? `${name} = \`${value}\` is not a colour this suite can read`
+            );
+          };
+          const failures: string[] = [];
+          for (const pair of ACCENT_PAIRS) {
+            const result = measure(pair, mode, resolve);
+            if (typeof result === "string") failures.push(`${pair.fg} on ${pair.bg}: ${result}`);
+            else if (result.ratio < pair.min) {
+              failures.push(
+                `${pair.fg} on ${pair.bg}: ${result.ratio.toFixed(2)}:1 < ${pair.min}:1 (${result.detail})`,
+              );
+            }
+          }
+          expect(failures, `\n${failures.join("\n")}\n`).toEqual([]);
+        });
+      }
+    }
   }
 });

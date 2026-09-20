@@ -1,34 +1,41 @@
 /**
  * What a card renders, whatever produced it: a module's composition for one variant, or a part's
- * demo (a single pick or its matrix). The main page, the compare frames and `/embed` all render
- * through this one file, so a preview looks the same in each.
+ * demo (a single pick or its matrix). The main page, the framed embeds (compare mode, the phone
+ * view) and `/embed` all render through this one file, so a preview looks the same in each.
  */
+import type { ThemeId } from "@prismshadow/penguin-ui";
 import type { ComponentSection } from "../../ui/src/catalog";
 import type { Demo } from "../../ui/src/demo";
 import type { Module, ModuleVariant, SceneFrame } from "../../ui/src/module";
-import { SceneContext } from "../../ui/src/scene";
-import type { SceneClock } from "../../ui/src/scene";
+import { SceneContext, SceneControlsContext } from "../../ui/src/scene";
+import type { SceneClock, SceneControls } from "../../ui/src/scene";
+import { THEME_ACCENT } from "./lib/accents";
 import { allSelections, formatVariantKey } from "./lib/demos";
 import type { VariantPick } from "./lib/demos";
 import { useGallery } from "./state";
 
 /**
- * A module's composition. A live variant's clock reaches the components it renders through
- * `SceneContext`; a static variant gets none, so no clock from a surrounding card ever leaks in.
+ * A module's composition. A scene's clock, and the controls to move it, reach the components it
+ * renders through `SceneContext` and `SceneControlsContext`; a variant without a scene gets
+ * neither, so no clock from a surrounding card ever leaks in.
  */
 export function ModuleView({
   module,
   variant,
   clock = null,
+  controls = null,
 }: {
   module: Module;
   variant: ModuleVariant;
   clock?: SceneClock | null;
+  controls?: SceneControls | null;
 }) {
   const { state, mode } = useGallery();
   return (
     <SceneContext.Provider value={clock}>
-      {module.render(variant.key, { lang: state.lang, mode })}
+      <SceneControlsContext.Provider value={clock ? controls : null}>
+        {module.render(variant.key, { lang: state.lang, mode })}
+      </SceneControlsContext.Provider>
     </SceneContext.Provider>
   );
 }
@@ -63,14 +70,21 @@ export function DemoView({ demo, pick }: { demo: Demo; pick: VariantPick }) {
   );
 }
 
-/** Localized titles and descriptions: English from the module and catalog files, Chinese from strings.ts. */
+/**
+ * Localized names: English from the module and catalog files, Chinese from strings.ts; theme
+ * display names and the breadcrumb's mode and view words from the dictionaries in both.
+ */
 export function useText(): {
   module: (module: Module) => { title: string; description: string };
   variant: (module: Module, variant: ModuleVariant) => string;
   frame: (module: Module, variant: ModuleVariant, frame: SceneFrame) => string;
   part: (section: ComponentSection) => { title: string; description: string };
+  /** 通用 / 白领 / 极客, or Primer / Frost / Console. */
+  theme: (id: ThemeId) => string;
+  /** The breadcrumb's qualifiers: the mode word, the accent id when applied, the phone frame's word. */
+  qualifiers: () => { mode: string; accent: string | undefined; view: string | undefined };
 } {
-  const { S } = useGallery();
+  const { S, state, mode, accent } = useGallery();
   return {
     module: (module) => {
       const zh = S.catalog.modules[module.id];
@@ -90,5 +104,11 @@ export function useText(): {
         description: zh?.description ?? section.description,
       };
     },
+    theme: (id) => S.rail.themeNames[id],
+    qualifiers: () => ({
+      mode: S.crumb.modes[mode],
+      accent: accent === THEME_ACCENT ? undefined : accent,
+      view: state.view === "phone" ? S.crumb.phone : undefined,
+    }),
   };
 }

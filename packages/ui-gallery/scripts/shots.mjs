@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * Screenshots of the gallery's modules through `/embed`: one PNG per module × variant × theme ×
- * mode × language, written to `<out>/<theme>/<mode>/<lang>/<module>--<variant>.png`. A live
- * variant is shot paused on a frame, as `<module>--<variant>@<frame>.png`: every frame with
- * `--variants all`, otherwise the last one, which is what the scene settles into. `--parts` adds
- * every part that has a demo, as `<part-id>--<pick>.png` beside them.
+ * mode × language, written to `<out>/<theme>/<mode>/<lang>/<module>--<variant>.png` — the
+ * variant settled, which for a variant with a scene is its last frame. With `--variants all` a
+ * scene's other frames are shot too, paused on each, as `<module>--<variant>@<frame>.png`.
+ * `--parts` adds every part that has a demo, as `<part-id>--<pick>.png` beside them.
  *
  * Needs the gallery running (`pnpm dev:gallery`, port 7372) and Playwright's Chromium. Shots are
  * never committed.
@@ -20,15 +20,18 @@
  *   --themes    github,modern,geek             (default: all three)
  *   --modes     light,dark                     (default: both)
  *   --langs     en,zh                          (default: both)
- *   --tier      sm | md | lg                   (default md)
+ *   --tier      sm | md | lg                   (default md: the 18 px root)
+ *   --accent    an accent preset id            (default: the theme's own accent)
+ *   --view      desktop | phone                (default desktop; phone shoots at 390 px, as the
+ *                                               gallery's phone frame does)
  *   --variants  default | all                  (default: each module's first variant only; `all`
- *                                               also shoots every frame of a live variant)
+ *                                               also shoots every other frame of a scene)
  *   --parts     also shoot every part demo     (flag)
  *   --width     viewport width in px           (default 758: the main page's card, so a shot
- *                                               lays out exactly as the card does)
+ *                                               lays out exactly as the card does; 390 for phone)
  *
  * Animations are frozen (`motion=reduced`) so two runs of the same tree compare pixel for pixel;
- * under it a live variant's frame shows its end state (a stream's whole text), as a still should.
+ * under it a scene's frame shows its end state (a stream's whole text), as a still should.
  *
  * Fonts must be the real ones. Before the first shot of each theme × language the script loads
  * every family that theme names for that language's specimen and fails the run when one has no
@@ -129,8 +132,15 @@ async function shoot() {
   const modes = list(args.modes, ["light", "dark"]);
   const langs = list(args.langs, ["en", "zh"]);
   const tier = args.tier ?? "md";
+  const accent = args.accent ?? "neutral";
+  const view = args.view ?? "desktop";
   const allVariants = args.variants === "all";
-  const width = Number(args.width ?? 758);
+  const width = Number(args.width ?? (view === "phone" ? 390 : 758));
+
+  if (view !== "desktop" && view !== "phone") {
+    console.error(`--view must be desktop or phone, not ${view}`);
+    return 2;
+  }
 
   const unknown = modules.filter((id) => !MODULE_IDS.includes(id));
   if (unknown.length > 0) {
@@ -157,7 +167,7 @@ async function shoot() {
   page.on("pageerror", (error) => errors.push(error.message));
 
   const embed = (params) => {
-    const q = new URLSearchParams({ ...params, tier, motion: "reduced" });
+    const q = new URLSearchParams({ ...params, tier, accent, view, motion: "reduced" });
     return `${base}/embed?${q}`;
   };
   const ready = async () => {
@@ -216,6 +226,7 @@ async function shoot() {
               variants: JSON.parse(el.dataset.variants ?? "[]"),
               frames: JSON.parse(el.dataset.frames ?? "[]"),
               frame: el.dataset.frame ?? "",
+              settled: el.dataset.settled === "true",
               axes: JSON.parse(el.dataset.axes ?? "{}"),
               matrix: el.dataset.matrix === "true",
             }));
@@ -226,9 +237,12 @@ async function shoot() {
             console.log(file);
             return info;
           };
-          // A live variant's embed opens paused on its last frame; the name says which frame it is.
+          // Settled — the last frame, the variant itself — keeps the plain name, so a variant's
+          // file is the same whether or not it has a scene; any other frame names itself.
           const shotName = (module) => (i) =>
-            i.frames.length > 0 ? `${module}--${i.variant}@${i.frame}` : `${module}--${i.variant}`;
+            i.frames.length > 0 && !i.settled
+              ? `${module}--${i.variant}@${i.frame}`
+              : `${module}--${i.variant}`;
           const shootVariant = async (module, variant) => {
             const params = { theme, mode, lang, module, ...(variant ? { variant } : {}) };
             const info = await capture(embed(params), shotName(module));

@@ -2,12 +2,13 @@
  * Status & feedback: how the app says what is going on.
  *
  * - Live: a Task's plan with its run states (done, running with its live clock, waiting for
- *   approval, failed, stopped) and nav rows carrying counts;
+ *   approval, failed, stopped) and nav rows carrying counts. Its scene runs the plan into that
+ *   state: the steps queued, then running on their own clocks, then each on the outcome it ends
+ *   on;
  * - Settled: tickets with their status and priority badges (two at most per row), and stop reasons;
  * - Notices: a neutral strip, the one callout a view may have, an inline error, and toasts;
  * - Loading & empty: progress against a budget, a skeleton list, a page's empty state and a
  *   settings slot's;
- * - Run to finish (live): three steps from queued through running to settled, one of them failing.
  *
  * Static stand-ins for W1's `Dot`, `Spinner`, `StatusIcon`, `Badge`, `Count`, `Skeleton` and
  * `EmptyState`, and W4's `Notice` and `ProgressBar`.
@@ -32,9 +33,9 @@ import {
   ProgressBar,
   RunSpinner,
   Skeleton,
-  StatusWord,
   TONE_INK,
   Toast,
+  arriving,
   useFrameProgress,
 } from "./parts";
 import type { IconName } from "./parts";
@@ -67,49 +68,105 @@ const PRIORITY_TONE: Record<
   P2: { tone: "neutral", variant: "outline" },
 };
 
-function Live({ f }: { f: Fixtures }) {
+const RUN: SceneSpec = {
+  frames: [
+    { key: "queued", title: "Queued", hold: 1000 },
+    { key: "running", title: "Running", hold: 2400 },
+    { key: "outcomes", title: "Outcomes", hold: 1800 },
+  ],
+};
+
+/** How far into its settled time a step's clock gets by the end of the running frame. */
+const RUN_REACH = 0.9;
+
+/**
+ * One step of the plan. Queued, it is a neutral dot and the word; running, a spinner and a clock
+ * counting towards the time it takes; settled, the mark and the reading its own state ends on —
+ * done, waiting for approval, failed, stopped.
+ */
+function PlanStep({
+  step,
+  frame,
+  share,
+  f,
+}: {
+  step: PlanStepFixture;
+  /** The frame the plan stands on: queued, running, or settled on its outcomes. */
+  frame: "queued" | "running" | "outcomes";
+  /** How far through its settled time the step is, while it runs. */
+  share: number;
+  f: Fixtures;
+}) {
+  const clock = useScene();
   const states = f.copy.chat.runStates;
+  const mark = STATE_MARK[step.state]!;
+  return (
+    <li className="flex items-center gap-2 border-t border-line-muted py-2 text-sm">
+      {/* Keyed on the frame, so each new mark arrives rather than swaps in place. */}
+      <span key={frame} data-reveal={arriving(clock, frame)} className="w-4 shrink-0">
+        {frame === "queued" ? (
+          <Dot tone="neutral" size="xs" />
+        ) : frame === "running" ? (
+          <RunSpinner tone="success" label={states.running} />
+        ) : mark.icon === "spinner" ? (
+          <RunSpinner tone={mark.tone} label={states.running} />
+        ) : (
+          <StatusIcon tone={mark.tone} icon={mark.icon} />
+        )}
+      </span>
+      <span
+        className={`min-w-0 flex-1 truncate ${
+          frame === "queued" || step.state === "stopped" ? "text-fg-muted" : "text-fg"
+        }`}
+      >
+        {step.title}
+      </span>
+      {frame === "queued" ? (
+        <span className="shrink-0 text-xs text-fg-muted">{f.copy.chat.queued}</span>
+      ) : frame === "running" ? (
+        <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">
+          {liveDuration(share * (step.durationMs ?? 0))}
+        </span>
+      ) : step.state === "waiting" ? (
+        <span className="shrink-0 text-xs font-(--ui-weight-medium) text-tone-attention-fg">
+          {states.waiting}
+        </span>
+      ) : step.state === "stopped" ? (
+        <span className="shrink-0 text-xs text-fg-muted">{states.stopped}</span>
+      ) : (
+        <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">
+          {step.state === "running"
+            ? liveDuration(step.elapsedMs ?? 0)
+            : duration(step.durationMs ?? 0)}
+        </span>
+      )}
+    </li>
+  );
+}
+
+/**
+ * The plan as a Task runs it, and the nav rows beside it. The scene walks the steps from queued
+ * through running to the outcome each one ends on; settled, that is the plan this variant shows
+ * when nothing is playing.
+ */
+function Live({ f }: { f: Fixtures }) {
+  const clock = useScene();
+  const progress = useFrameProgress();
   const [workspace] = f.sessionGroups;
+  const frame = reached(clock, "outcomes")
+    ? "outcomes"
+    : reached(clock, "running")
+      ? "running"
+      : "queued";
+  const share = at(clock, "running") ? progress * RUN_REACH : 0;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <section className="grid grid-cols-[minmax(0,1fr)] gap-1">
         <Heading level={5}>{f.copy.chat.plan}</Heading>
         <ul className="grid grid-cols-[minmax(0,1fr)]">
-          {f.plan.map((step) => {
-            const mark = STATE_MARK[step.state]!;
-            return (
-              <li
-                key={step.title}
-                className="flex items-center gap-2 border-t border-line-muted py-2 text-sm"
-              >
-                <span className="w-4 shrink-0">
-                  {mark.icon === "spinner" ? (
-                    <RunSpinner tone={mark.tone} label={states.running} />
-                  ) : (
-                    <StatusIcon tone={mark.tone} icon={mark.icon} />
-                  )}
-                </span>
-                <span
-                  className={`min-w-0 flex-1 truncate ${step.state === "stopped" ? "text-fg-muted" : "text-fg"}`}
-                >
-                  {step.title}
-                </span>
-                {step.state === "waiting" ? (
-                  <span className="shrink-0 text-xs font-(--ui-weight-medium) text-tone-attention-fg">
-                    {states.waiting}
-                  </span>
-                ) : step.state === "stopped" ? (
-                  <span className="shrink-0 text-xs text-fg-muted">{states.stopped}</span>
-                ) : (
-                  <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">
-                    {step.state === "running"
-                      ? liveDuration(step.elapsedMs ?? 0)
-                      : duration(step.durationMs ?? 0)}
-                  </span>
-                )}
-              </li>
-            );
-          })}
+          {f.plan.map((step) => (
+            <PlanStep key={step.title} step={step} frame={frame} share={share} f={f} />
+          ))}
         </ul>
       </section>
       <nav className="grid grid-cols-[minmax(0,1fr)] max-w-xs gap-px">
@@ -302,124 +359,11 @@ function LoadingAndEmpty({ f }: { f: Fixtures }) {
   );
 }
 
-const LIVE_RUN: SceneSpec = {
-  frames: [
-    { key: "queued", title: "Queued", hold: 1000 },
-    { key: "running", title: "Running", hold: 2400 },
-    { key: "settled", title: "Settled", hold: 1800 },
-  ],
-};
-
-/** How far into its settled time each step's clock gets by the end of the running frame. */
-const RUN_REACH = 0.9;
-
-/** One step of the live run: its mark, its title, and its word or clock on the right. */
-function RunStep({
-  step,
-  phase,
-  share,
-  bar,
-  f,
-}: {
-  step: PlanStepFixture;
-  phase: "queued" | "running" | "settled";
-  /** How far through its settled time the step is, while it runs. */
-  share: number;
-  /** The step whose progress the bar under it shows. */
-  bar: boolean;
-  f: Fixtures;
-}) {
-  const states = f.copy.chat.runStates;
-  const settledMark = STATE_MARK[step.state]!;
-  const ms = step.durationMs ?? 0;
-  return (
-    <li className="border-t border-line-muted py-2 text-sm">
-      <span className="flex items-center gap-2">
-        {/* Keyed on the phase, so each new mark arrives rather than swaps in place. */}
-        <span key={phase} data-reveal className="flex w-4 shrink-0 items-center">
-          {phase === "queued" ? (
-            <Dot tone="neutral" size="xs" />
-          ) : phase === "running" ? (
-            <RunSpinner tone="success" label={states.running} />
-          ) : settledMark.icon === "spinner" ? null : (
-            <StatusIcon tone={settledMark.tone} icon={settledMark.icon} />
-          )}
-        </span>
-        <span
-          className={`min-w-0 flex-1 truncate ${phase === "queued" ? "text-fg-muted" : "text-fg"}`}
-        >
-          {step.title}
-        </span>
-        {phase === "queued" ? (
-          <span className="shrink-0 text-xs text-fg-muted">{f.copy.chat.queued}</span>
-        ) : (
-          <span className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">
-            {phase === "running" ? liveDuration(share * ms) : duration(ms)}
-          </span>
-        )}
-      </span>
-      {bar && phase === "running" && (
-        <span data-reveal className="block pl-6 pt-1.5">
-          <ProgressBar value={share} label={step.title} />
-        </span>
-      )}
-    </li>
-  );
-}
-
-/**
- * Run to finish: three steps of the Task's plan waiting their turn; running together, each on
- * its live clock, the long one filling its progress bar; then settled — two done, the PDF
- * ingest failed. The heading's mark follows: queued, a live dot while they run, done at the end.
- */
-function LiveRun({ f }: { f: Fixtures }) {
-  const clock = useScene();
-  const progress = useFrameProgress();
-  const c = f.copy.chat;
-  const phase = reached(clock, "settled")
-    ? "settled"
-    : reached(clock, "running")
-      ? "running"
-      : "queued";
-  const share = at(clock, "running") ? progress * RUN_REACH : 0;
-  const steps = [f.plan[0], f.plan[1], f.plan.find((step) => step.state === "failed")].filter(
-    (step): step is PlanStepFixture => step !== undefined,
-  );
-  return (
-    <section className="grid grid-cols-[minmax(0,1fr)] gap-1">
-      <div className="flex items-center gap-2">
-        <Heading level={5}>{c.plan}</Heading>
-        <span className="min-w-0 flex-1" />
-        <span key={phase} data-reveal className="flex">
-          {phase === "queued" ? (
-            <StatusWord tone="neutral">{c.queued}</StatusWord>
-          ) : phase === "running" ? (
-            <span className="inline-flex items-center gap-1 text-xs font-(--ui-weight-medium) text-tone-success-fg">
-              <Dot tone="success" size="xs" live />
-              {c.running}
-            </span>
-          ) : (
-            <StatusWord tone="success" icon="circleCheck">
-              {c.done}
-            </StatusWord>
-          )}
-        </span>
-      </div>
-      <ul className="grid grid-cols-[minmax(0,1fr)]">
-        {steps.map((step, i) => (
-          <RunStep key={step.title} step={step} phase={phase} share={share} bar={i === 0} f={f} />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 const VARIANTS = {
   live: Live,
   settled: Settled,
   notices: Notices,
   "loading-empty": LoadingAndEmpty,
-  "live-run": LiveRun,
 } as const;
 
 export const module = defineModule({
@@ -429,11 +373,10 @@ export const module = defineModule({
     "Run states, badges and counts on a task list; notices and toasts; progress, skeletons and empty states.",
   width: "narrow",
   variants: [
-    { key: "live", title: "Live" },
+    { key: "live", title: "Live", scene: RUN },
     { key: "settled", title: "Settled" },
     { key: "notices", title: "Notices" },
     { key: "loading-empty", title: "Loading & empty" },
-    { key: "live-run", title: "Run to finish", scene: LIVE_RUN },
   ],
   parts: [
     "icons-dot",

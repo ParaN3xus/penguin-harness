@@ -339,6 +339,21 @@ export const zh: Fixtures = buildFixtures("zh", {
       description: "阅读渲染后的文档，报告失效链接和错误引用",
     },
   },
+  hero: {
+    title: "把 Task 交给 Agent，然后看着它做完。",
+    pitch:
+      "PenguinHarness 把每个 Task 跑成一个随时能打开的 Session：提示词、走过的步骤、改动的文件，以及花掉的成本。",
+    primary: "下载桌面版",
+    secondary: "阅读文档",
+    empty: {
+      title: "还没有 Session",
+      body: "说清楚要做什么，Agent 会自己排步骤、调用工具，并把整个过程留下来。",
+      examples: [
+        "收集 Claude Code 文档，回答问题并标注来源。",
+        "检查每条引用是否都指向真实文件，并补一个测试。",
+      ],
+    },
+  },
   session: {
     title: "构建 Claude Code 文档专家",
     turn1: {
@@ -617,6 +632,112 @@ export const zh: Fixtures = buildFixtures("zh", {
   usage: {
     days: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"],
     buckets: { cacheRead: "缓存读取", cacheWrite: "缓存写入", output: "输出" },
+  },
+  dialogs: {
+    form: {
+      nameLabel: "名称",
+      nameValue: "引用校验",
+      nameHint: "只能用字母、数字与连字符，它同时也是该智能体的 id。",
+      approvalLabel: "审批",
+      approvalHint: "哪些操作它可以自己执行，哪些要先问过你。",
+      submit: "创建智能体",
+    },
+    full: {
+      title: "选择 Workspace",
+      hint: "智能体在这个目录下读写文件。",
+      choose: "使用该目录",
+    },
+    sheet: { title: "消息操作" },
+  },
+  createWithAi: {
+    panel: {
+      runsAs: (agent) => `将由「${agent}」在新对话中完成。`,
+      placeholder: "描述你想要的智能体。",
+      draft:
+        "一个写报告的智能体：把每周导出的工单数据整理成一份团队愿意读完的简短报告，并附上用到的数字。",
+      examplesLabel: "示例",
+      examples: [
+        { title: "随记智能体", description: "把你随口交代的事记下来，再从你的记录里回答。" },
+        { title: "文档 RAG 智能体", description: "为文档目录建立索引，回答时给出引用。" },
+        { title: "报告写作智能体", description: "把一周的数据写成一份有人愿意读的报告。" },
+      ],
+      previewLabel: "完整提示词",
+      tail: "请用 agent-initialization 技能在当前 Project 中创建这个智能体：以 default_agent 的 system_config.yaml 为底，写好它的名称、描述与 AGENTS.md，只从插件库安装它需要的 Skill，不要改动其他智能体。最后给出新智能体的 id 与开始对话的方式。",
+      open: "在新对话中打开",
+    },
+    proposal: {
+      intro: "我打算创建的智能体是这样。写入之前，先确认名称和技能是否合适。",
+      agent: {
+        name: "报告写作",
+        description: "用平实的文字写出每周的工单报告，并给出支撑它的数字。",
+        instructions:
+          "写给团队看，不是写给模型看：先用一段话说清发生了什么变化，再给表格。每个数字都注明它来自哪一次查询；查不到的事情要直接说查不到。",
+      },
+      labels: { instructions: "提示词", skills: "技能", model: "模型", approval: "审批" },
+      accept: "没问题",
+    },
+    review: {
+      title: (changes) => `当前 Project 的 ${changes} 处改动`,
+      kinds: { new: "新建", install: "安装" },
+      notes: {
+        config: "它的名称、描述与所用模型。",
+        agentsMd: "上面这段提示词，写成它每轮都会读取的文件。",
+        analysis: "读取工单导出数据，完成其中的统计。",
+        humanizer: "让报告读起来不像模型写的。",
+      },
+      accepted: "已确认",
+      confirm: "全部创建",
+    },
+    created: {
+      title: (name) => `「${name}」已就绪`,
+      body: "它的 Agent State 已写入下面的路径。可以直接开始对话试用，也可以打开它修改提示词。",
+      open: "打开智能体",
+      start: "开始对话",
+    },
+  },
+  emptyStates: {
+    firstSession: {
+      title: "今天想做点什么？",
+      body: "用你自己的话描述一个任务。智能体会读取 Workspace、按需运行命令，并展示它走过的每一步。",
+      examplesLabel: "试试这些",
+      examples: [
+        { title: "查语料库", prompt: "哪些文档讲了 hook 事件？其中哪一个能阻止工具调用？" },
+        {
+          title: "修一个不稳定的测试",
+          prompt: "BM25 分词器的测试对同一份输入时过时不过，找出原因并修好它。",
+        },
+        { title: "打包应用", prompt: "把应用打包成 Docker 镜像，并把运行命令写进 README。" },
+      ],
+    },
+    noResults: {
+      query: "gemini",
+      title: "没有匹配的结果",
+      body: "换一个更短的词，或清除搜索条件查看全部模型。",
+      clear: "清除搜索",
+    },
+    firstRun: {
+      title: "完成初始设置",
+      body: "运行一个 Task 之前，Project 至少需要一个模型和一个智能体。其余的都可以之后再说。",
+      steps: [
+        {
+          title: "添加模型提供方",
+          body: "填入密钥与 Base URL，其余由内置模型目录补齐。",
+          action: "打开模型库",
+        },
+        {
+          title: "创建智能体",
+          body: "一个模型、一段提示词，以及它可用的工具。",
+          action: "新建智能体",
+        },
+        { title: "开始一个 Session", body: "描述一个任务，看它一步步做完。", action: "新对话" },
+        {
+          title: "安装插件",
+          body: "插件为所有启用它的智能体提供 Skill 与 MCP 服务器。",
+          action: "打开插件库",
+        },
+      ],
+      progress: (done, total) => `已完成 ${done}/${total}`,
+    },
   },
   slashCommands: {
     compact: "压缩对话，腾出上下文",

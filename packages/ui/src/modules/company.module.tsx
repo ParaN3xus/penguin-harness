@@ -1,7 +1,8 @@
 /**
  * Company board: the surfaces of company mode, over Docs Expert Co.
  *
- * - Board: the tickets in their columns — priority, the run or block state, owner and spend;
+ * - Board: the tickets in their columns — priority, the run or block state, owner and spend. Its
+ *   scene walks one ticket across the board, from Proposed to where it stands today;
  * - Calendar: the week's events at their local times, past ones marked with their outcome, and the
  *   current time;
  * - Org: the employee tree with each employee's state and spend against budget;
@@ -21,6 +22,8 @@ import type {
   TicketFixture,
 } from "../fixtures";
 import { defineModule } from "../module";
+import type { SceneSpec } from "../module";
+import { at, useScene } from "../scene";
 import { AgentTile, UserAvatar } from "../screens/parts";
 import { usd } from "../screens/format";
 import { Badge, Count, GlyphIcon, IconButton, ProgressBar, RunSpinner, StatusWord } from "./parts";
@@ -42,11 +45,23 @@ const employee = (f: Fixtures, id: string): EmployeeFixture | undefined =>
 // Board
 // ---------------------------------------------------------------------------------------------
 
-function TicketCard({ f, ticket }: { f: Fixtures; ticket: TicketFixture }) {
+function TicketCard({
+  f,
+  ticket,
+  moved,
+}: {
+  f: Fixtures;
+  ticket: TicketFixture;
+  /** Set on the card in the column it has just been dragged into. */
+  moved?: true;
+}) {
   const owner = employee(f, ticket.ownerAgentId);
   const priority = PRIORITY[ticket.priority];
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-[var(--radius-inner)] border border-line bg-surface px-3 py-2.5">
+    <li
+      data-reveal={moved}
+      className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-[var(--radius-inner)] border border-line bg-surface px-3 py-2.5"
+    >
       <p className="line-clamp-2 text-sm text-fg">{ticket.title}</p>
       <div className="flex items-center gap-2">
         <Badge tone={priority.tone} variant={priority.variant}>
@@ -71,27 +86,60 @@ function TicketCard({ f, ticket }: { f: Fixtures; ticket: TicketFixture }) {
   );
 }
 
+const MOVE: SceneSpec = {
+  frames: [
+    { key: "proposed", title: "Proposed", hold: 1000 },
+    { key: "progress", title: "In progress", hold: 1400 },
+    { key: "review", title: "Review", hold: 1600 },
+  ],
+};
+
+/** Which column the walking ticket sits in on each frame; it ends in the one it is filed under. */
+const MOVE_COLUMNS: Record<string, TicketFixture["status"]> = {
+  proposed: "proposed",
+  progress: "in_progress",
+};
+
+/**
+ * The ticket board, and the scene that walks one ticket across it: the one now in review starts
+ * in Proposed, is picked up into In progress, and lands where it stands today. Every column's
+ * count follows it, and the board settles into what this variant shows when nothing is playing.
+ */
 function Board({ f }: { f: Fixtures }) {
+  const clock = useScene();
   const status = f.copy.company.ticketStatus;
   const columns = ["proposed", "in_progress", "review", "done"] as const;
+  // The ticket the scene walks: the one under review, two columns along from where it started.
+  const walking = f.company.tickets.find((t) => t.status === "review");
+  const column = MOVE_COLUMNS[clock?.frame ?? ""];
+  const columnOf = (ticket: TicketFixture) =>
+    column !== undefined && ticket.ticketId === walking?.ticketId ? column : ticket.status;
+  // The card is dragged into a new column on every frame but the first, and only while playing:
+  // a paused board — the gallery's resting state, and every screenshot — is at rest.
+  const dragged = clock !== null && clock.playing && !at(clock, "proposed");
   return (
     <div className="grid grid-cols-4 items-start gap-3">
-      {columns.map((column) => {
-        const tickets = f.company.tickets.filter((t) => t.status === column);
+      {columns.map((name) => {
+        const tickets = f.company.tickets.filter((t) => columnOf(t) === name);
         return (
           <section
-            key={column}
+            key={name}
             className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-lg bg-surface-muted p-2 [--radius-inner:max(var(--ui-radius-xs),calc(var(--ui-radius-lg)-0.5rem))]"
           >
             <div className="flex items-center gap-2 px-1 pt-1">
               <span className="min-w-0 flex-1 truncate text-sm font-(--ui-weight-medium) text-fg">
-                {status[column]}
+                {status[name]}
               </span>
               <Count n={tickets.length} />
             </div>
             <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
               {tickets.map((ticket) => (
-                <TicketCard key={ticket.ticketId} f={f} ticket={ticket} />
+                <TicketCard
+                  key={ticket.ticketId}
+                  f={f}
+                  ticket={ticket}
+                  moved={dragged && ticket.ticketId === walking?.ticketId ? true : undefined}
+                />
               ))}
             </ul>
           </section>
@@ -468,7 +516,7 @@ export const module = defineModule({
     "Company mode's surfaces: the ticket board, the week's calendar with outcomes, the org chart with employee states, and the group chat.",
   width: "wide",
   variants: [
-    { key: "board", title: "Board" },
+    { key: "board", title: "Board", scene: MOVE },
     { key: "calendar", title: "Calendar" },
     { key: "org", title: "Org" },
     { key: "channel", title: "Channel" },

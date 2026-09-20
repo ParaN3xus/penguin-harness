@@ -1,10 +1,10 @@
 /**
- * The clock a live variant plays on (see module.ts): which frame is showing, whether it is moving,
- * how fast, and how far into the frame it is.
+ * The clock a scene plays on (see module.ts): which frame is showing, whether it is moving, how
+ * fast, and how far into the frame it is.
  *
  * A composition reads the clock and draws the state the current frame names:
  *
- *   function LiveStream({ f }: { f: Fixtures }) {
+ *   function Stream({ f }: { f: Fixtures }) {
  *     const clock = useScene();
  *     const t = useFrameTime();
  *     const settled = reached(clock, "settled");
@@ -12,16 +12,30 @@
  *   }
  *
  * The render function a module declares stays hook-free and returns such a component; the gallery
- * wraps whatever it renders in a `SceneContext` provider. Outside a live variant (a static variant,
+ * wraps whatever it renders in a `SceneContext` provider. Outside a scene (a variant without one,
  * the Web App) there is no clock: `useScene()` is null, `reached` is true (a static view is the
  * settled one) and `at` is false.
+ *
+ * A scene runs once. Its resting state is *settled*: paused at the end of the last frame, which is
+ * what the card shows until the reader presses play, and what a screenshot or an embed shows by
+ * default. Play from a settled clock starts over from the first frame and runs to the end, where
+ * the clock settles again — nothing loops, and nothing plays unasked. Pausing midway keeps the
+ * place; play then resumes it. Stepping and jumping land paused at a frame's end, so the frame can
+ * be read as a still.
+ *
+ * A composition may also take the clock over: `useSceneControls()` gives it the controls of the
+ * clock it renders under (a reader who clicks inside a mock while the scene still plays settles
+ * it; a reader who sends a prompt plays the reply from its frame), or null where there is none.
+ * The controls move the one clock the card owns, so the card's transport always says what is
+ * happening.
  *
  * Time is wall-clock based so that several documents can show the same moment: the card that owns
  * the clock hands its `SceneTimeline` to the compare frames, and each one computes the time in the
  * frame from `Date.now()` and that timeline alone. Only the owner advances frames.
  *
- * The pure half — the timeline, `sceneReducer`, `frameElapsed`, `msToNextFrame` — needs no React
- * and no DOM, so the gallery's player and the tests call it directly.
+ * The pure half — the timeline, `sceneReducer`, `frameElapsed`, `msToNextFrame`, `isSettled`,
+ * `sceneControls` — needs no React and no DOM, so the gallery's player and the tests call it
+ * directly.
  */
 import { createContext, useContext, useEffect, useReducer } from "react";
 import type { SceneFrame } from "./module";
@@ -58,6 +72,7 @@ export interface SceneClock extends SceneTimeline {
 }
 
 export type SceneAction =
+  /** From settled: the first frame, from its start. Paused midway: resume. Playing: nothing. */
   | { type: "play"; now: number }
   | { type: "pause"; now: number }
   /** Back to the first frame, playing. */
@@ -66,15 +81,41 @@ export type SceneAction =
   | { type: "step"; by: number; now: number }
   /** To one frame, keeping the play state. */
   | { type: "jump"; index: number; now: number }
+  /** From one frame's start, playing on to the end. */
+  | { type: "playFrom"; index: number; now: number }
+  /** Straight to the settled state: the last frame, paused at its end. */
+  | { type: "settle"; now: number }
   | { type: "rate"; rate: number; now: number }
-  /** Advance past every frame whose hold has run out, looping from the last frame to the first. */
+  /** Advance past every frame whose hold has run out; past the last one, settle. */
   | { type: "tick"; now: number };
+
+/** An action before the player stamps its time: what a transport or a composition asks for. */
+export type SceneCommand = {
+  [K in SceneAction["type"]]: Omit<Extract<SceneAction, { type: K }>, "now">;
+}[SceneAction["type"]];
+
+/**
+ * What a composition may do to the clock it renders under. Every method is one command to the
+ * card's reducer, so the card's transport, the framed embeds and the composition never disagree
+ * about where the clock stands.
+ */
+export interface SceneControls {
+  /** From where the clock stands; from the first frame when it is settled. */
+  play(): void;
+  pause(): void;
+  /** From the first frame, playing. */
+  restart(): void;
+  /** Straight to the settled state — what a reader's own move inside a mock asks for. */
+  settle(): void;
+  /** From the frame with `key`, playing on to the end; an unknown key plays from the first. */
+  playFrom(key: string): void;
+}
 
 // ---------------------------------------------------------------------------------------------
 // Pure timeline logic
 // ---------------------------------------------------------------------------------------------
 
-/** A frame's hold at 1×. A missing or non-positive hold would stall the loop: it reads as 1 s. */
+/** A frame's hold at 1×. A missing or non-positive hold would stall the clock: it reads as 1 s. */
 export function holdOf(frame: SceneFrame | undefined): number {
   const hold = frame?.hold;
   return typeof hold === "number" && Number.isFinite(hold) && hold > 0 ? hold : 1000;
@@ -109,6 +150,18 @@ export function cueTimeline(
   };
 }
 
+/** The resting timeline: paused at the end of the last frame, the state the scene settles into. */
+export function settledTimeline(frames: readonly SceneFrame[], now: number): SceneTimeline {
+  return cueTimeline(frames, Math.max(0, frames.length - 1), { now });
+}
+
+/** True when the timeline rests at the end of the last frame — the scene has run, or never ran. */
+export function isSettled(frames: readonly SceneFrame[], timeline: SceneTimeline): boolean {
+  if (timeline.playing || frames.length === 0) return false;
+  const last = frames.length - 1;
+  return timeline.index === last && timeline.pausedElapsed >= holdOf(frames[last]);
+}
+
 /** Ms (at 1×) spent in the current frame at `now`, between 0 and the frame's hold. */
 export function frameElapsed(
   frames: readonly SceneFrame[],
@@ -133,18 +186,21 @@ export function msToNextFrame(
   return Math.max(0, left / timeline.rate);
 }
 
-/** A playing timeline moved on to the frame showing at `now`. */
+/**
+ * A playing timeline moved on to the frame showing at `now`. Once the last frame's hold has run
+ * out it settles: paused at that frame's end, however long ago that was (a tab left in the
+ * background for an hour comes back settled, not somewhere in a loop).
+ */
 function settle(frames: readonly SceneFrame[], t: SceneTimeline, now: number): SceneTimeline {
   if (!t.playing || frames.length === 0) return t;
-  const cycle = frames.reduce((sum, frame) => sum + holdOf(frame), 0) / t.rate;
+  const last = frames.length - 1;
   let { index, frameStartedAt } = t;
   while ((now - frameStartedAt) * t.rate >= holdOf(frames[index])) {
-    frameStartedAt += holdOf(frames[index]) / t.rate;
-    index = (index + 1) % frames.length;
-    // A tab left in the background for an hour skips whole loops at once, not frame by frame.
-    if (now - frameStartedAt >= cycle) {
-      frameStartedAt += Math.floor((now - frameStartedAt) / cycle) * cycle;
+    if (index >= last) {
+      return { ...t, index: last, playing: false, pausedElapsed: holdOf(frames[last]) };
     }
+    frameStartedAt += holdOf(frames[index]) / t.rate;
+    index += 1;
   }
   return index === t.index && frameStartedAt === t.frameStartedAt
     ? t
@@ -164,8 +220,9 @@ export function sceneReducer(
       return t;
     case "play": {
       if (t.playing) return t;
-      // A frame paused at its end (a jump, a step, the initial cue) plays again from its start;
-      // one paused midway resumes where it stopped.
+      // Settled: the scene plays again from the top. A frame paused at its end (a jump, a step)
+      // plays again from its start; one paused midway resumes where it stopped.
+      if (isSettled(frames, t)) return cueTimeline(frames, 0, { playing: true, rate: t.rate, now });
       const hold = holdOf(frames[t.index]);
       const spent = t.pausedElapsed >= hold ? 0 : t.pausedElapsed;
       return { ...t, playing: true, frameStartedAt: now - spent / t.rate, pausedElapsed: 0 };
@@ -179,6 +236,11 @@ export function sceneReducer(
       return cueTimeline(frames, t.index + (Math.trunc(action.by) || 0), { rate: t.rate, now });
     case "jump":
       return cueTimeline(frames, action.index, { playing: t.playing, rate: t.rate, now });
+    case "playFrom":
+      return cueTimeline(frames, action.index, { playing: true, rate: t.rate, now });
+    case "settle":
+      // Already settled: the same object, so nothing downstream re-renders for a repeated ask.
+      return isSettled(frames, t) ? t : { ...settledTimeline(frames, now), rate: t.rate };
     case "rate": {
       if (!validRate(action.rate) || action.rate === t.rate) return t;
       if (!t.playing) return { ...t, rate: action.rate };
@@ -210,6 +272,21 @@ export function at(clock: SceneClock | null, key: string): boolean {
   return clock !== null && clock.frame === key;
 }
 
+/** Controls over whatever runs a clock's commands: the card's reducer, or a message to the card. */
+export function sceneControls(
+  frames: readonly SceneFrame[],
+  dispatch: (command: SceneCommand) => void,
+): SceneControls {
+  return {
+    play: () => dispatch({ type: "play" }),
+    pause: () => dispatch({ type: "pause" }),
+    restart: () => dispatch({ type: "restart" }),
+    settle: () => dispatch({ type: "settle" }),
+    playFrom: (key) =>
+      dispatch({ type: "playFrom", index: Math.max(0, frameIndexOf(frames, key)) }),
+  };
+}
+
 // ---------------------------------------------------------------------------------------------
 // React
 // ---------------------------------------------------------------------------------------------
@@ -217,9 +294,17 @@ export function at(clock: SceneClock | null, key: string): boolean {
 export const SceneContext = createContext<SceneClock | null>(null);
 SceneContext.displayName = "SceneContext";
 
-/** The clock of the live variant this component renders in, or null (a static variant, the app). */
+export const SceneControlsContext = createContext<SceneControls | null>(null);
+SceneControlsContext.displayName = "SceneControlsContext";
+
+/** The clock of the scene this component renders in, or null (a variant without one, the app). */
 export function useScene(): SceneClock | null {
   return useContext(SceneContext);
+}
+
+/** The controls of that clock, or null where nothing runs one — then a reader's move only holds. */
+export function useSceneControls(): SceneControls | null {
+  return useContext(SceneControlsContext);
 }
 
 /**

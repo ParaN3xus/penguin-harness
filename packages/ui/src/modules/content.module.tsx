@@ -2,7 +2,8 @@
  * Markdown & code: what an answer is written in.
  *
  * - Prose: a docs answer — headings on the Markdown scale, a paragraph with a link and inline code,
- *   a list, a table, a quoted note, a formula;
+ *   a list, a table, a quoted note, a formula. Its scene writes the answer out the way a reply
+ *   arrives, a block at a time;
  * - Code: `src/rag.ts` in a code block with its header, copy button and line numbers, and the
  *   command that runs it;
  * - Diff: the session's two changes as unified diffs;
@@ -15,8 +16,19 @@ import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { FileDiff, Fixtures, InlineFixture, ToolCallItem } from "../fixtures";
 import { defineModule } from "../module";
+import type { SceneSpec } from "../module";
+import { reached, useScene } from "../scene";
 import { duration } from "../screens/format";
-import { GlyphIcon, IconButton } from "./parts";
+import { GlyphIcon, IconButton, arriving } from "./parts";
+
+const WRITE: SceneSpec = {
+  frames: [
+    { key: "intro", title: "Intro", hold: 1000 },
+    { key: "scopes", title: "Scopes", hold: 1200 },
+    { key: "table", title: "Table", hold: 1400 },
+    { key: "note", title: "Note", hold: 1800 },
+  ],
+};
 
 function InlineText({ parts }: { parts: readonly InlineFixture[] }) {
   return (
@@ -41,7 +53,13 @@ function InlineText({ parts }: { parts: readonly InlineFixture[] }) {
   );
 }
 
+/**
+ * The docs answer, and the scene that writes it: the title and its opening paragraph; the scope
+ * list under its heading; the table of what each scope reaches; then the quoted note and the
+ * ranking with its formula — the whole answer this variant shows when nothing is playing.
+ */
 function Prose({ f }: { f: Fixtures }) {
+  const clock = useScene();
   const d = f.docsAnswer;
   const h = "text-fg font-(--ui-weight-strong)";
   return (
@@ -50,48 +68,79 @@ function Prose({ f }: { f: Fixtures }) {
       <p>
         <InlineText parts={d.intro} />
       </p>
-      <h2 className={`pt-2 text-(length:--ui-md-h2-size) leading-snug ${h}`}>{d.scopesTitle}</h2>
-      <ul className="grid grid-cols-[minmax(0,1fr)] list-disc gap-1 pl-5">
-        {d.scopes.map((scope, i) => (
-          <li key={i}>
-            <InlineText parts={scope} />
-          </li>
-        ))}
-      </ul>
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr>
-            {d.table.head.map((cell) => (
-              <th
-                key={cell}
-                className="border border-line bg-surface-muted px-3 py-1.5 text-left font-(--ui-weight-strong)"
-              >
-                {cell}
-              </th>
+      {reached(clock, "scopes") && (
+        <>
+          <h2
+            data-reveal={arriving(clock, "scopes")}
+            className={`pt-2 text-(length:--ui-md-h2-size) leading-snug ${h}`}
+          >
+            {d.scopesTitle}
+          </h2>
+          <ul
+            data-reveal={arriving(clock, "scopes")}
+            className="grid grid-cols-[minmax(0,1fr)] list-disc gap-1 pl-5"
+          >
+            {d.scopes.map((scope, i) => (
+              <li key={i}>
+                <InlineText parts={scope} />
+              </li>
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {d.table.rows.map((row) => (
-            <tr key={row[0]}>
-              {row.map((cell, i) => (
-                <td
-                  key={i}
-                  className={`border border-line px-3 py-1.5 ${i === 0 ? "font-mono text-xs" : ""}`}
+          </ul>
+        </>
+      )}
+      {reached(clock, "table") && (
+        <table data-reveal={arriving(clock, "table")} className="w-full border-collapse text-sm">
+          <thead>
+            <tr>
+              {d.table.head.map((cell) => (
+                <th
+                  key={cell}
+                  className="border border-line bg-surface-muted px-3 py-1.5 text-left font-(--ui-weight-strong)"
                 >
                   {cell}
-                </td>
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <blockquote className="border-l-2 border-line-emphasis pl-4 text-fg-muted">
-        <InlineText parts={d.note} />
-      </blockquote>
-      <h3 className={`pt-2 text-(length:--ui-md-h3-size) leading-snug ${h}`}>{d.rankingTitle}</h3>
-      <p>{d.ranking}</p>
-      <p className="overflow-x-auto text-center font-mono text-sm text-fg">{d.formula}</p>
+          </thead>
+          <tbody>
+            {d.table.rows.map((row) => (
+              <tr key={row[0]}>
+                {row.map((cell, i) => (
+                  <td
+                    key={i}
+                    className={`border border-line px-3 py-1.5 ${i === 0 ? "font-mono text-xs" : ""}`}
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {reached(clock, "note") && (
+        <>
+          <blockquote
+            data-reveal={arriving(clock, "note")}
+            className="border-l-2 border-line-emphasis pl-4 text-fg-muted"
+          >
+            <InlineText parts={d.note} />
+          </blockquote>
+          <h3
+            data-reveal={arriving(clock, "note")}
+            className={`pt-2 text-(length:--ui-md-h3-size) leading-snug ${h}`}
+          >
+            {d.rankingTitle}
+          </h3>
+          <p data-reveal={arriving(clock, "note")}>{d.ranking}</p>
+          <p
+            data-reveal={arriving(clock, "note")}
+            className="overflow-x-auto text-center font-mono text-sm text-fg"
+          >
+            {d.formula}
+          </p>
+        </>
+      )}
     </article>
   );
 }
@@ -281,7 +330,7 @@ export const module = defineModule({
     "A docs answer in Markdown — headings, links, inline code, a table, math and a quote — a code block, a unified diff and a command log.",
   width: "wide",
   variants: [
-    { key: "prose", title: "Prose" },
+    { key: "prose", title: "Prose", scene: WRITE },
     { key: "code", title: "Code" },
     { key: "diff", title: "Diff" },
     { key: "log", title: "Log" },

@@ -1,30 +1,39 @@
 /**
- * Playing live variants: the clock a card owns, the clock a compare frame follows, and the
- * transport in the card's foot.
+ * Playing scenes: the clock a card owns, the clock a framed embed follows, and the transport in
+ * the card's foot.
  *
- * A card's clock wakes only when the current frame's hold runs out — nothing ticks in between, so a
- * frame change re-renders the card once; a composition that moves within a frame (a stream, a
- * typing field) asks `useFrameTime()` for its own animation-frame updates. The card plays while it
- * is on screen and pauses when it scrolls away, unless the reader paused it, in which case it waits
- * for the reader.
+ * Nothing plays unasked. A card's clock starts settled — paused at the end of the last frame,
+ * which is the variant itself — and moves only when the reader presses play; the scene then runs
+ * once and settles again. The clock wakes only when the current frame's hold runs out — nothing
+ * ticks in between, so a frame change re-renders the card once; a composition that moves within a
+ * frame (a stream, a typing field) asks `useFrameTime()` for its own animation-frame updates.
  *
- * Compare mode keeps one clock: the card's. It posts its timeline to each theme's `/embed` frame,
- * which renders from that timeline and `Date.now()` alone and never advances on its own, so the
- * three themes show the same frame at the same moment.
+ * Compare mode and the phone view keep one clock: the card's. It posts its timeline to each
+ * `/embed` frame, which renders from that timeline and `Date.now()` alone and never advances on
+ * its own, so the three themes show the same frame at the same moment.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Module, ModuleVariant, SceneFrame, SceneSpec } from "../../../ui/src/module";
 import {
   cueTimeline,
   frameElapsed,
   holdOf,
+  isSettled,
   msToNextFrame,
   SCENE_RATES,
   sceneClock,
+  sceneControls,
   sceneReducer,
+  settledTimeline,
 } from "../../../ui/src/scene";
-import type { SceneAction, SceneClock, SceneTimeline } from "../../../ui/src/scene";
-import { CLOCK_READY, readClockMessage } from "../lib/live";
+import type {
+  SceneAction,
+  SceneClock,
+  SceneCommand,
+  SceneControls,
+  SceneTimeline,
+} from "../../../ui/src/scene";
+import { CLOCK_READY, controlMessage, readClockMessage } from "../lib/live";
 import type { SceneCue } from "../lib/live";
 import { useText } from "../preview";
 import { useGallery } from "../state";
@@ -32,52 +41,50 @@ import { Segmented } from "./controls";
 import { ChromeIcon } from "./icons";
 import type { ChromeIconName } from "./icons";
 
-/** A reader's (or the viewport's) command; the player stamps the time. */
-export type SceneCommand = {
-  [K in SceneAction["type"]]: Omit<Extract<SceneAction, { type: K }>, "now">;
-}[SceneAction["type"]];
+export type { SceneCommand } from "../../../ui/src/scene";
 
 interface Held {
   frames: readonly SceneFrame[];
   timeline: SceneTimeline;
+  /** The reader has played this scene (so a settled clock reads Replay, not Play). */
+  ran: boolean;
 }
 
 export interface ScenePlayer {
-  /** Null for a static variant. */
+  /** Null for a variant without a scene. */
   clock: SceneClock | null;
-  /** A reader's command from the transport. */
+  /** True once the reader has pressed play on this variant's scene. */
+  ran: boolean;
+  /** A reader's command from the transport, or a framed embed's relayed one. */
   control: (command: SceneCommand) => void;
-  /** Callback ref: the element whose visibility plays and pauses the clock (with `autoplay`). */
-  observe: (element: Element | null) => void;
+  /** The same clock as a composition may drive it; null without a scene. */
+  controls: SceneControls | null;
 }
 
 /**
  * The clock a card (or a standalone `/embed`) owns for the variant it shows. A different variant
- * starts its own scene afresh; a static variant has no clock.
+ * starts its own scene afresh, settled; a variant without a scene has no clock.
  */
 export function useScenePlayer(
   scene: SceneSpec | undefined,
   {
     reduced,
-    autoplay = false,
     start,
   }: {
     reduced: boolean;
-    /** Play while the observed element is on screen, pause while it is not. */
-    autoplay?: boolean;
-    /** Where a scene starts. Default: the first frame, playing if it is on screen. */
+    /** Where a scene starts. Default: settled, on the last frame. */
     start?: (frames: readonly SceneFrame[]) => SceneCue;
   },
 ): ScenePlayer {
   const frames = scene?.frames;
-  const inView = useRef(false);
-  /** The reader paused (or stepped): scrolling back does not resume. */
-  const readerPaused = useRef(false);
 
   const begin = (list: readonly SceneFrame[]): Held => {
-    const cue = start?.(list) ?? { index: 0, playing: autoplay && inView.current };
     const now = Date.now();
-    return { frames: list, timeline: cueTimeline(list, cue.index, { playing: cue.playing, now }) };
+    const cue = start?.(list);
+    const timeline = cue
+      ? cueTimeline(list, cue.index, { playing: cue.playing, now })
+      : settledTimeline(list, now);
+    return { frames: list, timeline, ran: timeline.playing };
   };
   const [held, setHeld] = useState<Held | null>(() => (frames ? begin(frames) : null));
   let current = held;
@@ -87,70 +94,54 @@ export function useScenePlayer(
     setHeld(current);
   }
 
-  useEffect(() => {
-    readerPaused.current = false;
-  }, [frames]);
-
-  const send = useCallback((command: SceneCommand) => {
+  const control = useCallback((command: SceneCommand) => {
     const action = { ...command, now: Date.now() } as SceneAction;
-    // Always a new object, even when nothing moved: a timer that fired a millisecond early must
-    // still be scheduled again.
-    setHeld((h) => h && { frames: h.frames, timeline: sceneReducer(h.frames, h.timeline, action) });
+    const played =
+      action.type === "play" || action.type === "restart" || action.type === "playFrom";
+    setHeld((h) => {
+      if (!h) return h;
+      const timeline = sceneReducer(h.frames, h.timeline, action);
+      const ran = h.ran || played;
+      // A tick that moved nothing still gets a new object: a timer that fired a millisecond early
+      // must be scheduled again. Any other command that moved nothing (a composition settling an
+      // already settled clock on every keystroke) leaves the state, and every reader, alone.
+      if (action.type !== "tick" && timeline === h.timeline && ran === h.ran) return h;
+      return { frames: h.frames, timeline, ran };
+    });
   }, []);
-
-  const control = useCallback(
-    (command: SceneCommand) => {
-      if (command.type === "pause" || command.type === "step") readerPaused.current = true;
-      if (command.type === "play" || command.type === "restart") readerPaused.current = false;
-      send(command);
-    },
-    [send],
-  );
 
   // The one timer: the moment the current frame's hold runs out.
   useEffect(() => {
     if (!held) return;
     const delay = msToNextFrame(held.frames, held.timeline, Date.now());
     if (delay === null) return;
-    const timer = window.setTimeout(() => send({ type: "tick" }), Math.ceil(delay));
+    const timer = window.setTimeout(() => control({ type: "tick" }), Math.ceil(delay));
     return () => window.clearTimeout(timer);
-  }, [held, send]);
-
-  const [element, observe] = useState<Element | null>(null);
-  useEffect(() => {
-    if (!autoplay || !element) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[entries.length - 1];
-        if (!entry) return;
-        inView.current = entry.isIntersecting;
-        if (!entry.isIntersecting) send({ type: "pause" });
-        else if (!readerPaused.current) send({ type: "play" });
-      },
-      // On screen = crossing the middle three fifths of the viewport, not a sliver at its edge.
-      { rootMargin: "-20% 0px -20% 0px" },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [autoplay, element, send]);
+  }, [held, control]);
 
   const clock = useMemo(
     () => (current ? sceneClock(current.frames, current.timeline, reduced) : null),
     [current, reduced],
   );
-  return { clock, control, observe };
+  const controls = useMemo(
+    () => (current ? sceneControls(current.frames, control) : null),
+    [current, control],
+  );
+  return { clock, ran: current?.ran ?? false, control, controls };
 }
 
 /**
- * A compare frame's clock: the card's timeline, as its `gallery:clock` messages deliver it. Until
- * the first message the frame holds still on the last frame, as any embed does.
+ * A framed embed's clock: the card's timeline, as its `gallery:clock` messages deliver it. Until
+ * the first message the frame holds still, settled, as any embed does. Its controls send each
+ * command up to the card as a `gallery:control` message, so a reader's move inside a framed mock
+ * moves the one clock the card owns.
  */
 export function useFollowedClock(
   scene: SceneSpec | undefined,
   module: string,
   variant: string,
   reduced: boolean,
-): SceneClock | null {
+): { clock: SceneClock | null; controls: SceneControls | null } {
   const frames = scene?.frames;
   const [timeline, setTimeline] = useState<SceneTimeline | null>(null);
   useEffect(() => {
@@ -164,11 +155,17 @@ export function useFollowedClock(
     window.parent.postMessage({ type: CLOCK_READY }, window.location.origin);
     return () => window.removeEventListener("message", onMessage);
   }, [frames, module, variant]);
-  return useMemo(() => {
+  const clock = useMemo(() => {
     if (!frames) return null;
-    const t = timeline ?? cueTimeline(frames, frames.length - 1, { now: 0 });
-    return sceneClock(frames, t, reduced);
+    return sceneClock(frames, timeline ?? settledTimeline(frames, 0), reduced);
   }, [frames, timeline, reduced]);
+  const controls = useMemo(() => {
+    if (!frames || window.parent === window) return null;
+    return sceneControls(frames, (command) =>
+      window.parent.postMessage(controlMessage(module, variant, command), window.location.origin),
+    );
+  }, [frames, module, variant]);
+  return { clock, controls };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -220,34 +217,47 @@ function FrameProgress({ clock }: { clock: SceneClock }) {
 }
 
 /**
- * Play / pause, play from the start, previous and next frame, a chip per frame (the current one
- * pressed, with its progress), and the speed.
+ * The play control first — Play on a settled clock (the scene runs once from the top), Pause
+ * while it runs, Play again from wherever it was paused, Replay once it has run and settled again
+ * — then the previous and next frame, a chip per frame (the current one pressed, with its
+ * progress), and the speed.
  */
 export function Transport({
   module,
   variant,
   clock,
+  ran,
   control,
 }: {
   module: Module;
   variant: ModuleVariant;
   clock: SceneClock;
+  ran: boolean;
   control: (command: SceneCommand) => void;
 }) {
   const { S } = useGallery();
   const text = useText();
+  const replay = ran && isSettled(clock.frames, clock);
+  const primary = clock.playing
+    ? { icon: "pause" as const, label: S.transport.pause, command: { type: "pause" as const } }
+    : replay
+      ? {
+          icon: "restart" as const,
+          label: S.transport.replay,
+          command: { type: "restart" as const },
+        }
+      : { icon: "play" as const, label: S.transport.play, command: { type: "play" as const } };
   return (
     <div className="g-transport" role="group" aria-label={S.transport.label}>
-      <TransportButton
-        icon={clock.playing ? "pause" : "play"}
-        title={clock.playing ? S.transport.pause : S.transport.play}
-        onClick={() => control(clock.playing ? { type: "pause" } : { type: "play" })}
-      />
-      <TransportButton
-        icon="restart"
-        title={S.transport.restart}
-        onClick={() => control({ type: "restart" })}
-      />
+      <button
+        type="button"
+        className="g-play"
+        data-playing={clock.playing || undefined}
+        onClick={() => control(primary.command)}
+      >
+        <ChromeIcon name={primary.icon} size={13} />
+        <span>{primary.label}</span>
+      </button>
       <TransportButton
         icon="previous"
         title={S.transport.previous}

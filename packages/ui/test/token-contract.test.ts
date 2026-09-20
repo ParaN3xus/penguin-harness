@@ -16,14 +16,24 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_THEME_ID, THEME_IDS, THEME_MODES, TOKEN_GROUPS, TOKEN_NAMES } from "../src/tokens";
+import {
+  ACCENT_PRESETS,
+  DEFAULT_THEME_ID,
+  THEME_ACCENT_PRESETS,
+  THEME_IDS,
+  THEME_MODES,
+  TOKEN_GROUPS,
+  TOKEN_NAMES,
+} from "../src/tokens";
 import type { ThemeId } from "../src/tokens";
 import {
+  accentProblems,
   analyzeFile,
   analyzeThemeFile,
   contractProblems,
   darkRepeats,
   matchesPolicyPath,
+  parseCssRules,
   scanSourceRoots,
   stripCssComments,
   unscannedRoots,
@@ -54,6 +64,7 @@ function themeState(id: ThemeId): ThemeState {
 }
 
 const THEMES = THEME_IDS.map(themeState);
+const read = (rel: string) => readFileSync(join(SRC_DIR, rel), "utf8");
 
 describe("the contract itself", () => {
   it("lists each name once, every one a --ui-* custom property", () => {
@@ -109,8 +120,89 @@ describe("theme files", () => {
           `${theme.file}: the dark rule repeats these base values — drop them from it`,
         ).toEqual([]);
       });
+
+      it("declares the accent presets tokens.ts lists for it, each setting the six accent names", () => {
+        // A preset is the one rule outside the canonical two that may set a token: the six accent
+        // names, on the theme's own root, in `@layer ui-accent`; a dark rule lifts what dark
+        // changes. The ids and their order are the picker's, so tokens.ts and the file agree.
+        expect(accentProblems(analysis, ACCENT_PRESETS[theme.id])).toEqual([]);
+      });
     });
   }
+});
+
+describe("the accent presets, per theme (2026-09-19)", () => {
+  // Each theme lists its own presets and values (user decision): Primer the five ids and values
+  // the Web App has always had, so it moves no pixel; Frost warm and muted; Console terminal
+  // hues. A theme's rules match only its own root, so a stored preset another theme lists paints
+  // nothing under it and comes back when that theme returns.
+  const PRIMER_TODAY: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+    blue: {
+      "--ui-accent": "#2563eb",
+      "--ui-accent-hover": "#1d4ed8",
+      "--ui-accent-active": "#1e40af",
+      "--ui-accent-fg": "#ffffff",
+      "--ui-accent-muted": "rgb(37 99 235 / 0.12)",
+      "--ui-accent-line": "rgb(37 99 235 / 0.5)",
+    },
+    green: {
+      "--ui-accent": "#15803d",
+      "--ui-accent-hover": "#166534",
+      "--ui-accent-active": "#14532d",
+      "--ui-accent-fg": "#ffffff",
+      "--ui-accent-muted": "rgb(21 128 61 / 0.12)",
+      "--ui-accent-line": "rgb(21 128 61 / 0.5)",
+    },
+    violet: {
+      "--ui-accent": "#7c3aed",
+      "--ui-accent-hover": "#6d28d9",
+      "--ui-accent-active": "#5b21b6",
+      "--ui-accent-fg": "#ffffff",
+      "--ui-accent-muted": "rgb(124 58 237 / 0.12)",
+      "--ui-accent-line": "rgb(124 58 237 / 0.5)",
+    },
+    rose: {
+      "--ui-accent": "#be123c",
+      "--ui-accent-hover": "#9f1239",
+      "--ui-accent-active": "#881337",
+      "--ui-accent-fg": "#ffffff",
+      "--ui-accent-muted": "rgb(190 18 60 / 0.12)",
+      "--ui-accent-line": "rgb(190 18 60 / 0.5)",
+    },
+    amber: {
+      "--ui-accent": "#b45309",
+      "--ui-accent-hover": "#92400e",
+      "--ui-accent-active": "#78350f",
+      "--ui-accent-fg": "#ffffff",
+      "--ui-accent-muted": "rgb(180 83 9 / 0.12)",
+      "--ui-accent-line": "rgb(180 83 9 / 0.5)",
+    },
+  };
+
+  it("keeps Primer's five ids and values byte for byte, the same in both modes", () => {
+    const primer = THEMES.find((theme) => theme.id === DEFAULT_THEME_ID);
+    if (primer === undefined || primer.status !== "filled") throw new Error("Primer is filled");
+    expect([...THEME_ACCENT_PRESETS.github]).toEqual(Object.keys(PRIMER_TODAY));
+    for (const [id, values] of Object.entries(PRIMER_TODAY)) {
+      const rules = primer.analysis.accents.get(id);
+      expect(rules, id).toBeDefined();
+      expect(Object.fromEntries(rules!.light), id).toEqual(values);
+      expect([...rules!.dark], `${id} has no dark lift`).toEqual([]);
+    }
+  });
+
+  it("gives every theme its own five, with no id shared between two themes", () => {
+    const all = THEME_IDS.flatMap((id) => THEME_ACCENT_PRESETS[id]);
+    expect(all.length).toBe(new Set(all).size);
+    for (const id of THEME_IDS) expect(THEME_ACCENT_PRESETS[id].length).toBe(5);
+  });
+
+  it("no longer lives in theme.css, and theme.css still declares the ui-accent layer after ui-theme", () => {
+    const sheet = read("theme.css");
+    const presets = parseCssRules(sheet).filter((rule) => /data-accent=/.test(rule.selector));
+    expect(presets.map((rule) => `${rule.line}: ${rule.selector}`)).toEqual([]);
+    expect(stripCssComments(sheet)).toMatch(/@layer ui-theme, ui-accent;/);
+  });
 });
 
 describe("the de-slop revision of the contract (K-redesign §2.5)", () => {
@@ -143,7 +235,7 @@ describe("the theme-identities revision of the contract (2026-09-19)", () => {
   // rungs and its own control padding, and the chrome and reading faces are two names. The
   // presence / reveal / layout motion reads tokens of its own, and the app window has a hook with
   // tokens behind it. 188 + 1 (the space unit) + 1 (the chrome face) + 9 (the shell) + 11 (motion)
-  // = 210.
+  // = 210; the structure revision below adds 5 more.
   it("adds the space unit, the chrome face, the shell group and the motion names", () => {
     for (const name of [
       "--ui-space-unit",
@@ -172,7 +264,26 @@ describe("the theme-identities revision of the contract (2026-09-19)", () => {
       expect(TOKEN_NAMES).toContain(name);
     }
     expect(TOKEN_GROUPS.find((group) => group.id === "shell")?.names.length).toBe(9);
-    expect(TOKEN_NAMES.length).toBe(210);
+    expect(TOKEN_NAMES.length).toBe(215);
+  });
+
+  it("adds the structure group behind the tree and field hooks (round 2)", () => {
+    // A host indents a tree row by the inset and the indent per level, so a theme's connector
+    // rules land on the columns the host used; a field's label column and gap are the theme's.
+    // 210 + 5 = 215.
+    const structure = TOKEN_GROUPS.find((group) => group.id === "structure");
+    expect(structure?.names).toEqual([
+      "--ui-tree-inset",
+      "--ui-tree-indent",
+      "--ui-tree-guide",
+      "--ui-field-label-w",
+      "--ui-field-gap",
+    ]);
+    const primer = THEMES.find((theme) => theme.id === DEFAULT_THEME_ID);
+    if (primer === undefined || primer.status !== "filled") throw new Error("Primer is filled");
+    // Today's file tree: a 0.5rem inset and 0.875rem per level.
+    expect(primer.analysis.modes.light.get("--ui-tree-inset")).toBe("0.5rem");
+    expect(primer.analysis.modes.light.get("--ui-tree-indent")).toBe("0.875rem");
   });
 
   it("bridges the space unit, the chrome face and the body rung to Tailwind and body", () => {

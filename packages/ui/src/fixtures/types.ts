@@ -649,6 +649,138 @@ export interface DocsAnswerFixture {
 }
 
 // ---------------------------------------------------------------------------
+// Dialogs, "Create with AI" and the surfaces with nothing on them yet
+// ---------------------------------------------------------------------------
+
+/**
+ * What the product puts over a page and asks for. The destructive confirmation's title and body
+ * are the Agents page's own (`AppCopy.agents`), because a confirmation quotes the page it
+ * interrupts; only what it leaves behind is written here.
+ */
+export interface DialogsFixture {
+  /** The manual "New agent" dialog: a name, a model and how it asks before it acts. */
+  form: {
+    nameLabel: string;
+    nameValue: string;
+    nameHint: string;
+    approvalLabel: string;
+    approvalHint: string;
+    submit: string;
+  };
+  /** The full-screen dialog: the browser that says which folder an Agent works in. */
+  full: { title: string; hint: string; choose: string };
+  /** The bottom sheet a phone opens instead of a centred card: a message's own actions. */
+  sheet: { title: string };
+}
+
+/** What a creation step does to the Workspace: a file written, or a Skill installed. */
+export type CreateChangeKind = "new" | "install";
+
+/** One thing "Create with AI" will create, as the review lists it. */
+export interface CreateChangeFixture {
+  /** Project-relative, `/`-separated; a folder ends in `/`. */
+  path: string;
+  kind: CreateChangeKind;
+  /** One line on why it is there. */
+  note: string;
+}
+
+/**
+ * "Create with AI": the panel that hands a prompt to a new Session, the Agent the model proposes
+ * in it, the changes it asks to make, and where they landed. The panel's shape is the product's —
+ * who will do the work, a draft, examples that replace the draft, and the fixed tail every send
+ * appends — so a reader sees exactly what goes out.
+ */
+export interface CreateWithAiFixture {
+  panel: {
+    /** Who the prompt is handed to, and where. */
+    runsAs: (agent: string) => string;
+    placeholder: string;
+    /** The draft the scene types. */
+    draft: string;
+    examplesLabel: string;
+    /** Clicking one replaces the draft; the titles are the product's own five, shortened. */
+    examples: readonly { title: string; description: string }[];
+    /** The fold over what is really sent, and the tail appended after a blank line. */
+    previewLabel: string;
+    tail: string;
+    /** The way out of the panel: it fills a new Session's composer, it does not send. */
+    open: string;
+  };
+  /** The model's answer: a line of prose, then the Agent it proposes. */
+  proposal: {
+    intro: string;
+    agent: {
+      id: string;
+      name: string;
+      description: string;
+      /** The AGENTS.md it would write, as the card previews it. */
+      instructions: string;
+      /** Skill ids from the plugin library. */
+      skills: readonly string[];
+    };
+    labels: Readonly<Record<"instructions" | "skills" | "model" | "approval", string>>;
+    accept: string;
+  };
+  /** One row per thing it will create, each acceptable or editable. */
+  review: {
+    title: (changes: number) => string;
+    kinds: Readonly<Record<CreateChangeKind, string>>;
+    changes: readonly CreateChangeFixture[];
+    accepted: string;
+    confirm: string;
+  };
+  /** Where it landed, and the two ways on from here. */
+  created: {
+    title: (name: string) => string;
+    body: string;
+    /** Project-relative folder the Agent State was written to. */
+    path: string;
+    open: string;
+    start: string;
+  };
+}
+
+/** One prompt an empty Session offers, with the mark that tells the three apart. */
+export interface ExamplePromptFixture {
+  icon: GlyphName;
+  title: string;
+  prompt: string;
+}
+
+/** One step of the first-run checklist: what to do, why, and the button that opens it. */
+export interface FirstRunStepFixture {
+  title: string;
+  body: string;
+  action: string;
+  done: boolean;
+}
+
+/**
+ * The four surfaces with nothing on them yet. A page whose list is empty needs no fixture of its
+ * own: the Agents page already writes that sentence (`AppCopy.agents.empty`).
+ */
+export interface EmptyStatesFixture {
+  /** A Session before its first message: the line it opens with and the prompts it offers. */
+  firstSession: {
+    title: string;
+    body: string;
+    examplesLabel: string;
+    examples: readonly ExamplePromptFixture[];
+  };
+  /** A search that found nothing: what was typed, and what to do about it. */
+  noResults: { query: string; title: string; body: string; clear: string };
+  /** The first-run checklist: what is already done, and what is next. */
+  firstRun: {
+    title: string;
+    body: string;
+    /** In order; the current step is the first one not done. */
+    steps: readonly FirstRunStepFixture[];
+    progress: (done: number, total: number) => string;
+  };
+}
+
+// ---------------------------------------------------------------------------
 // App copy and type specimens
 // ---------------------------------------------------------------------------
 
@@ -957,10 +1089,33 @@ export interface TypeSpecimens {
   numerals: string;
 }
 
+// ---------------------------------------------------------------------------
+// The hero
+// ---------------------------------------------------------------------------
+
+/**
+ * The words around the app window the hero shows. Everything inside that window — the session
+ * titles, the transcript, the dock's panels — is the dataset the rest of the gallery uses; only
+ * the lines the product says about itself live here.
+ */
+export interface HeroFixture {
+  /** The one display line above the window. */
+  title: string;
+  /** The sentence under it: what the product does. */
+  pitch: string;
+  /** The first thing a reader is asked to do. */
+  primary: string;
+  /** The quieter way on, beside the primary button. */
+  secondary: string;
+  /** The window before a Session exists: what it says, and the two prompts it offers. */
+  empty: { title: string; body: string; examples: readonly [string, string] };
+}
+
 /** The whole dataset for one locale. */
 export interface Fixtures {
   lang: FixtureLang;
   copy: AppCopy;
+  hero: HeroFixture;
   user: FixtureUser;
   agents: FixtureAgent[];
   session: ChatSession;
@@ -983,5 +1138,8 @@ export interface Fixtures {
   failedRun: FailedRunFixture;
   streamedReply: StreamedReplyFixture;
   docsAnswer: DocsAnswerFixture;
+  dialogs: DialogsFixture;
+  createWithAi: CreateWithAiFixture;
+  emptyStates: EmptyStatesFixture;
   specimens: TypeSpecimens;
 }

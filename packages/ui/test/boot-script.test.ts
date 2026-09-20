@@ -22,7 +22,12 @@ import {
   applyThemeAttributes,
 } from "../src/boot";
 import type { AccentChoice, FontScale } from "../src/boot";
-import { ACCENT_PRESETS, DEFAULT_THEME_ID, THEME_IDS } from "../src/tokens";
+import {
+  ACCENT_PRESET_IDS,
+  DEFAULT_THEME_ID,
+  THEME_ACCENT_PRESETS,
+  THEME_IDS,
+} from "../src/tokens";
 import type { ThemeId } from "../src/tokens";
 import { WEB_DIR } from "./helpers/paths";
 
@@ -76,7 +81,9 @@ function runBoot(stored: Record<string, string | null>, systemDark: boolean, thr
 /**
  * What the provider resolves the same stored values to, written from the stored-preference rules
  * rather than from the script: an unknown mode means "system", an unknown theme id the default
- * theme, an unknown accent `neutral`, an unknown scale the default tier.
+ * theme, an unknown accent `neutral`, an unknown scale the default tier. A preset any theme lists
+ * is written to the root whichever theme is active — the theme files scope their presets to their
+ * own root, so an unlisted one paints nothing and comes back with its theme.
  */
 function viaProvider(stored: Record<string, string | null>, systemDark: boolean) {
   const mode = stored[THEME_STORAGE_KEYS.mode];
@@ -89,7 +96,7 @@ function viaProvider(stored: Record<string, string | null>, systemDark: boolean)
     themeId: (THEME_IDS as readonly (string | null | undefined)[]).includes(themeId)
       ? (themeId as ThemeId)
       : DEFAULT_THEME_ID,
-    accent: (ACCENT_PRESETS as readonly (string | null | undefined)[]).includes(accent)
+    accent: (ACCENT_PRESET_IDS as readonly (string | null | undefined)[]).includes(accent)
       ? (accent as AccentChoice)
       : "neutral",
     fontScale:
@@ -104,7 +111,13 @@ describe("BOOT_SCRIPT", () => {
   it("paints what the provider will, for every combination of stored preferences", () => {
     const modes = [null, "light", "dark", "system", "sepia"];
     const themes = [null, ...THEME_IDS, "retro"];
-    const accents = [null, "neutral", ...ACCENT_PRESETS, "teal"];
+    // One preset of each theme's list, so a Frost preset stored under Primer is exercised too.
+    const accents = [
+      null,
+      "neutral",
+      ...THEME_IDS.map((id) => THEME_ACCENT_PRESETS[id][0]!),
+      "teal",
+    ];
     const scales = [null, ...Object.keys(FONT_SCALE_PX), "xl", "toString"];
     const mismatches: string[] = [];
     let cases = 0;
@@ -131,6 +144,24 @@ describe("BOOT_SCRIPT", () => {
             }
     expect(cases).toBeGreaterThan(1000);
     expect(mismatches.slice(0, 5)).toEqual([]);
+  });
+
+  it("knows every preset every theme lists, and writes one under any theme", () => {
+    // The script paints the first frame; a preset it did not know would snap in when the provider
+    // mounts. And a preset stays on the root under a theme that does not list it: the theme
+    // files, not the script, decide what it paints.
+    for (const themeId of THEME_IDS) {
+      for (const accent of THEME_ACCENT_PRESETS[themeId]) {
+        for (const under of THEME_IDS) {
+          const painted = runBoot(
+            { [THEME_STORAGE_KEYS.themeId]: under, [THEME_STORAGE_KEYS.accent]: accent },
+            false,
+          );
+          expect(painted.accent, `${accent} (${themeId}) under ${under}`).toBe(accent);
+        }
+      }
+    }
+    expect(ACCENT_PRESET_IDS.length).toBe(new Set(ACCENT_PRESET_IDS).size);
   });
 
   it("renders the page untouched when storage throws, instead of throwing itself", () => {

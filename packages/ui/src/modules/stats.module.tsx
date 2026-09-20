@@ -2,7 +2,9 @@
  * Stats & charts: a Trace's numbers.
  *
  * - Overview: the stat strip (cost, tokens, elapsed, cache hit), the Overall summary as a ruled
- *   key-value grid, the per-turn chips, the context ring and the week's output sparkline;
+ *   key-value grid, the per-turn chips, the context ring and the week's output sparkline. Its
+ *   scene counts the strip up from nothing, then brings in the summary, then the chips and the
+ *   ring filling to the share of the window in use;
  * - Timeline: turn 2's execution timeline — a lane for the model and one per tool, the time axis,
  *   the legend — and the events it cross-highlights;
  * - Usage: a week of tokens by bucket as stacked bars, and the month's spend against its budget
@@ -14,9 +16,19 @@
 import { fixturesFor } from "../fixtures";
 import type { Fixtures, TraceSegmentKind } from "../fixtures";
 import { defineModule } from "../module";
+import type { SceneSpec } from "../module";
+import { at, reached, useScene } from "../scene";
 import { duration, percent, tokens, usd } from "../screens/format";
-import { Badge, GlyphIcon, KeyValue, RuledSection } from "./parts";
+import { Badge, GlyphIcon, KeyValue, RuledSection, arriving, useFrameProgress } from "./parts";
 import type { IconName } from "./parts";
+
+const COUNT_UP: SceneSpec = {
+  frames: [
+    { key: "tiles", title: "Tiles", hold: 1600 },
+    { key: "summary", title: "Summary", hold: 1200 },
+    { key: "gauges", title: "Gauges", hold: 1800 },
+  ],
+};
 
 /** Timeline phase inks: chart identity colours, one per kind; `other` recedes. */
 const SEGMENT_INK: Record<TraceSegmentKind, string> = {
@@ -129,62 +141,90 @@ function Sparkline({ values, label }: { values: readonly number[]; label: string
   );
 }
 
+/**
+ * A Trace's numbers, and the scene that counts them out. The strip's figures run up from nothing
+ * on the first frame's clock, the Overall grid arrives on the second, and on the third the
+ * per-turn chips land and the context ring fills to the share of the window in use — the totals
+ * this variant shows when nothing is playing.
+ */
 function Overview({ f }: { f: Fixtures }) {
   const t = f.copy.traces;
+  const clock = useScene();
+  const progress = useFrameProgress();
   const o = f.trace.overall;
   const turn = f.trace.turns[1]!;
   const ctx = f.session.context;
   const context = f.copy.chat.contextOf(tokens(ctx.tokens), tokens(ctx.window));
+  // The share of each number that has been counted out, and how far the ring has filled.
+  const counted = at(clock, "tiles") ? progress : 1;
+  const filled = at(clock, "gauges") ? progress : 1;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <div className="flex divide-x divide-line">
-        <StatTile label={t.cost} value={usd(o.costUsd)} detail={t.overTurns(o.turns)} />
+        <StatTile label={t.cost} value={usd(o.costUsd * counted)} detail={t.overTurns(o.turns)} />
         <StatTile
           label={t.tokens}
-          value={tokens(o.inputTokens + o.outputTokens)}
+          value={tokens((o.inputTokens + o.outputTokens) * counted)}
           detail={`${tokens(o.outputTokens)} ${t.outputTokens}`}
         />
-        <StatTile label={t.elapsed} value={duration(o.elapsedMs)} detail={`${o.outputTps} tok/s`} />
+        <StatTile
+          label={t.elapsed}
+          value={duration(o.elapsedMs * counted)}
+          detail={`${o.outputTps} tok/s`}
+        />
         <StatTile
           label={t.cacheHitRate}
-          value={percent(o.cacheReadTokens, o.inputTokens)}
+          value={percent(o.cacheReadTokens * counted, o.inputTokens)}
           detail={tokens(o.cacheReadTokens)}
         />
       </div>
-      <RuledSection title={t.overall}>
-        <KeyValue
-          items={[
-            { label: t.turns, value: String(o.turns) },
-            { label: t.toolCalls, value: String(o.toolCalls) },
-            { label: t.compactions, value: String(o.compactions) },
-            { label: t.inputTokens, value: tokens(o.inputTokens) },
-            {
-              label: t.cacheHits,
-              value: `${tokens(o.cacheReadTokens)} · ${percent(o.cacheReadTokens, o.inputTokens)}`,
-            },
-            { label: t.outputTokens, value: tokens(o.outputTokens) },
-          ]}
-        />
-      </RuledSection>
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 border-t border-line pt-4">
-        <span className="flex items-center gap-3">
-          <Badge>{t.turn(turn.index)}</Badge>
-          <StatChip icon="wrench" value={String(turn.toolCalls)} label={t.toolCalls} />
-          <StatChip icon="arrowUpLine" value={tokens(turn.inputTokens)} label={t.inputTokens} />
-          <StatChip icon="arrowDownLine" value={tokens(turn.outputTokens)} label={t.outputTokens} />
-          <StatChip icon="cost" value={usd(turn.costUsd)} label={t.cost} />
-        </span>
-        <span className="flex flex-wrap items-center gap-x-10 gap-y-4">
+      {reached(clock, "summary") && (
+        <div data-reveal={arriving(clock, "summary")}>
+          <RuledSection title={t.overall}>
+            <KeyValue
+              items={[
+                { label: t.turns, value: String(o.turns) },
+                { label: t.toolCalls, value: String(o.toolCalls) },
+                { label: t.compactions, value: String(o.compactions) },
+                { label: t.inputTokens, value: tokens(o.inputTokens) },
+                {
+                  label: t.cacheHits,
+                  value: `${tokens(o.cacheReadTokens)} · ${percent(o.cacheReadTokens, o.inputTokens)}`,
+                },
+                { label: t.outputTokens, value: tokens(o.outputTokens) },
+              ]}
+            />
+          </RuledSection>
+        </div>
+      )}
+      {reached(clock, "gauges") && (
+        <div
+          data-reveal={arriving(clock, "gauges")}
+          className="grid grid-cols-[minmax(0,1fr)] gap-4 border-t border-line pt-4"
+        >
           <span className="flex items-center gap-3">
-            <Ring share={ctx.tokens / ctx.window} label={context} />
-            <span className="text-xs text-fg-muted">{context}</span>
+            <Badge>{t.turn(turn.index)}</Badge>
+            <StatChip icon="wrench" value={String(turn.toolCalls)} label={t.toolCalls} />
+            <StatChip icon="arrowUpLine" value={tokens(turn.inputTokens)} label={t.inputTokens} />
+            <StatChip
+              icon="arrowDownLine"
+              value={tokens(turn.outputTokens)}
+              label={t.outputTokens}
+            />
+            <StatChip icon="cost" value={usd(turn.costUsd)} label={t.cost} />
           </span>
-          <span className="flex items-center gap-3">
-            <Sparkline values={f.usage.output} label={f.copy.usage.outputThisWeek} />
-            <span className="text-xs text-fg-muted">{f.copy.usage.outputThisWeek}</span>
+          <span className="flex flex-wrap items-center gap-x-10 gap-y-4">
+            <span className="flex items-center gap-3">
+              <Ring share={(ctx.tokens / ctx.window) * filled} label={context} />
+              <span className="text-xs text-fg-muted">{context}</span>
+            </span>
+            <span className="flex items-center gap-3">
+              <Sparkline values={f.usage.output} label={f.copy.usage.outputThisWeek} />
+              <span className="text-xs text-fg-muted">{f.copy.usage.outputThisWeek}</span>
+            </span>
           </span>
-        </span>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -382,7 +422,7 @@ export const module = defineModule({
     "A Trace's numbers: the overall summary, stat tiles and chips, a context ring and a sparkline; the execution timeline and its legend; spend by day against the budget.",
   width: "wide",
   variants: [
-    { key: "overview", title: "Overview" },
+    { key: "overview", title: "Overview", scene: COUNT_UP },
     { key: "timeline", title: "Timeline" },
     { key: "usage", title: "Usage" },
   ],

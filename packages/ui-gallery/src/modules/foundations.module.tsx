@@ -29,7 +29,7 @@ export const module = defineModule({
   id: "foundations",
   title: "Foundations",
   description:
-    "The palette, the type scale, shape and depth, the rhythm steps, icons, motion, focus and the six style hooks, each on a board.",
+    "The palette, the type scale, shape and depth, the rhythm steps, icons, motion, focus and the ten style hooks, each on a board.",
   width: "wide",
   variants: [
     { key: "colour", title: "Colour" },

@@ -83,14 +83,19 @@ function PrefRow({
   popover?: string;
 }) {
   return (
-    <div className="relative flex items-center justify-between gap-4 py-3.5 first:pt-0">
-      <p className="flex items-center gap-1.5 text-sm font-(--ui-weight-medium) text-fg">
+    <div className="ui-field relative flex items-center justify-between gap-4 py-3.5 first:pt-0">
+      <p
+        data-slot="label"
+        className="flex items-center gap-1.5 text-sm font-(--ui-weight-medium) text-fg"
+      >
         {label}
         <span title={info} className={popover ? "text-fg" : "text-fg-subtle"}>
           <Glyph name="help" size={14} />
         </span>
       </p>
-      <div className="shrink-0">{children}</div>
+      <div data-slot="control" className="shrink-0">
+        {children}
+      </div>
       {popover && <FloatingPanel>{popover}</FloatingPanel>}
     </div>
   );
@@ -128,8 +133,9 @@ function PagedDialog({ f }: { f: Fixtures }) {
                     : "text-fg-muted"
                 }`}
               >
+                {/* The page's name is right beside it, so the rail's glyph is decorative. */}
                 <span className="text-fg-subtle">
-                  <Glyph name={glyph} size={15} />
+                  <Glyph name={glyph} size={15} decor="nav" />
                 </span>
                 <span className="min-w-0 truncate">{c.pages[key]}</span>
               </span>

@@ -32,14 +32,14 @@ export interface ModuleRegistry {
 const fileName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 /**
- * What stops a live variant's scene from playing or being addressed: fewer than two frames (nothing
- * to animate between), a frame key that cannot be a URL or file-name segment or repeats, or a hold
+ * What stops a variant's scene from playing or being addressed: fewer than two frames (nothing to
+ * animate between), a frame key that cannot be a URL or file-name segment or repeats, or a hold
  * that is not a positive number of ms.
  */
 function sceneProblems(variant: ModuleVariant): string[] {
   const frames = variant.scene?.frames;
   if (frames === undefined) return [];
-  if (frames.length < 2) return [`live variant "${variant.key}" needs at least two frames`];
+  if (frames.length < 2) return [`scene of "${variant.key}" needs at least two frames`];
   const keys = frames.map((frame) => frame.key);
   const badKeys = keys.filter((key, i) => !VARIANT_KEY.test(key) || keys.indexOf(key) !== i);
   const badHolds = frames.filter((frame) => !(Number.isFinite(frame.hold) && frame.hold > 0));

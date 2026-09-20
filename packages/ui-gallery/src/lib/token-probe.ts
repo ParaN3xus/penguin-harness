@@ -1,21 +1,32 @@
 /**
- * Resolves every contract token in every theme × mode, as the browser computes it.
+ * Resolves every contract token in every theme × mode, as the browser computes it — and, on the
+ * same footing, each theme's accent presets.
  *
- * The theme files select on `:root[data-theme]` and `:root.dark`, so a theme only takes effect on
- * a document root. The probe therefore copies the page's own CSS into a hidden, same-origin blank
- * frame and flips that frame's root through all six theme × mode pairs, reading each token with
- * `getComputedStyle` — synchronous, and nothing on the visible page restyles. A custom property's
- * computed value has its `var()` references substituted, so `--ui-accent-line: var(--ui-accent)`
- * comes back as the colour it points at; an undefined token comes back as the empty string.
+ * The theme files select on `:root[data-theme]`, `:root.dark` and `:root[data-accent]`, so a
+ * theme only takes effect on a document root. The probe therefore copies the page's own CSS into a
+ * hidden, same-origin blank frame and flips that frame's root through the theme × mode pairs (and
+ * the accent presets), reading each token with `getComputedStyle` — synchronous, and nothing on
+ * the visible page restyles. A custom property's computed value has its `var()` references
+ * substituted, so `--ui-accent-line: var(--ui-accent)` comes back as the colour it points at; an
+ * undefined token comes back as the empty string.
  */
 import { THEME_IDS, THEME_MODES, TOKEN_NAMES } from "@prismshadow/penguin-ui";
 import type { ThemeId, ThemeModeName } from "@prismshadow/penguin-ui";
 import { applyThemeAttributes } from "@prismshadow/penguin-ui/boot";
+import { accentPresetsOf, THEME_ACCENT } from "./accents";
 import type { Rgba } from "./color";
 
 /** Token name → resolved value (`""` when the theme leaves it undefined). */
 export type TokenValues = Readonly<Record<string, string>>;
 export type TokenMatrix = Readonly<Record<ThemeId, Readonly<Record<ThemeModeName, TokenValues>>>>;
+
+/**
+ * Per theme × mode: `neutral` → the theme's own `--ui-accent`, and each listed preset id → the
+ * `--ui-accent` it sets, so a swatch can be painted in the preset's own colour.
+ */
+export type AccentMatrix = Readonly<
+  Record<ThemeId, Readonly<Record<ThemeModeName, Readonly<Record<string, string>>>>>
+>;
 
 function documentCss(doc: Document): string {
   const chunks: string[] = [];
@@ -29,7 +40,8 @@ function documentCss(doc: Document): string {
   return chunks.join("\n");
 }
 
-export function probeTokens(): TokenMatrix {
+/** Runs `read` against the root of a hidden frame that carries the page's CSS, then removes it. */
+function withProbeRoot<T>(read: (root: HTMLElement, win: Window) => T): T {
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
   frame.tabIndex = -1;
@@ -43,7 +55,20 @@ export function probeTokens(): TokenMatrix {
     const style = doc.createElement("style");
     style.textContent = documentCss(document);
     doc.head.appendChild(style);
-    const root = doc.documentElement;
+    return read(doc.documentElement, win);
+  } finally {
+    frame.remove();
+  }
+}
+
+/** The root's `data-accent` for a choice: absent for the theme's own accent. */
+function setAccent(root: HTMLElement, accent: string): void {
+  if (accent === THEME_ACCENT) delete root.dataset.accent;
+  else root.dataset.accent = accent;
+}
+
+export function probeTokens(): TokenMatrix {
+  return withProbeRoot((root, win) => {
     const matrix = {} as Record<ThemeId, Record<ThemeModeName, TokenValues>>;
     for (const themeId of THEME_IDS) {
       matrix[themeId] = {} as Record<ThemeModeName, TokenValues>;
@@ -56,9 +81,27 @@ export function probeTokens(): TokenMatrix {
       }
     }
     return matrix;
-  } finally {
-    frame.remove();
-  }
+  });
+}
+
+export function probeAccents(): AccentMatrix {
+  return withProbeRoot((root, win) => {
+    const matrix = {} as Record<ThemeId, Record<ThemeModeName, Record<string, string>>>;
+    for (const themeId of THEME_IDS) {
+      matrix[themeId] = {} as Record<ThemeModeName, Record<string, string>>;
+      for (const mode of THEME_MODES) {
+        applyThemeAttributes(root, { themeId, dark: mode === "dark" });
+        const values: Record<string, string> = {};
+        for (const accent of [THEME_ACCENT, ...accentPresetsOf(themeId)]) {
+          setAccent(root, accent);
+          values[accent] = win.getComputedStyle(root).getPropertyValue("--ui-accent").trim();
+        }
+        setAccent(root, THEME_ACCENT);
+        matrix[themeId][mode] = values;
+      }
+    }
+    return matrix;
+  });
 }
 
 let paintCtx: CanvasRenderingContext2D | null | undefined;

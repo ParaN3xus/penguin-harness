@@ -3,7 +3,8 @@
  * there are no client-side transitions to manage):
  *
  *   /                 the gallery
- *   /embed            one module variant (a live one on its own clock), or one part demo, alone
+ *   /embed            one module variant (its scene on its own clock, or on the card's when
+ *                     framed), or one part demo, alone
  *   /screens/<name>   a full-viewport composite
  *   /fonts            font specimens, declared faces and licences
  */

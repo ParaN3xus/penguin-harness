@@ -1,11 +1,14 @@
 /**
  * The gallery context every route renders inside: the URL-backed view state, the resolved mode,
- * the chrome dictionary, and the token matrix.
+ * the chrome dictionary, and the token and accent matrices.
  *
  * The provider owns the document root: it applies the theme under test to <html> through the
  * package's own `applyThemeAttributes` (the same contract the app's boot script and theme provider
- * follow), sets `lang` so CJK text shapes as Chinese, and marks reduced motion. The gallery chrome
- * never reads those attributes' theme — only `.dark`, to pick its own light or dark palette.
+ * follow) — theme, mode, the accent choice and the root font size, which is what makes the size
+ * tiers real: every rem in a composition, a framed embed or `/embed` follows
+ * `<html style="font-size">`, while the chrome, sized in px, does not — sets `lang` so CJK text
+ * shapes as Chinese, and marks reduced motion and the phone view. The gallery chrome never reads
+ * those attributes' theme — only `.dark`, to pick its own light or dark palette.
  */
 import {
   createContext,
@@ -18,16 +21,16 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { applyThemeAttributes } from "@prismshadow/penguin-ui/boot";
+import { asAccentChoice, resolveAccent } from "./lib/accents";
 import { replaceSearch, usePrefersDark, useSearch } from "./lib/location";
-import { probeTokens } from "./lib/token-probe";
-import type { TokenMatrix } from "./lib/token-probe";
-import { formatGalleryQuery, parseGalleryState, resolveMode } from "./lib/url-state";
+import { probeAccents, probeTokens } from "./lib/token-probe";
+import type { AccentMatrix, TokenMatrix } from "./lib/token-probe";
+import { formatGalleryQuery, parseGalleryState, PREF_KEYS, resolveMode } from "./lib/url-state";
 import type { GalleryState, RememberedPrefs } from "./lib/url-state";
 import { zh } from "./strings";
 import type { GalleryStrings } from "./strings";
 import { en } from "./strings-en";
 
-const PREF_KEYS = ["theme", "mode", "tier", "lang"] as const;
 const storageKey = (key: string) => `penguin-gallery.${key}`;
 
 function readRemembered(): RememberedPrefs {
@@ -55,9 +58,13 @@ export interface GalleryContextValue {
   state: GalleryState;
   /** `state.mode` with `system` resolved. */
   mode: "light" | "dark";
+  /** `state.accent` as the active theme applies it: the preset, or `neutral` when it lists none such. */
+  accent: string;
   S: GalleryStrings;
   /** Every token in every theme × mode; null until the first probe has run. */
   tokens: TokenMatrix | null;
+  /** Every theme's own accent and listed presets, resolved; null until the first probe has run. */
+  accents: AccentMatrix | null;
   /** Rewrites the URL (and the remembered preferences) with a patched state. */
   update: (patch: Partial<GalleryState> | ((state: GalleryState) => GalleryState)) => void;
 }
@@ -70,14 +77,19 @@ export function useGallery(): GalleryContextValue {
   return value;
 }
 
+interface Probed {
+  tokens: TokenMatrix;
+  accents: AccentMatrix;
+}
+
 /** Re-probe after the page's CSS changes (Vite HMR swaps <style> tags); debounced. */
-function useTokenMatrix(): TokenMatrix | null {
-  const [tokens, setTokens] = useState<TokenMatrix | null>(null);
+function useProbe(): Probed | null {
+  const [probed, setProbed] = useState<Probed | null>(null);
   useEffect(() => {
     let timer = 0;
     const run = () => {
       timer = 0;
-      setTokens(probeTokens());
+      setProbed({ tokens: probeTokens(), accents: probeAccents() });
     };
     run();
     const observer = new MutationObserver(() => {
@@ -90,7 +102,7 @@ function useTokenMatrix(): TokenMatrix | null {
       if (timer) window.clearTimeout(timer);
     };
   }, []);
-  return tokens;
+  return probed;
 }
 
 export function GalleryProvider({
@@ -109,7 +121,8 @@ export function GalleryProvider({
   const state = useMemo(() => parseGalleryState(search, remembered), [search, remembered]);
   const prefersDark = usePrefersDark();
   const mode = resolveMode(state.mode, prefersDark);
-  const tokens = useTokenMatrix();
+  const accent = resolveAccent(state.theme, state.accent);
+  const probed = useProbe();
 
   const extras = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
@@ -139,18 +152,30 @@ export function GalleryProvider({
 
   useLayoutEffect(() => {
     const root = document.documentElement;
+    // The chosen preset goes onto the root as it is, listed by the active theme or not — the
+    // app's boot script does the same, and a theme's preset rules match only their own theme.
     applyThemeAttributes(root, {
       themeId: state.theme,
       dark: mode === "dark",
+      accent: asAccentChoice(state.accent),
       fontScale: state.tier,
     });
     root.lang = state.lang === "zh" ? "zh-CN" : "en";
     root.dataset.motion = state.motion;
-  }, [state.theme, mode, state.tier, state.lang, state.motion]);
+    root.dataset.view = state.view;
+  }, [state.theme, mode, state.tier, state.accent, state.lang, state.motion, state.view]);
 
   const value = useMemo<GalleryContextValue>(
-    () => ({ state, mode, S: state.lang === "zh" ? zh : en, tokens, update }),
-    [state, mode, tokens, update],
+    () => ({
+      state,
+      mode,
+      accent,
+      S: state.lang === "zh" ? zh : en,
+      tokens: probed?.tokens ?? null,
+      accents: probed?.accents ?? null,
+      update,
+    }),
+    [state, mode, accent, probed, update],
   );
   return <GalleryContext.Provider value={value}>{children}</GalleryContext.Provider>;
 }

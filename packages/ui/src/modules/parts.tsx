@@ -2,8 +2,8 @@
  * Static stand-ins the gallery modules compose, beside the screens' own (`screens/parts.tsx`). Each
  * is named after the component it imitates (A-architecture §3, K-redesign §5.1) and takes that
  * component's props, so a wave swaps it for the real thing by changing an import. Token utilities
- * and the declared style hooks only; no state, except in the motion helpers at the end, which the
- * live variants play their frames through.
+ * and the declared style hooks only; no state, except in the motion helpers at the end, which a
+ * variant's scene plays its frames through.
  *
  * The names are load-bearing beyond readability: a style hook is allowed only inside the component
  * that hosts it (`FloatingPanel`, `Modal` and `Tooltip` wear `.ui-glass`, `GroupHeader`, `MenuLabel`
@@ -14,6 +14,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AccentSwatchFixture } from "../fixtures";
 import { holdOf, reached, useFrameTime, useScene } from "../scene";
+import type { SceneClock } from "../scene";
 import type { ToneName } from "../tokens";
 import { GLYPHS } from "../screens/glyph";
 import { INLINE, StreamingCaret, inline } from "../screens/markdown";
@@ -63,15 +64,27 @@ export const ICON_PATHS = {
 
 export type IconName = keyof typeof ICON_PATHS;
 
-/** A line icon at the theme's stroke, cap and join; pixel sizes, like the app's `ICON_SIZE`. */
+/**
+ * A line icon at the theme's stroke, cap and join; pixel sizes, like the app's `ICON_SIZE`.
+ *
+ * `decor` names the part a decorative icon plays — one that says nothing its label does not
+ * already say — so Frost can tint it by role and Console drop it. The renderer writes the
+ * `ui-icon-decor` hook for it, gated on the prop, so a call site says `decor="nav"` and nothing
+ * else; the hook guard reads the prop on the call site and holds the enclosing row or header to
+ * the hook's host list, so the class being written here does not loosen that rule. An icon that
+ * carries information (a status mark, a file kind, a tool glyph, an avatar, the send button)
+ * takes no `decor`.
+ */
 export function GlyphIcon({
   name,
   size = 14,
   className = "",
+  decor,
 }: {
   name: IconName;
   size?: number;
   className?: string;
+  decor?: "nav" | "group" | "menu" | "empty";
 }) {
   return (
     <svg
@@ -81,7 +94,8 @@ export function GlyphIcon({
       fill="none"
       stroke="currentColor"
       aria-hidden
-      className={`block shrink-0 ${className}`}
+      data-role={decor}
+      className={`block shrink-0 ${decor ? "ui-icon-decor" : ""} ${className}`}
       style={{
         strokeWidth: "var(--ui-icon-stroke)",
         strokeLinecap: "var(--ui-icon-cap)" as "round",
@@ -659,14 +673,22 @@ export function NavRow({
         active ? "bg-accent-muted font-(--ui-weight-medium) text-fg" : "text-fg-muted"
       }`}
     >
-      <GlyphIcon name={icon} size={16} className={active ? "text-fg" : "text-fg-subtle"} />
+      <GlyphIcon
+        name={icon}
+        size={16}
+        decor="nav"
+        className={active ? "text-fg" : "text-fg-subtle"}
+      />
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {count !== undefined && <Count n={count} />}
     </span>
   );
 }
 
-/** A collapsible group's header: the label names the rows below it. */
+/**
+ * A collapsible group's header: the label names the rows below it, and its icon repeats what the
+ * label already says, so it carries `ui-icon-decor` and a theme may tint it or drop it.
+ */
 export function GroupHeader({
   label,
   name = false,
@@ -685,7 +707,7 @@ export function GroupHeader({
 }) {
   return (
     <div className="flex items-center gap-1.5 px-2 pb-1 pt-3 text-fg-subtle">
-      {icon && <GlyphIcon name={icon} size={14} />}
+      {icon && <GlyphIcon name={icon} size={14} decor="group" />}
       {name ? (
         <span className="min-w-0 truncate text-xs font-(--ui-weight-medium) text-fg-muted">
           {label}
@@ -769,7 +791,10 @@ export function MenuItem({
         active ? "bg-surface-muted" : ""
       }`}
     >
-      {icon && <GlyphIcon name={icon} size={14} className={danger ? "" : "text-fg-muted"} />}
+      {/* A menu row's icon restates its label; `ui-icon-decor` lets a theme tint or drop it. */}
+      {icon && (
+        <GlyphIcon name={icon} size={14} decor="menu" className={danger ? "" : "text-fg-muted"} />
+      )}
       <span className="min-w-0 flex-1">
         <span className="block truncate">{label}</span>
         {description && <span className="block truncate text-xs text-fg-muted">{description}</span>}
@@ -876,6 +901,11 @@ const CONTROL_STATE: Record<FieldState, string> = {
   disabled: "border-line bg-surface-muted opacity-60",
 };
 
+/**
+ * A labelled control row. `ui-field` lets a theme lay the three parts out as its own — the label
+ * over the control, or a fixed label column with the control beside it — so the slots say which
+ * part is which rather than the markup fixing a shape.
+ */
 export function Field({
   label,
   hint,
@@ -890,8 +920,11 @@ export function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
-      <span className="flex items-center gap-1 text-sm font-(--ui-weight-medium) text-fg">
+    <div className="ui-field grid grid-cols-[minmax(0,1fr)] gap-1.5">
+      <span
+        data-slot="label"
+        className="flex items-center gap-1 text-sm font-(--ui-weight-medium) text-fg"
+      >
         {label}
         {required && (
           <span aria-hidden className="text-tone-danger-fg">
@@ -899,14 +932,20 @@ export function Field({
           </span>
         )}
       </span>
-      {children}
+      <div data-slot="control" className="min-w-0">
+        {children}
+      </div>
       {error ? (
-        <span className="flex items-center gap-1 text-xs text-tone-danger-fg">
+        <span data-slot="hint" className="flex items-center gap-1 text-xs text-tone-danger-fg">
           <GlyphIcon name="circleCross" size={12} />
           {error}
         </span>
       ) : (
-        hint && <span className="text-xs text-fg-muted">{hint}</span>
+        hint && (
+          <span data-slot="hint" className="text-xs text-fg-muted">
+            {hint}
+          </span>
+        )
       )}
     </div>
   );
@@ -1093,7 +1132,11 @@ export function SwatchPicker({
   );
 }
 
-/** A preference row: the label (with its "?") and hint on the left, the control on the right. */
+/**
+ * A preference row: the label (with its "?") and hint on the left, the control on the right. It is
+ * a labelled control row like `Field`, so it wears `ui-field` and names the same slots; the "?" is
+ * the only thing that says a row has more to explain, so it is never decorative.
+ */
 export function PrefRow({
   label,
   hint,
@@ -1106,23 +1149,32 @@ export function PrefRow({
   control: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 py-3">
-      <div className="min-w-0">
+    <div className="ui-field flex items-center justify-between gap-6 py-3">
+      <div data-slot="label" className="min-w-0">
         <p className="flex items-center gap-1 text-sm font-(--ui-weight-medium) text-fg">
           {label}
           {info && <GlyphIcon name="help" size={14} className="text-fg-subtle" />}
         </p>
         {hint && <p className="mt-0.5 text-xs text-fg-muted">{hint}</p>}
       </div>
-      <div className="shrink-0">{control}</div>
+      <div data-slot="control" className="shrink-0">
+        {control}
+      </div>
     </div>
   );
 }
 
+/**
+ * Where a row of `depth` starts inside a `ui-tree`. A host indents its own rows by this ladder, so
+ * the connector rules each theme draws land on the columns the rows keep.
+ */
+export const treeInset = (depth: number): string =>
+  `calc(var(--ui-tree-inset) + var(--ui-tree-indent) * ${depth})`;
+
 // ---------------------------------------------------------------------------------------------
-// Motion (the live variants): Presence, Backdrop, StreamText, TypingText
+// Motion (a variant's scene): Presence, Backdrop, StreamText, TypingText, useArrivals
 //
-// A live variant draws the state its current frame names, and the theme animates the change
+// A scene draws the state its current frame names, and the theme animates the change
 // through attributes: `data-presence` / `data-backdrop` on a layer that comes and goes,
 // `data-reveal` on content that just arrived, `data-layout-motion` on a box whose size changes.
 // These helpers set the attributes and keep the timing; no duration or easing is written here, so
@@ -1133,8 +1185,18 @@ export function PrefRow({
 export type PresenceSide = "top" | "bottom" | "left" | "right" | "center";
 
 /**
- * How far the current frame of a live variant has run, from 0 to 1. Without a clock (a static
- * variant) and under reduced motion it reads 1, the frame's end; a still is cued at its end too.
+ * Whether something that lands on `frame` is landing right now, for `data-reveal`. It is true only
+ * while the scene is playing that frame: a paused card — the gallery's resting state, and every
+ * screenshot — draws what has arrived at rest, so nothing re-runs its entrance when a card is
+ * first painted.
+ */
+export function arriving(clock: SceneClock | null, frame: string): true | undefined {
+  return clock !== null && clock.playing && clock.frame === frame ? true : undefined;
+}
+
+/**
+ * How far the current frame of a scene has run, from 0 to 1. Without a clock (a variant with no
+ * scene) and under reduced motion it reads 1, the frame's end; a still is cued at its end too.
  */
 export function useFrameProgress(): number {
   const clock = useScene();
@@ -1280,10 +1342,27 @@ const revealed = (total: number, time: number, hold: number) =>
   Math.min(total, Math.floor((time * total) / (hold * REVEAL_SPAN)));
 
 /**
+ * How many of `total` pieces have landed: none before `frame`, all of them from the next frame on
+ * and wherever there is no clock (a static variant is the settled one). During `frame` they arrive
+ * one after another on its clock, so a list fills in step across a comparison's three themes.
+ */
+export function useArrivals(total: number, frame: string): number {
+  const clock = useScene();
+  const time = useFrameTime();
+  if (!reached(clock, frame)) return 0;
+  if (clock === null || clock.frame !== frame) return total;
+  return revealed(total, time, holdOf(clock.frames[clock.index]));
+}
+
+/**
  * A reply as it streams during `frame`: the chunks so far, each arriving as its own
  * `<span data-reveal>`, then the caret. Before `frame` it is absent; after it, the whole text
  * settles without a caret. The count comes from the frame's time, so the three frames of a
  * comparison stream in step, and a still or reduced motion shows the whole text behind the caret.
+ *
+ * Once every chunk has arrived the text stops being a run of new pieces and becomes one run of
+ * text, as the static variant writes it: a card sitting on the finished frame draws the settled
+ * reply, and nothing re-reveals when the card is first painted.
  */
 export function StreamText({ text, frame }: { text: string; frame: string }) {
   const clock = useScene();
@@ -1292,6 +1371,14 @@ export function StreamText({ text, frame }: { text: string; frame: string }) {
   if (!reached(clock, frame)) return null;
   if (clock === null || clock.frame !== frame) return <>{inline(text)}</>;
   const shown = revealed(chunks.length, time, holdOf(clock.frames[clock.index]));
+  if (shown >= chunks.length) {
+    return (
+      <>
+        {inline(text)}
+        <StreamingCaret />
+      </>
+    );
+  }
   return (
     <>
       {chunks.slice(0, shown).map((chunk, i) => (
@@ -1317,4 +1404,56 @@ export function TypingText({ text, frame }: { text: string; frame: string }) {
   const characters = Array.from(text);
   const shown = revealed(characters.length, time, holdOf(clock.frames[clock.index]));
   return <>{characters.slice(0, shown).join("")}</>;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The confirm card (W3: ConfirmModal)
+//
+// Appended after the motion helpers rather than beside `Modal` so that this file grows at its end
+// while several hands are in it.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The headerless confirm card: the tone's mark beside what is about to happen and what it costs,
+ * then two small buttons with the deciding one last. It has no title bar, because a confirmation
+ * is one sentence and a choice, and it takes the glass from the `Modal` it is built on rather
+ * than being a second dialog shell.
+ */
+export function ConfirmModal({
+  tone,
+  title,
+  body,
+  cancel,
+  confirm,
+}: {
+  tone: ToneName;
+  title: string;
+  body: string;
+  cancel: string;
+  confirm: string;
+}) {
+  return (
+    <Modal
+      footer={
+        <>
+          <Button variant="secondary" size="sm">
+            {cancel}
+          </Button>
+          <Button variant={tone === "danger" ? "danger" : "primary"} size="sm">
+            {confirm}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex items-start gap-3 px-5 pb-1 pt-5">
+        <span className={`pt-0.5 ${TONE_INK[tone]}`}>
+          <GlyphIcon name={TONE_GLYPH[tone]} size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <Heading level={3}>{title}</Heading>
+          <p className="mt-1 text-sm text-fg-muted">{body}</p>
+        </div>
+      </div>
+    </Modal>
+  );
 }
