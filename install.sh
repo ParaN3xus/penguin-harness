@@ -7,8 +7,6 @@
 #   PENGUIN_VERSION=vX.Y.Z    choose a version (same as --version vX.Y.Z); a published Release
 #                              installer defaults to its own version, an unstamped source copy to latest
 #   PENGUIN_INSTALL_DIR=<dir> install dir; default ~/.penguin
-#   PENGUIN_LINK_COMMAND=0    leave ~/.local/bin/penguin alone; for a second installation beside
-#                              the one the `penguin` command belongs to
 #   PENGUIN_ARCHIVE=<file>    install a local Release archive without network access (same as --archive <file>)
 #   PENGUIN_DOWNLOAD_SOURCE=auto|oss|github choose the online source; default auto (speed-probed,
 #                              with the same-version other source as fallback)
@@ -16,6 +14,8 @@
 #   PENGUIN_DOWNLOAD_BASE_URL=<url> exact online asset directory selected by the stable forwarder
 #   PENGUIN_DOWNLOAD_FALLBACK_BASE_URL=<url> fallback for PENGUIN_DOWNLOAD_BASE_URL
 #   --universal               install the universal package (no bundled Node runtime; needs system Node >= 24)
+#   --no-modify-path          do not put `penguin` on PATH (no ~/.local/bin/penguin symlink); for a second
+#                              installation beside the one the command belongs to
 #
 # Each Release attaches exactly one artifact per target: penguin-<target>.tar.gz, a shallow
 # installer bundle holding this script, the program payload (payload.tar.gz) and the payload's
@@ -39,7 +39,7 @@ GITHUB_LATEST_BASE="$REPO/releases/latest/download"
 VERSION="${PENGUIN_VERSION:-}"
 INSTALL_DIR="${PENGUIN_INSTALL_DIR:-$HOME/.penguin}"
 BIN_DIR="$HOME/.local/bin"
-LINK_COMMAND="${PENGUIN_LINK_COMMAND:-1}"
+MODIFY_PATH=1
 UNIVERSAL=0
 ARCHIVE="${PENGUIN_ARCHIVE:-}"
 SOURCE_MODE="${PENGUIN_DOWNLOAD_SOURCE:-auto}"
@@ -122,6 +122,10 @@ while [ $# -gt 0 ]; do
       UNIVERSAL=1
       shift
       ;;
+    --no-modify-path)
+      MODIFY_PATH=0
+      shift
+      ;;
     --archive)
       [ $# -ge 2 ] || fail "--archive requires a path to a Release archive"
       ARCHIVE="$2"
@@ -163,10 +167,6 @@ esac
 case "$DOWNLOAD_SPEED_PROBE" in
   0 | 1) ;;
   *) fail "PENGUIN_DOWNLOAD_SPEED_PROBE must be 0 or 1" ;;
-esac
-case "$LINK_COMMAND" in
-  0 | 1) ;;
-  *) fail "PENGUIN_LINK_COMMAND must be 0 or 1" ;;
 esac
 RESOLVED_RELEASE_VERSION="$VERSION"
 if [ -z "$RESOLVED_RELEASE_VERSION" ] && is_release_tag "$EMBEDDED_RELEASE_VERSION"; then
@@ -765,11 +765,11 @@ rm -rf "$STAGING"
 STAGING=""
 
 # --- Symlink into ~/.local/bin and check PATH only after the install is known to work.
-#     PENGUIN_LINK_COMMAND=0 skips both: ~/.local/bin/penguin is one name, and a second
+#     --no-modify-path skips both: ~/.local/bin/penguin is one name, and a second
 #     installation that took it would hand its program to whoever types `penguin`. ---
 PATH_MISSING=0
 PENGUIN_COMMAND="penguin"
-if [ "$LINK_COMMAND" -eq 1 ]; then
+if [ "$MODIFY_PATH" -eq 1 ]; then
   mkdir -p "$BIN_DIR"
   ln -sf "$INSTALL_DIR/bin/penguin" "$BIN_DIR/penguin"
   case ":$PATH:" in

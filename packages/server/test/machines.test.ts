@@ -257,7 +257,7 @@ describe("ssh / scp invocations", () => {
 
   it("takes the installer on stdin, so a POSIX install costs ONE ssh handshake", () => {
     expect(runInstallScriptCommand("v0.2.4", { platform: "linux" }, RELEASE)).toEqual({
-      command: `PENGUIN_INSTALL_DIR="$HOME/.penguin" PENGUIN_LINK_COMMAND=1 PENGUIN_VERSION='v0.2.4' sh -s`,
+      command: `PENGUIN_INSTALL_DIR="$HOME/.penguin" PENGUIN_VERSION='v0.2.4' sh -s`,
       scriptOnStdin: true,
     });
     // The dev profile installs beside the release program, never over it.
@@ -270,13 +270,17 @@ describe("ssh / scp invocations", () => {
     // The installer repoints ~/.local/bin/penguin (or extends the user Path) at whatever it
     // just installed; from the dev profile that would hand a person typing `penguin` the dev
     // program, run against the release data root.
-    expect(runInstallScriptCommand("v0.2.4", { platform: "linux" }, DEV).command).toContain(
-      "PENGUIN_LINK_COMMAND=0 ",
+    expect(runInstallScriptCommand("v0.2.4", { platform: "linux" }, DEV).command).toBe(
+      `PENGUIN_INSTALL_DIR="$HOME/.penguin-dev" PENGUIN_VERSION='v0.2.4' sh -s -- --no-modify-path`,
     );
     expect(
       runInstallScriptCommand("v0.2.4", { platform: "win32", scriptPath: "%TEMP%\\p.ps1" }, DEV)
         .command,
-    ).toContain('set "PENGUIN_LINK_COMMAND=0" & ');
+    ).toContain(' -Version "v0.2.4" -NoModifyPath & del /q ');
+    // The release profile owns the command, so its install is the installer's default.
+    expect(runInstallScriptCommand("v0.2.4", { platform: "linux" }, RELEASE).command).not.toContain(
+      "no-modify-path",
+    );
   });
 
   it("runs a Windows remote's copy from a path, and deletes it in the same command", () => {
@@ -291,7 +295,7 @@ describe("ssh / scp invocations", () => {
       ),
     ).toEqual({
       command:
-        'set "PENGUIN_INSTALL_DIR=%USERPROFILE%\\.penguin" & set "PENGUIN_LINK_COMMAND=1" & ' +
+        'set "PENGUIN_INSTALL_DIR=%USERPROFILE%\\.penguin" & ' +
         'powershell -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\\penguin-ab12.ps1"' +
         ' -Version "v0.2.4" & del /q "%USERPROFILE%\\penguin-ab12.ps1"',
       scriptOnStdin: false,

@@ -147,23 +147,25 @@ export function runInstallScriptCommand(
   // PENGUIN_INSTALL_DIR would not be visible here, and the rest of these commands assume
   // the layout they were given.
   //
-  // PENGUIN_LINK_COMMAND=0 for a layout that does not own the machine's `penguin` command:
-  // the installer would otherwise repoint `~/.local/bin/penguin` (or extend the user Path)
-  // at this program directory, and a person typing `penguin` there would run the dev
-  // program against the release data root.
-  const link = layout.ownsCommand ? "1" : "0";
+  // `--no-modify-path` for a layout that does not own the machine's `penguin` command: the
+  // installer would otherwise repoint `~/.local/bin/penguin` (or extend the user Path) at
+  // this program directory, and a person typing `penguin` there would run the dev program
+  // against the release data root.
   if (where.platform === "win32") {
     const script = cmdQuote(where.scriptPath);
     return {
       command:
-        `set "PENGUIN_INSTALL_DIR=${layout.programDir.win}" & set "PENGUIN_LINK_COMMAND=${link}" & ` +
+        `set "PENGUIN_INSTALL_DIR=${layout.programDir.win}" & ` +
         `powershell -NoProfile -ExecutionPolicy Bypass -File ${script} -Version ${cmdQuote(versionTag)}` +
+        (layout.ownsCommand ? "" : " -NoModifyPath") +
         ` & del /q ${script}`,
       scriptOnStdin: false,
     };
   }
   return {
-    command: `PENGUIN_INSTALL_DIR="${layout.programDir.posix}" PENGUIN_LINK_COMMAND=${link} PENGUIN_VERSION=${shQuote(versionTag)} sh -s`,
+    command:
+      `PENGUIN_INSTALL_DIR="${layout.programDir.posix}" PENGUIN_VERSION=${shQuote(versionTag)} sh -s` +
+      (layout.ownsCommand ? "" : " -- --no-modify-path"),
     scriptOnStdin: true,
   };
 }

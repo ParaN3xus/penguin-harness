@@ -24,7 +24,7 @@
 profile 在实例触及的每台机器上都成立。壳以 `PENGUIN_PROFILE` 把它交给自己的 server(`pnpm dev:server` 和 `pnpm penguin` 脚本也会设置),Machines 页面安装、探测、启动、停止和连接的都是那台机器上该 profile 的安装:release 在 `~/.penguin`,数据在 `~/.penguin/data`,端口 7364;dev 在 `~/.penguin-dev`,数据在 `~/.penguin-dev/data`,端口 7371(`DEFAULT_DEV_SERVER_PORT`)。因此 dev 实例永远不会重启那台机器上别人正在用的 release server,两个 profile 在两端都各自保有 Agent、Session 和推送版本。每条远程命令都显式指明程序目录和数据根(`PENGUIN_INSTALL_DIR`、`PENGUIN_HOME`),不依赖远端的默认值。
 
 - profile 以 `PENGUIN_PROFILE` 随每条远程命令一起传递,与 `PENGUIN_HOME` 并列,因此在某台机器上启动的 server 再去触及其他机器时,仍处于它被启动时的那个 profile。
-- 那台机器上用户键入的 `penguin` 命令始终归 release 安装所有。dev profile 的安装以 `PENGUIN_LINK_COMMAND=0` 运行安装脚本;这是 `install.sh` 与 `install.ps1` 新增的选项,不改动 `~/.local/bin/penguin`,也不改动 Windows 的用户 Path。
+- 那台机器上用户键入的 `penguin` 命令始终归 release 安装所有。dev profile 的安装以 `--no-modify-path`(`install.ps1` 为 `-NoModifyPath`)运行安装脚本;这是安装脚本新增的参数,不改动 `~/.local/bin/penguin`,也不改动 Windows 的用户 Path。
 - 对远程启动的等待在被启动的进程退出后随即结束,并以对端日志作为失败原因,不再等满 30 秒。启动后记录的端口以那台机器自己报告的为准。
 - 「Install 'penguin' Command…」菜单项只在 release profile 下提供,与每次启动时对该链接的修复一致。
 

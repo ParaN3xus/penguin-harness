@@ -224,7 +224,7 @@ try {
   $env:OS = "PenguinInstallerFixtureTest"
   Remove-Item Env:\PENGUIN_DOWNLOAD_BASE_URL, Env:\PENGUIN_DOWNLOAD_FALLBACK_BASE_URL, `
     Env:\PENGUIN_DOWNLOAD_SOURCE, Env:\PENGUIN_DOWNLOAD_SPEED_PROBE, Env:\PENGUIN_ARCHIVE, Env:\PENGUIN_INSTALL_DIR, `
-    Env:\PENGUIN_VERSION, Env:\PENGUIN_LINK_COMMAND -ErrorAction SilentlyContinue
+    Env:\PENGUIN_VERSION -ErrorAction SilentlyContinue
 
   # --- Offline program archive: good install, then a failing upgrade must roll back. ---
   $InstallDir = Join-Path $WorkDir "offline-installed"
@@ -243,29 +243,13 @@ try {
   Assert-True ($Version -eq "fixture-old") "previous Windows installation was not restored"
 
   # --- A second installation beside the first leaves `penguin` with the first: with
-  #     PENGUIN_LINK_COMMAND=0 its bin directory is not put on the Path. ---
+  #     -NoModifyPath its bin directory is not put on the Path. ---
   $SecondDir = Join-Path $WorkDir "offline-second"
   $SecondBin = Join-Path $SecondDir "bin"
-  $env:PENGUIN_LINK_COMMAND = "0"
-  try {
-    & $Installer -InstallDir $SecondDir -ArchivePath $GoodArchive *>&1 | Out-Null
-  } finally {
-    Remove-Item Env:\PENGUIN_LINK_COMMAND -ErrorAction SilentlyContinue
-  }
+  & $Installer -InstallDir $SecondDir -ArchivePath $GoodArchive -NoModifyPath *>&1 | Out-Null
   $Version = & (Join-Path $SecondBin "penguin.cmd") --version
   Assert-True ($Version -eq "fixture-old") "second Windows installation did not produce a working command"
-  Assert-True (($env:Path -split ";") -notcontains $SecondBin) "PENGUIN_LINK_COMMAND=0 still put the second installation on the Path"
-
-  $env:PENGUIN_LINK_COMMAND = "maybe"
-  $Rejected = $false
-  try {
-    & $Installer -InstallDir $SecondDir -ArchivePath $GoodArchive *>&1 | Out-Null
-  } catch {
-    $Rejected = $true
-  } finally {
-    Remove-Item Env:\PENGUIN_LINK_COMMAND -ErrorAction SilentlyContinue
-  }
-  Assert-True $Rejected "an invalid PENGUIN_LINK_COMMAND was accepted"
+  Assert-True (($env:Path -split ";") -notcontains $SecondBin) "-NoModifyPath still put the second installation on the Path"
 
   # --- Canonical bundle fixtures: flat outer layer sealing payload.zip + checksum + installers. ---
   $BundleDir = Join-Path $WorkDir "bundle"

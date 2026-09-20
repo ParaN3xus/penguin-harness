@@ -298,21 +298,22 @@ HOME="$TEST_HOME" PENGUIN_INSTALL_DIR="$OFFLINE_INSTALL" PATH="$STUB_BIN:$PATH" 
   || fail_test "offline install did not produce a working command"
 
 # A second installation beside the first leaves `penguin` with the first: with
-# PENGUIN_LINK_COMMAND=0 the ~/.local/bin symlink is not repointed.
+# --no-modify-path the ~/.local/bin symlink is not repointed.
 SECOND_INSTALL="$WORK_DIR/offline-second-install"
-HOME="$TEST_HOME" PENGUIN_INSTALL_DIR="$SECOND_INSTALL" PENGUIN_LINK_COMMAND=0 PATH="$STUB_BIN:$PATH" \
-  sh "$OFFLINE_DIR/install.sh" >/dev/null \
-  || fail_test "second install with PENGUIN_LINK_COMMAND=0 failed"
+HOME="$TEST_HOME" PENGUIN_INSTALL_DIR="$SECOND_INSTALL" PATH="$STUB_BIN:$PATH" \
+  sh "$OFFLINE_DIR/install.sh" --no-modify-path >/dev/null \
+  || fail_test "second install with --no-modify-path failed"
 [ "$("$SECOND_INSTALL/bin/penguin" --version)" = "fixture-old" ] \
   || fail_test "second install did not produce a working command"
 [ "$(readlink "$TEST_HOME/.local/bin/penguin")" = "$OFFLINE_INSTALL/bin/penguin" ] \
-  || fail_test "PENGUIN_LINK_COMMAND=0 repointed the penguin symlink at the second installation"
-set +e
-HOME="$TEST_HOME" PENGUIN_INSTALL_DIR="$SECOND_INSTALL" PENGUIN_LINK_COMMAND=maybe PATH="$STUB_BIN:$PATH" \
-  sh "$OFFLINE_DIR/install.sh" >/dev/null 2>&1
-status=$?
-set -e
-[ "$status" -ne 0 ] || fail_test "an invalid PENGUIN_LINK_COMMAND was accepted"
+  || fail_test "--no-modify-path repointed the penguin symlink at the second installation"
+# The same flag arrives through `sh -s --`, which is how a machine install passes it.
+THIRD_INSTALL="$WORK_DIR/offline-third-install"
+HOME="$TEST_HOME" PENGUIN_INSTALL_DIR="$THIRD_INSTALL" PENGUIN_ARCHIVE="$ARTIFACT_DIR/$HOST_ASSET" \
+  PATH="$STUB_BIN:$PATH" sh -s -- --no-modify-path < "$OFFLINE_DIR/install.sh" >/dev/null \
+  || fail_test "install over stdin with --no-modify-path failed"
+[ "$(readlink "$TEST_HOME/.local/bin/penguin")" = "$OFFLINE_INSTALL/bin/penguin" ] \
+  || fail_test "--no-modify-path over stdin repointed the penguin symlink"
 
 # The stamped installer inside a released bundle must still prefer its sibling payload and
 # never resolve metadata or download an online asset.
