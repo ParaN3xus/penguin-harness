@@ -384,7 +384,9 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
       createdAtIso: at(0),
       running: true,
       totals: { tokens: 43_830, costUsd: 0.0231, elapsedMs: 71_840 },
-      context: { tokens: 27_310, window: 1_000_000 },
+      // The Agent compacts at 40k (the seeded threshold is 256k, well under this model's 1M
+      // window), so the ring stands at 68% — below the app's amber at 80%.
+      context: { tokens: 27_310, threshold: 40_000 },
       composer: {
         draft: s.draft,
         chips: [
@@ -656,7 +658,6 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
       overall: {
         turns: 2,
         toolCalls: 7,
-        compactions: 0,
         inputTokens: 40_540,
         cacheReadTokens: 33_720,
         outputTokens: 3_290,

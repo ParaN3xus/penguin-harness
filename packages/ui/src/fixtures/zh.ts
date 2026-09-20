@@ -20,8 +20,8 @@ export const zh: Fixtures = buildFixtures("zh", {
       sessions: "Session",
       collapseSidebar: "收起侧栏",
       search: "搜索会话",
-      filterSessions: "筛选与排序",
-      newFolder: "新建文件夹",
+      listSettings: "列表选项",
+      newWorkspace: "新建工作区",
     },
     chat: {
       runStates: {
@@ -68,16 +68,17 @@ export const zh: Fixtures = buildFixtures("zh", {
       deny: "拒绝",
     },
     dock: {
-      subagents: (n) => `子智能体（${n}）`,
+      agentsPanel: "智能体面板",
       topology: "调用关系",
       nodeRunning: "运行中",
       nodeDone: "已完成",
       openAsSession: "跳转到该会话",
       newPanel: "添加面板",
-      movePanel: "移到另一侧",
-      bottomDock: "底部面板",
-      rightDock: "右侧面板",
-      close: "关闭",
+      moveToBottom: "移到下方",
+      moveToRight: "移到右侧",
+      bottomDock: "下侧栏",
+      rightDock: "右侧栏",
+      hideDock: "收起侧边栏",
     },
     traces: {
       filesTitle: "Trace 文件",
@@ -85,7 +86,7 @@ export const zh: Fixtures = buildFixtures("zh", {
       overall: "全局统计",
       turns: "轮次",
       toolCalls: "工具调用",
-      compactions: "压缩次数",
+      avgToolCalls: "每轮平均工具调用",
       inputTokens: "输入 tokens",
       cacheHits: "命中缓存",
       outputTokens: "输出 tokens",
@@ -138,7 +139,7 @@ export const zh: Fixtures = buildFixtures("zh", {
       launcherInfo: "在对话正文右缘浮动的圆形按钮，展开后是工作台各块面板与终端的快捷方式。",
       toolAliases: "工具短名",
       toolAliasesInfo: "对话里的工具卡片用短名称呼内置工具，read_file 显示为「读取」。",
-      moreInfo: "说明",
+      moreInfoAbout: (subject) => `说明：${subject}`,
       close: "关闭",
     },
     auth: {
@@ -281,7 +282,7 @@ export const zh: Fixtures = buildFixtures("zh", {
   },
   notices: {
     byTone: {
-      success: { title: "Trace 已导出", body: "已写入 trace-001.jsonl，共 48.2 KB。" },
+      success: { title: "Trace 已导出", body: "已写入 trace-001.jsonl，共 47.1 KB。" },
       attention: {
         title: "有命令等待审批",
         body: "exec · 启动应用并运行引用测试。",
@@ -304,7 +305,7 @@ export const zh: Fixtures = buildFixtures("zh", {
       },
     },
     toasts: [
-      { tone: "success", title: "已添加模型", body: "DeepSeek V4 Flash 可以使用了。" },
+      { tone: "success", title: "已添加模型", body: "DeepSeek V4.1 Flash 可以使用了。" },
       {
         tone: "danger",
         title: "密钥保存失败",
@@ -356,7 +357,7 @@ export const zh: Fixtures = buildFixtures("zh", {
     errorSummary: "修正上面的字段后才能继续。",
     submit: "添加提供方",
     cancel: "取消",
-    swatchLabels: ["跟随主题", "蓝色", "绿色", "紫色", "玫红", "琥珀"],
+    swatchLabels: ["灰白", "蓝", "绿", "紫", "红", "橙"],
   },
   menus: {
     copy: "复制消息",
@@ -403,11 +404,11 @@ export const zh: Fixtures = buildFixtures("zh", {
   },
   specimens: {
     display: "会引用来源的智能体",
-    heading: "两轮对话，提示缓存命中率 81%",
+    heading: "两轮对话，提示缓存命中率 83%",
     paragraph:
       "PenguinHarness 用 DeepSeek V4 Pro 运行 claude-code-expert 会话 1 分 12 秒：共 43.8k tokens、$0.0231、7 次工具调用。BM25 索引覆盖 214 个 Markdown 文件，所以即便问 “How do I configure hooks?”，回答也会引用 corpus/claude-code-docs/hooks.md [1]。",
     ui: "运行中 · 6 步 · 34s — read_file …/src/rag.ts（421ms）· edit_file +3 −1 · $0.0110",
-    caption: "最近同步 2026-09-14 14:02（UTC+8）· 48.2 KB · Trace #001",
+    caption: "最近同步 2026-09-14 14:02（UTC+8）· 47.1 KB · Trace #001",
     code: `// 引用必须指向语料库中真实存在的文件
 const hits = rank("如何配置 hooks？").slice(0, 6).filter((c) => fs.existsSync(c.source));
 console.log(\`命中 \${hits.length} 条，用时 \${(performance.now() - t0).toFixed(1)}ms\`); // 命中 6 条，用时 12.4ms`,

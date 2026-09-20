@@ -69,8 +69,9 @@ function Corner({ f }: { f: Fixtures }) {
   const s = f.copy.settings;
   return (
     <div className="absolute right-4 top-4 flex items-center gap-2">
+      {/* Both controls are three wide, in the app's order: English / 中文 / System. */}
       <div aria-label={a.language}>
-        <Segmented options={[a.langZh, a.langEn]} value={f.lang === "zh" ? 0 : 1} />
+        <Segmented options={[a.langEn, a.langZh, s.system]} value={f.lang === "zh" ? 1 : 0} />
       </div>
       <div aria-label={s.theme}>
         <Segmented options={[s.light, s.dark, s.system]} value={2} />
@@ -98,7 +99,7 @@ export function LoginScreen({
           {f.copy.appName}
         </h1>
         <div className="rounded-xl border border-line bg-surface p-6 shadow-sm">
-          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <form className="space-y-4">
             <Field label={a.username}>
               <span className="block w-full rounded-md border border-line-emphasis bg-surface px-3 py-2 text-base text-fg ring-2 ring-[var(--ui-accent-muted)]">
                 {f.user.id}

@@ -110,7 +110,7 @@ export function ChatScreen({ lang }: { lang: FixtureLang }) {
             <Composer f={f} />
           </main>
           <div className="w-[24rem] shrink-0">
-            <DockFrame f={f} tab={f.copy.dock.subagents(1)} glyph="bot" edge="right">
+            <DockFrame f={f} tab={f.copy.dock.agentsPanel} glyph="bot" edge="right">
               <SubagentsPanel f={f} />
             </DockFrame>
           </div>

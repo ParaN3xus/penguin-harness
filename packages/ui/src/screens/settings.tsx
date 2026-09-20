@@ -18,6 +18,7 @@ import { ChatHeader, NEUTRAL_FILL, Segmented, Sidebar } from "./parts";
 import { Composer } from "./transcript";
 
 type PageKey = keyof Fixtures["copy"]["settings"]["pages"];
+type SettingsCopy = Fixtures["copy"]["settings"];
 
 const RAIL: ReadonlyArray<{
   group: "groupPersonal" | "groupServer";
@@ -72,26 +73,32 @@ function FloatingPanel({ children }: { children: ReactNode }) {
 }
 
 function PrefRow({
+  c,
   label,
   info,
   children,
-  popover,
+  open = false,
 }: {
+  c: SettingsCopy;
   label: string;
   info: string;
   children: ReactNode;
-  popover?: string;
+  /** The one row whose popover stands open in the capture. */
+  open?: boolean;
 }) {
+  // The "?" names its subject and nothing more; the explanation is what the popover holds —
+  // the app's `InfoPopover`, whose trigger reads "More info: <label>".
+  const name = c.moreInfoAbout(label);
   return (
     <div className="relative flex items-center justify-between gap-4 py-3.5 first:pt-0">
       <p className="flex items-center gap-1.5 text-sm font-(--ui-weight-medium) text-fg">
         {label}
-        <span title={info} className={popover ? "text-fg" : "text-fg-subtle"}>
+        <span title={name} aria-label={name} className={open ? "text-fg" : "text-fg-subtle"}>
           <Glyph name="help" size={14} />
         </span>
       </p>
       <div className="shrink-0">{children}</div>
-      {popover && <FloatingPanel>{popover}</FloatingPanel>}
+      {open && <FloatingPanel>{info}</FloatingPanel>}
     </div>
   );
 }
@@ -152,16 +159,16 @@ function PagedDialog({ f }: { f: Fixtures }) {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-3">
           <div className="divide-y divide-line-muted">
-            <PrefRow label={c.theme} info={c.themeInfo}>
+            <PrefRow c={c} label={c.theme} info={c.themeInfo}>
               <Segmented options={[c.light, c.dark, c.system]} value={2} />
             </PrefRow>
-            <PrefRow label={c.terminalTheme} info={c.terminalThemeInfo}>
+            <PrefRow c={c} label={c.terminalTheme} info={c.terminalThemeInfo}>
               <Segmented options={[c.followApp, c.light, c.dark]} value={0} />
             </PrefRow>
-            <PrefRow label={c.fontSize} info={c.fontSizeInfo}>
+            <PrefRow c={c} label={c.fontSize} info={c.fontSizeInfo}>
               <Segmented options={[c.fontSizes.sm, c.fontSizes.md, c.fontSizes.lg]} value={1} />
             </PrefRow>
-            <PrefRow label={c.accent} info={c.accentInfo}>
+            <PrefRow c={c} label={c.accent} info={c.accentInfo}>
               <div className="flex items-center gap-1.5">
                 {f.forms.swatches.map((swatch, i) => (
                   <span
@@ -176,10 +183,10 @@ function PagedDialog({ f }: { f: Fixtures }) {
                 ))}
               </div>
             </PrefRow>
-            <PrefRow label={c.launcher} info={c.launcherInfo}>
+            <PrefRow c={c} label={c.launcher} info={c.launcherInfo}>
               <Switch on />
             </PrefRow>
-            <PrefRow label={c.toolAliases} info={c.toolAliasesInfo} popover={c.toolAliasesInfo}>
+            <PrefRow c={c} label={c.toolAliases} info={c.toolAliasesInfo} open>
               <Switch on={false} />
             </PrefRow>
           </div>

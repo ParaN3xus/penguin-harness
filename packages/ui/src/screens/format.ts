@@ -33,9 +33,29 @@ export function usd(n: number): string {
   return n < 1 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
 }
 
-/** A byte size: `942 B`, `48.2 KB`. */
+/** A byte size, as the app writes it — no gap between figure and unit: `942B`, `47.1KB`. */
 export function bytes(n: number): string {
-  return n < 1024 ? `${n} B` : `${trimZero(n / 1024)} KB`;
+  return n < 1024 ? `${n}B` : `${trimZero(n / 1024)}KB`;
+}
+
+/**
+ * A reply's time, as the chat footer prints it: `Sep 14, 6:02 AM` / `9月14日 06:02`. Fixed to UTC
+ * so a mock-up reads the same in every capture, wherever it is rendered.
+ */
+export function messageTime(atIso: string, lang: "en" | "zh"): string {
+  return new Date(atIso).toLocaleString(lang === "en" ? "en-US" : "zh-CN", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+  });
+}
+
+/** One count per another, to one decimal: `3.5`, or an em dash when there is nothing to divide. */
+export function average(total: number, count: number): string {
+  const avg = total / count;
+  return count > 0 && Number.isFinite(avg) ? avg.toFixed(1) : "—";
 }
 
 /** A percentage of a whole: `79%`. */

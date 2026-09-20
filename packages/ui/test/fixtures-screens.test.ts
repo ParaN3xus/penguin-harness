@@ -92,7 +92,15 @@ describe("fixtures", () => {
           `contextWindow: ${m.contextWindow},`,
         ].join("\\s*"),
       );
-      expect(row.test(catalog), `${m.provider}/${m.modelId}`).toBe(true);
+      const found = row.exec(catalog);
+      expect(found !== null, `${m.provider}/${m.modelId}`).toBe(true);
+      // A renamed row fails above; a retired one would still match, and a mock-up that offers a
+      // model the product no longer sells is the same untruth.
+      const end = catalog.indexOf("\n  },", found!.index);
+      expect(
+        catalog.slice(found!.index, end).includes("retired: true"),
+        `${m.provider}/${m.modelId} is retired in the catalog`,
+      ).toBe(false);
     }
   });
 });
