@@ -11,6 +11,8 @@
  * 「智能体」 — the nav entry, the grouping option, the panel — and keeps "Agent" as-is
  * inside running prose, where it is the term of art rather than the thing being pointed at.
  */
+import type { PeakWindows } from "../features/models/model-grouping";
+
 export const zh = {
   appName: "PenguinHarness",
 
@@ -429,6 +431,8 @@ export const zh = {
     retry: "重试",
     unknownError: "请求失败，请稍后重试",
     requiredField: "此项必填",
+    /** A menu row that copies what it acts on (the conversation's selection menu); the confirmation is `copied`. */
+    copy: "复制",
     copied: "已复制",
     /** Accessible name of the circled "?" that discloses a section or field explanation. */
     moreInfo: "说明",
@@ -1130,9 +1134,21 @@ export const zh = {
     /** Badge on a row the seller is currently discounting: the rate off its list price. */
     discountBadge: (pct: number): string => `省 ${pct}%`,
     discountTitle: (pct: number): string => `促销价：已在牌价基础上打 ${pct}% 折扣`,
-    /** Same badge as a flat promotion; only the explanation differs, because this rate comes and goes with the clock. */
-    offPeakTitle: (pct: number): string =>
-      `空闲时段价：比牌价低 ${pct}%。高峰时段按牌价计费——北京时间周一至周五 9:00–12:00、14:00–18:00`,
+    /**
+     * Same badge as a flat promotion; only the explanation differs, because this rate comes and
+     * goes with the clock. `peak` is the row's own schedule (see peakWindows), so each seller's
+     * peak hours are the ones named.
+     */
+    offPeakTitle: (pct: number, peak: PeakWindows): string => {
+      const day = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+      const days = peak.everyDay
+        ? "每天"
+        : peak.days
+            .map(([from, to]) => (from === to ? day[from - 1] : `${day[from - 1]}至${day[to - 1]}`))
+            .join("、");
+      const hours = peak.hours.map(([from, to]) => `${from}:00–${to}:00`).join("、");
+      return `空闲时段价：比牌价低 ${pct}%。高峰时段按牌价计费——北京时间${days} ${hours}`;
+    },
     visionModelBadge: "视觉代理",
     /** Card's right-edge figure: what this model has spent over its whole life. The unit stays English and is abbreviated the way the rest of the page abbreviates it — `tok/s`, `/M tok`. */
     usedTokens: (v: string) => `${v} toks`,
@@ -2236,6 +2252,9 @@ Benchmark：
     processRemove: "移除",
     /** Remove button tooltip: removal also drops the output captured from that process. */
     processRemoveHint: "移除该条目——该进程已捕获的输出也会一并丢弃",
+    /** The list heading's text action: removes every exited entry at once; its hint says the captured output goes too. */
+    processClearExited: "清除已退出",
+    processClearExitedHint: "清除所有已退出的进程——它们已捕获的输出也会一并丢弃",
     statTokens: "Token 累计",
     /** Info-dropdown stats list: the tokens bullet's label and its cache-hit-rate parenthetical (rate = cacheRead ÷ all input, e.g. "68%"). */
     statTotalTokens: "总 Token",
@@ -2276,6 +2295,8 @@ Benchmark：
     memoryChangedMark: "本次对话已更改",
     memoryContentUnavailable: "无法加载内容（文件可能已被移动或删除）",
     memoryRowOpen: "查看内容",
+    /** The memory-change card header's text action: opens the Memory panel on its list (a visible label rather than a second brain glyph beside the card's own). */
+    memoryOpenList: "打开记忆列表",
     memoryBack: "返回列表",
     memoryEmptyAll: "还没有任何记忆——在对话里说「记住……」即可让 agent 保存",
     /** Visible label on the Memory panel's header link (not a tooltip-only glyph): says what the click does and where it lands. */
