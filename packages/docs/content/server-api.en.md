@@ -144,6 +144,20 @@ An install is a job, not a request: it probes the far side, may fetch and verify
 
 Refusals decided before any ssh runs have their own codes: `409` `install_running`, `404` `unknown_machine`, `409` `no_install_image`, and `409` `self_install` — this server will not push this build over the program directory it is running from. Besides the `local` row, that covers an alias pointing back home (`Host localhost`, a second name for this host) once a probe has heard this server's own id from it.
 
+### Port Forwarding (admin only)
+
+A forward brings a TCP port on a machine's loopback to THIS server's loopback: `(machineId, workspace, remotePort) → localPort`. It belongs to a Workspace — a directory on a machine — not to a Session, and it is stored in `web.db`, so it survives a restart and a hot push on the same local port.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | /api/port-forwards?machine=&workspace= | The forwards and what is known of each: `{forwards: [{id, machineId, workspace, remotePort, localPort, createdAt, listener, dial, open, bytesUp, bytesDown}]}`. `machine` alone is every forward of that machine; `workspace` needs `machine` (`400` otherwise) |
+| POST | /api/port-forwards | Body `{machineId, workspace, remotePort, localPort?}`; `201` with the forward. `localPort` omitted = chosen here: the remote port's own number when it is free, else the first free port above it. `404` `unknown_machine`, `409` `forward_exists`, `409` `local_port_in_use`. `localPort` must be 1024–65535 |
+| DELETE | /api/port-forwards/:id | Close the listener and the connections through it, and forget the forward; `204`, `404` when there is none |
+
+The listener binds `127.0.0.1` only, when the forward is made and whenever the platform starts. It dials the machine only when a client connects, through the ONE connection held to that machine — a forward never opens ssh of its own, so with the machine not connected the client is closed at once and the reason is kept.
+
+The facts are reported by layer, never as one flag: `listener` is `{listening: true}` or `{error}` (`EADDRINUSE` when something else took the port — the record and its port stay as they are); `dial` is the last dial, `{answeredAt}` or `{failedAt, detail}`, `null` until a client has connected; `open` is the connections open now; `bytesUp` / `bytesDown` count since this process started.
+
 ### Version and Self-Update
 
 | Method | Path | Description |

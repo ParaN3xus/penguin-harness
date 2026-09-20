@@ -144,6 +144,20 @@ curl -H "Authorization: Bearer $(cat ~/.penguin/data/api-token)" \
 
 在任何 ssh 运行之前就能判定的拒绝各有错误码：`409` `install_running`、`404` `unknown_machine`、`409` `no_install_image`，以及 `409` `self_install`——本服务端不会把这份构建盖到自己正在运行的程序目录上。除 `local` 那一行之外，指回本机的别名（`Host localhost`、本机的第二个名字）一旦被探测到报出本服务端自己的 id，同样会被拒绝。
 
+### 端口转发（仅管理员）
+
+一条转发把某台机器回环上的一个 TCP 端口带到**本服务端**的回环上：`(machineId, workspace, remotePort) → localPort`。它属于 Workspace（某台机器上的一个目录）而非 Session，记录存于 `web.db`，因此重启与热推送之后仍在同一个本地端口上。
+
+| Method | Path | 说明 |
+| --- | --- | --- |
+| GET | /api/port-forwards?machine=&workspace= | 转发列表及各自的已知事实：`{forwards: [{id, machineId, workspace, remotePort, localPort, createdAt, listener, dial, open, bytesUp, bytesDown}]}`。只给 `machine` 即该机器的全部转发；`workspace` 必须与 `machine` 同给（否则 `400`） |
+| POST | /api/port-forwards | 请求体 `{machineId, workspace, remotePort, localPort?}`；`201` 返回该转发。省略 `localPort` 则由服务端选取：与远端端口同号的端口空闲即用它，否则向上取第一个空闲端口。`404` `unknown_machine`、`409` `forward_exists`、`409` `local_port_in_use`。`localPort` 须在 1024–65535 |
+| DELETE | /api/port-forwards/:id | 关闭 listener 与经由它的连接，并删除记录；`204`，不存在则 `404` |
+
+listener 只绑 `127.0.0.1`，在创建转发时与平台每次启动时 bind。只有客户端连上时才向机器拨号，且走该机器的**唯一连接**——转发自身从不拉起 ssh：机器未连接时客户端立即被关闭，并记下原因。
+
+事实按层给出，不合成一个标志：`listener` 为 `{listening: true}` 或 `{error}`（端口被别人占用时为 `EADDRINUSE`——记录与端口保持不变）；`dial` 为最近一次拨号，`{answeredAt}` 或 `{failedAt, detail}`，尚无客户端连接时为 `null`；`open` 为当前连接数；`bytesUp` / `bytesDown` 自本进程启动起累计。
+
 ### 版本与在线更新
 
 | 方法 | 路径 | 说明 |
