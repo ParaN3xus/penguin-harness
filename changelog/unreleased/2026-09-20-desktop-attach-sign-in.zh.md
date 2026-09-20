@@ -3,6 +3,7 @@
 - **Date:** 2026-09-20
 - **Type:** fix
 - **Scope:** `desktop`, `server`, `web`, `docs`
+- **PR:** [#811](https://github.com/Prism-Shadow/penguin-harness/pull/811)
 
 [English](2026-09-20-desktop-attach-sign-in.md)
 
