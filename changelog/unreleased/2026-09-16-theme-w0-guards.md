@@ -59,12 +59,13 @@ nothing as components move between the two.
 - `packages/ui/test/deslop.test.ts` runs every check over `packages/ui/src` with an empty allowlist,
   and checks the theme files' heading tokens: no h2–h5 is uppercased and no heading is set in mono.
 - `packages/web/test/deslop.test.ts` runs the same checks over `packages/web/src` against an
-  allowlist of the 374 hits the app held in 96 files, counted exactly per file and rule, each entry
+  allowlist of the 390 hits the app holds in 99 files, counted exactly per file and rule, each entry
   naming the wave that removes it; palette classes are not checked in the Web App.
 - `packages/ui/test/hooks.test.ts` holds the package, the Web App and the gallery to the six style
   hooks of `src/hooks.ts`, allows each hook only inside the components that host it, and checks the
-  markup the recipes select on: `data-live` on `.ui-live`, `.ui-display` on an h1, and `head`,
-  `body`, `foot` or `pane` slots in `.ui-frame`.
+  markup the recipes select on: `data-live` on `.ui-live`, `.ui-display` on a page title (an `h1`,
+  `[aria-level="1"]` or `<Heading level={1}>`), and `head`, `body`, `foot` or `pane` slots in
+  `.ui-frame`.
 
 ## Test helpers
 

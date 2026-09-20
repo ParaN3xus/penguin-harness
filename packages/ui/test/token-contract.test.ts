@@ -211,13 +211,18 @@ describe("token reads", () => {
   });
 
   /**
-   * Names the file spells that are not tokens. A family prefix (`startsWith("--ui-chart")`) names
-   * tokens that exist; a removed or misspelt token prefixes none.
+   * The families a file may name as a prefix: the chart inks are read as a group
+   * (`--ui-chart-*` through the bridge, `startsWith("--ui-chart")`). The list is spelled out
+   * rather than derived, because 56 of the 188 names are a proper prefix of another one — a
+   * recipe reading `var(--ui-shadow)` or `var(--ui-glass)` resolves to nothing and would pass a
+   * derived check, which is the failure this one exists to catch.
    */
+  const FAMILY_PREFIXES = ["--ui-chart"];
+
+  /** Names the file spells that are not tokens. */
   const strays = (file: SourceFile) =>
     spelled(file).filter(
-      (found) =>
-        !contract.has(found.name) && !TOKEN_NAMES.some((t) => t.startsWith(`${found.name}-`)),
+      (found) => !contract.has(found.name) && !FAMILY_PREFIXES.includes(found.name),
     );
 
   it("reads whole names only — the check is exercised on known shapes", () => {
@@ -239,10 +244,13 @@ describe("token reads", () => {
           "const d = (n: number) => `var(--ui-h${n}-size)`;",
           'const e = "chart inks read --ui-chart-* through the bridge";',
           'const f = (name: string) => name.startsWith("--ui-chart");',
+          // A family name that is not in FAMILY_PREFIXES is a stray, though it prefixes tokens
+          // that exist (--ui-shadow-flat, --ui-glass-bg): var(--ui-shadow) resolves to nothing.
+          'const g = "var(--ui-shadow)";',
           "// --ui-comment-only is not read",
         ].join("\n"),
       ),
-    ).toEqual(["--ui-glass-highlight"]);
+    ).toEqual(["--ui-glass-highlight", "--ui-shadow"]);
   });
 
   it("name only contract tokens", () => {

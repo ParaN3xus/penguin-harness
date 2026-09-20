@@ -14,14 +14,22 @@
  *   host is the nearest enclosing PascalCase function, so a stand-in in `screens/` or `modules/`
  *   carries the name of the component it imitates;
  * - the markup the recipes select on: `.ui-live` names its signal in `data-live`, `.ui-display`
- *   sits on an h1, `.ui-frame`'s slots are `head`, `body`, `foot` or `pane`.
+ *   sits on a page title (an `h1`, an `[aria-level="1"]`, or a `<Heading level={1}>` — the hook's
+ *   own host, which states its level as a prop), `.ui-frame`'s slots are `head`, `body`, `foot`
+ *   or `pane`.
  *
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HOOKS } from "../src/hooks";
-import { analyzeFile, matchesPolicyPath, scanSourceRoots, unscannedRoots } from "../src/testing";
+import {
+  analyzeFile,
+  headingLevel,
+  matchesPolicyPath,
+  scanSourceRoots,
+  unscannedRoots,
+} from "../src/testing";
 import type { ClassToken, FileAnalysis, SourceFile } from "../src/testing";
 import { REPO_ROOT, SRC_DIR, WEB_DIR } from "./helpers/paths";
 
@@ -83,11 +91,51 @@ function hookNames(file: SourceFile): { name: string; line: number }[] {
     .map((t) => ({ name: t.utility, line: t.line }));
 }
 
-/** The innermost component a token was written in, or null at module level. */
+/**
+ * The innermost component a token was written in, or null at module level. A token in a class
+ * attribute is answered by the element that carries it, which `analyzeFile` already resolves to
+ * the nearest enclosing PascalCase function; the smallest-component sort is left for a token in a
+ * loose string, where there is no element to ask.
+ */
 function componentOf(analysis: FileAnalysis, token: ClassToken): string | null {
+  const element = analysis.elements.find((e) => e.classes.includes(token));
+  if (element !== undefined) return element.component;
   const owners = analysis.components.filter((c) => c.classes.includes(token));
   owners.sort((a, b) => a.classes.length - b.classes.length);
   return owners[0]?.name ?? null;
+}
+
+/** Where an element applies a hook without the markup that hook's recipes select on. */
+function recipeProblems(file: SourceFile): string[] {
+  return analyzeFile(file).elements.flatMap((element) => {
+    const names = new Set(element.classes.map((t) => t.utility));
+    const at = `${file.id}:${element.line} <${element.tag}>`;
+    const problems: string[] = [];
+    const live = element.attributes.get("data-live");
+    if (names.has("ui-live") && live !== null && !LIVE_SIGNALS.has(String(live))) {
+      problems.push(`${at} .ui-live needs data-live="dot|caret|spinner", has ${String(live)}`);
+    }
+    // The page title's face: an `h1`, `aria-level="1"`, or `<Heading level={1}>`. Another
+    // component's tag is judged where its own markup is written, not at the call site.
+    if (names.has("ui-display") && (element.intrinsic || element.tag === "Heading")) {
+      const level = headingLevel(element);
+      if (level !== 1 && element.attributes.get("aria-level") !== "1") {
+        problems.push(
+          `${at} .ui-display belongs on an h1, [aria-level="1"] or <Heading level={1}>`,
+        );
+      }
+    }
+    if (names.has("ui-frame")) {
+      for (const child of element.children) {
+        if (child.kind !== "element") continue;
+        const slot = child.element.attributes.get("data-slot");
+        if (typeof slot === "string" && !FRAME_SLOTS.has(slot)) {
+          problems.push(`${at} .ui-frame slot "${slot}" is not head, body, foot or pane`);
+        }
+      }
+    }
+    return problems;
+  });
 }
 
 describe("style hooks", () => {
@@ -149,32 +197,7 @@ describe("style hooks", () => {
   });
 
   it("carry the markup their recipes select on", () => {
-    const broken = markup.flatMap((file) =>
-      analyzeFile(file).elements.flatMap((element) => {
-        const names = new Set(element.classes.map((t) => t.utility));
-        const at = `${file.id}:${element.line} <${element.tag}>`;
-        const problems: string[] = [];
-        const live = element.attributes.get("data-live");
-        if (names.has("ui-live") && live !== null && !LIVE_SIGNALS.has(String(live))) {
-          problems.push(`${at} .ui-live needs data-live="dot|caret|spinner", has ${String(live)}`);
-        }
-        const level = element.attributes.get("aria-level");
-        if (names.has("ui-display") && element.intrinsic && element.tag !== "h1" && level !== "1") {
-          problems.push(`${at} .ui-display belongs on an h1`);
-        }
-        if (names.has("ui-frame")) {
-          for (const child of element.children) {
-            if (child.kind !== "element") continue;
-            const slot = child.element.attributes.get("data-slot");
-            if (typeof slot === "string" && !FRAME_SLOTS.has(slot)) {
-              problems.push(`${at} .ui-frame slot "${slot}" is not head, body, foot or pane`);
-            }
-          }
-        }
-        return problems;
-      }),
-    );
-    expect(broken).toEqual([]);
+    expect(markup.flatMap(recipeProblems)).toEqual([]);
   });
 });
 
@@ -229,5 +252,43 @@ describe("the hook checks, on known shapes", () => {
     expect(named("ui-glass")).toBe("Card");
     expect(named("ui-live")).toBe("Composer");
     expect(named("ui-frame")).toBeNull();
+  });
+
+  it("name the inner component even when the outer one writes no class of its own", () => {
+    const analysis = analyzeFile(
+      file(
+        "c.tsx",
+        [
+          "export function Tooltip() {",
+          '  const Bubble = () => <div className="ui-glass rounded-md p-2" />;',
+          "  return <Bubble />;",
+          "}",
+        ].join("\n"),
+      ),
+    );
+    expect(
+      componentOf(
+        analysis,
+        analysis.tokens.find((t) => t.utility === "ui-glass")!,
+      ),
+    ).toBe("Bubble");
+  });
+
+  it("judge .ui-display on a Heading's level, not only on intrinsic tags", () => {
+    const at = (rel: string, text: string) =>
+      recipeProblems(file(rel, text)).map((p) => p.slice(p.indexOf(" ") + 1));
+    expect(
+      at("d.tsx", 'const A = () => <Heading level={2} className="ui-display">T</Heading>;'),
+    ).toEqual(['<Heading> .ui-display belongs on an h1, [aria-level="1"] or <Heading level={1}>']);
+    expect(
+      at("e.tsx", 'const A = () => <Heading level={1} className="ui-display">T</Heading>;'),
+    ).toEqual([]);
+    expect(at("f.tsx", 'const A = () => <h1 className="ui-display">T</h1>;')).toEqual([]);
+    expect(at("g.tsx", 'const A = () => <div className="ui-display">T</div>;')).toHaveLength(1);
+    // A component the check cannot resolve is judged where its own markup is written.
+    expect(at("h.tsx", 'const A = () => <PageTitle className="ui-display" />;')).toEqual([]);
+    expect(
+      headingLevel(analyzeFile(file("i.tsx", "const A = () => <h3>T</h3>;")).elements[0]!),
+    ).toBe(3);
   });
 });

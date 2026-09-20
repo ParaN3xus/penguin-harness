@@ -48,11 +48,12 @@
 - `packages/ui/test/deslop.test.ts` 在 `packages/ui/src` 上运行全部检查，允许清单为空；并检查各主题文件的
   标题令牌：h2–h5 均不大写，也没有哪级标题使用等宽字体。
 - `packages/web/test/deslop.test.ts` 在 `packages/web/src` 上运行同样的检查，对照一份允许清单：列出应用
-  现有的 374 处命中，分布在 96 个文件中，按文件与规则精确计数，每条都写明由哪一波次移除；Web App 中不检查
+  现有的 390 处命中，分布在 99 个文件中，按文件与规则精确计数，每条都写明由哪一波次移除；Web App 中不检查
   调色板类名。
 - `packages/ui/test/hooks.test.ts` 要求包、Web App 与画廊只使用 `src/hooks.ts` 中的六个样式钩子，每个钩子
   只能出现在承载它的组件中，并检查钩子样式所依赖的标记：`.ui-live` 带 `data-live`，`.ui-display` 位于
-  h1 上，`.ui-frame` 的插槽为 `head`、`body`、`foot` 或 `pane`。
+  页面标题上（`h1`、`[aria-level="1"]` 或 `<Heading level={1}>`），`.ui-frame` 的插槽为 `head`、`body`、
+  `foot` 或 `pane`。
 
 ## 测试辅助
 
