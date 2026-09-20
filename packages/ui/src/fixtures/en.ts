@@ -43,8 +43,8 @@ export const en: Fixtures = buildFixtures("en", {
       collapseSidebar: "Collapse sidebar",
       expandSidebar: "Expand sidebar",
       search: "Search chats",
-      filterSessions: "Filter and sort",
-      newFolder: "New folder",
+      listSettings: "List options",
+      newWorkspace: "New workspace",
       pin: "Pin",
     },
     chat: {
@@ -98,16 +98,17 @@ export const en: Fixtures = buildFixtures("en", {
       outputComplete: "Output complete",
     },
     dock: {
-      subagents: (n) => `Subagents (${n})`,
+      agentsPanel: "Agents panel",
       topology: "Call graph",
       nodeRunning: "running",
       nodeDone: "done",
       openAsSession: "Jump to this session",
       newPanel: "Add panel",
-      movePanel: "Move panel to the other edge",
-      bottomDock: "Bottom panels",
-      rightDock: "Right panels",
-      close: "Close",
+      moveToBottom: "Move to the bottom",
+      moveToRight: "Move to the right",
+      bottomDock: "Bottom panel",
+      rightDock: "Right sidebar",
+      hideDock: "Hide sidebar",
     },
     traces: {
       filesTitle: "Trace files",
@@ -115,7 +116,7 @@ export const en: Fixtures = buildFixtures("en", {
       overall: "Overall",
       turns: "Turns",
       toolCalls: "Tool calls",
-      compactions: "Compactions",
+      avgToolCalls: "Avg tools / turn",
       inputTokens: "Input tokens",
       cacheHits: "Cache hits",
       outputTokens: "Output tokens",
@@ -177,7 +178,7 @@ export const en: Fixtures = buildFixtures("en", {
       toolAliases: "Tool short names",
       toolAliasesInfo:
         'Tool cards in a conversation name the built-in tools by a short alias: read_file reads as "read".',
-      moreInfo: "More info",
+      moreInfoAbout: (subject) => `More info: ${subject}`,
       close: "Close",
       sendWith: "Send with",
       sendKeys: ["Enter", "⌘ Enter"],
@@ -465,7 +466,7 @@ Run \`{run}\`, then open {url}.`,
   },
   notices: {
     byTone: {
-      success: { title: "Trace exported", body: "48.2 KB written to trace-001.jsonl." },
+      success: { title: "Trace exported", body: "47.1 KB written to trace-001.jsonl." },
       attention: {
         title: "A command needs approval",
         body: "exec · Start the app and run the citation tests.",
@@ -488,7 +489,7 @@ Run \`{run}\`, then open {url}.`,
       },
     },
     toasts: [
-      { tone: "success", title: "Model added", body: "DeepSeek V4 Flash is ready to use." },
+      { tone: "success", title: "Model added", body: "DeepSeek V4.1 Flash is ready to use." },
       {
         tone: "danger",
         title: "Couldn't save the key",
@@ -570,7 +571,7 @@ Run \`{run}\`, then open {url}.`,
     errorSummary: "Fix the field above to continue.",
     submit: "Add provider",
     cancel: "Cancel",
-    swatchLabels: ["Theme default", "Blue", "Green", "Violet", "Rose", "Amber"],
+    swatchLabels: ["Neutral", "Blue", "Green", "Violet", "Rose", "Amber"],
   },
   menus: {
     copy: "Copy message",
@@ -657,11 +658,11 @@ Run \`{run}\`, then open {url}.`,
   },
   specimens: {
     display: "Agents that cite their sources",
-    heading: "Prompt cache hit 81% across 2 turns",
+    heading: "Prompt cache hit 83% across 2 turns",
     paragraph:
       "PenguinHarness ran the claude-code-expert Session for 1m12s on DeepSeek V4 Pro: 43.8k tokens, $0.0231 and 7 tool calls. The BM25 index covers 214 Markdown files, so even a question asked as “如何配置 hooks？” still cites corpus/claude-code-docs/hooks.md [1].",
     ui: "Running · 6 steps · 34s — read_file …/src/rag.ts (421ms) · edit_file +3 −1 · $0.0110",
-    caption: "Last synced 2026-09-14 14:02 (UTC+8) · 48.2 KB · Trace #001",
+    caption: "Last synced 2026-09-14 14:02 (UTC+8) · 47.1 KB · Trace #001",
     code: `// A citation must open a real file (引用必须指向真实文件)
 const hits = rank(question).slice(0, 6).filter((c) => fs.existsSync(c.source));
 console.log(\`\${hits.length} hits in \${(performance.now() - t0).toFixed(1)}ms\`); // 6 hits in 12.4ms`,

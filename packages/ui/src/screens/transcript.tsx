@@ -18,7 +18,7 @@ import type {
   ToolCallItem,
   TurnStats,
 } from "../fixtures";
-import { duration, liveDuration, percent, tokens, usd } from "./format";
+import { duration, liveDuration, messageTime, tokens, usd } from "./format";
 import { Glyph } from "./glyph";
 import { Markdown, StreamingCaret } from "./markdown";
 import {
@@ -80,22 +80,22 @@ function UserBubble({
   );
 }
 
-/** The per-turn footer under a settled reply (the app's TaskStatsLine). */
-export function StatsLine({ stats, f }: { stats: TurnStats; f: Fixtures }) {
+/**
+ * The per-turn footer under a settled reply (the app's TaskStatsLine, `task-stats-line.tsx`).
+ * The reply's own time leads — the numbers annotate it — and the five chips are the app's five,
+ * in its order. The cache composition is not broken down here and the tool count is not shown:
+ * both belong to the Trace page's turn card.
+ */
+export function StatsLine({ atIso, stats, f }: { atIso: string; stats: TurnStats; f: Fixtures }) {
   const t = f.copy.traces;
-  const input = stats.inputTokens;
   return (
     <div className="-mt-1 mb-3 flex h-5 items-center gap-3 whitespace-nowrap text-fg-subtle">
-      <StatChip glyph="wrench" value={String(stats.toolCalls)} title={t.toolCalls} />
-      <StatChip
-        glyph="arrowUpLine"
-        value={`${tokens(input)} (${percent(stats.cacheReadTokens, input)})`}
-        title={t.inputTokens}
-      />
+      <span>{messageTime(atIso, f.lang)}</span>
+      <StatChip glyph="arrowUpLine" value={tokens(stats.inputTokens)} title={t.inputTokens} />
       <StatChip glyph="arrowDownLine" value={tokens(stats.outputTokens)} title={t.outputTokens} />
+      <StatChip glyph="gauge" value={`${stats.outputTps} tok/s`} title={t.outputTps} />
       <StatChip glyph="cost" value={usd(stats.costUsd)} title={t.cost} />
       <StatChip glyph="clock" value={duration(stats.elapsedMs)} title={t.elapsed} />
-      <StatChip glyph="gauge" value={`${stats.outputTps} tok/s`} title={t.outputTps} />
       <span className="flex items-center gap-1">
         <IconButton icon="copy" size="sm" label={f.copy.chat.copy} />
         <IconButton icon="fork" size="sm" label={f.copy.chat.fork} />
@@ -210,7 +210,7 @@ function SubagentRow({ item, f }: { item: ToolCallItem; f: Fixtures }) {
       </span>
       <span className="shrink-0 font-mono text-xs text-fg-subtle">{sub.shortId}</span>
       {sub.running && <Spinner size="xs" label={f.copy.chat.runStates.running} />}
-      {sub.pendingApproval && <Dot className="bg-tone-attention-emphasis" />}
+      {sub.pendingApproval && <Dot tone="attention" />}
       <span className="min-w-0 flex-1" />
     </div>
   );
@@ -222,13 +222,9 @@ function SubagentRow({ item, f }: { item: ToolCallItem; f: Fixtures }) {
  * (§1.3 row 19). The alias is mono text; it needs no chip of its own.
  */
 function ApprovalBlock({ item, f }: { item: ToolCallItem; f: Fixtures }) {
-  let preview = item.argumentsJson;
-  try {
-    const args = JSON.parse(item.argumentsJson) as { cmd?: string };
-    if (args.cmd) preview = `$ ${args.cmd.replace(/\s+/g, " ")}`;
-  } catch {
-    // Arguments stay as written.
-  }
+  // The waiting call is an `exec_command`, and the fixture writes its arguments with `json()`.
+  const { cmd } = JSON.parse(item.argumentsJson) as { cmd: string };
+  const preview = `$ ${cmd.replace(/\s+/g, " ")}`;
   return (
     <div className="border-t border-line bg-tone-attention-bg px-3 py-2">
       <div className="mb-2 flex items-center gap-2">
@@ -403,13 +399,12 @@ export function Turn({
   /** The dock's narrower column: prose one step smaller. */
   dense?: boolean;
 }) {
-  const start = from
-    ? Math.max(
-        0,
-        turn.items.findIndex((i) => i.id === from),
-      )
-    : 0;
+  // `from` names an item of this turn. An id that is not in it fails the render rather than
+  // quietly drawing the whole turn — the screens' `find(…)!` idiom, one rung down.
+  const start = from === undefined ? 0 : turn.items.findIndex((i) => i.id === from);
+  if (start < 0) throw new Error(`Turn: no item "${from}" to start from`);
   const segs = segments(turn.items.slice(start));
+  const reply = turn.items.filter((i) => i.kind === "text").at(-1);
   return (
     <>
       {segs.map((seg, i) => {
@@ -441,7 +436,7 @@ export function Turn({
         }
         return null;
       })}
-      {turn.stats && <StatsLine stats={turn.stats} f={f} />}
+      {turn.stats && <StatsLine atIso={reply!.atIso} stats={turn.stats} f={f} />}
     </>
   );
 }
@@ -450,11 +445,15 @@ export function Turn({
 // Composer (W6: ComposerCard, ChipRow, ToolbarTrigger, SendButton)
 // ---------------------------------------------------------------------------
 
-/** The 14 px context gauge: a ring filled to the share of the model's window in use. */
-function ContextRing({ used, window }: { used: number; window: number }) {
+/**
+ * The 14 px context gauge: a ring filled to the share of the compaction threshold in use — the
+ * basis the app fills against (`features/chat/context-gauge.tsx`), which turns amber past 80% and
+ * red past 95%. This mock stands at 68%, so the ring keeps its resting ink.
+ */
+function ContextRing({ used, basis }: { used: number; basis: number }) {
   const r = 5.5;
   const c = 2 * Math.PI * r;
-  const share = Math.min(1, used / window);
+  const share = Math.min(1, used / basis);
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden className="shrink-0">
       <circle cx="7" cy="7" r={r} fill="none" stroke="var(--ui-line)" strokeWidth="2" />
@@ -487,7 +486,7 @@ function ComposerCard({ children }: { children: ReactNode }) {
 export function Composer({ f, compact = false }: { f: Fixtures; compact?: boolean }) {
   const s = f.session;
   const c = f.copy.chat;
-  const model = f.models.find((m) => m.modelId === s.model.modelId);
+  const model = f.models.find((m) => m.modelId === s.model.modelId)!;
   return (
     <div className="shrink-0 border-t border-line px-3 py-3">
       <div className="mx-auto max-w-3xl">
@@ -542,15 +541,15 @@ export function Composer({ f, compact = false }: { f: Fixtures; compact?: boolea
             </div>
             <div className="min-w-0 flex-1" />
             <div className="flex min-w-0 items-center gap-2">
-              <ContextRing used={s.context.tokens} window={s.context.window} />
+              <ContextRing used={s.context.tokens} basis={s.context.threshold} />
               <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-control px-2 text-fg-muted">
                 <Glyph name="sparkle" size={13} />
                 {c.thinkingLevels[s.composer.thinkingLevel]}
                 <Glyph name="chevronDown" size={12} className="text-fg-subtle" />
               </span>
               <span className="flex h-8 min-w-0 items-center gap-1.5 rounded-control px-1 text-fg-muted">
-                <AgentTile id={s.model.provider} name={model?.providerLabel ?? "?"} size={16} />
-                <span className="min-w-0 truncate">{model?.displayName}</span>
+                <AgentTile id={s.model.provider} name={model.providerLabel} size={16} />
+                <span className="min-w-0 truncate">{model.displayName}</span>
               </span>
               {/* Stop is a control, not a status: a solid fill, never danger ink on a danger tint. */}
               <span

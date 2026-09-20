@@ -32,9 +32,23 @@ export const NEUTRAL_FILL = "bg-[color-mix(in_oklab,var(--ui-fg)_7%,transparent)
  */
 export { Spinner };
 
-/** A 6 px state dot. Dots stay round in every theme; that is what `rounded-full` is kept for. */
-export function Dot({ className }: { className: string }) {
-  return <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${className}`} />;
+/**
+ * A 6 px state dot — W1's `Dot` at its `xs` size (K-redesign §5.1), so a call site swaps by name.
+ * It takes a tone, never a raw class, and paints the tone's **ink**: an emphasis fill is for a
+ * box, not for a 6 px disc. `accent` is the one addition, because the unread mark is the accent
+ * and §5.1's Tone list has no name for it. `size`, `live`, `label` and `knockout` arrive with W1.
+ */
+export function Dot({ tone }: { tone: ToneName | "accent" }) {
+  const ink: Record<ToneName | "accent", string> = {
+    success: "bg-tone-success-fg",
+    attention: "bg-tone-attention-fg",
+    danger: "bg-tone-danger-fg",
+    done: "bg-tone-done-fg",
+    neutral: "bg-tone-neutral-fg",
+    info: "bg-tone-info-fg",
+    accent: "bg-accent",
+  };
+  return <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${ink[tone]}`} />;
 }
 
 const STATE_GLYPH: Record<Exclude<RunState, "running">, GlyphName> = {
@@ -156,10 +170,13 @@ export function IconButton({
 export function Badge({
   tone = "neutral",
   variant = "soft",
+  size = "md",
   children,
 }: {
   tone?: ToneName;
   variant?: "soft" | "outline" | "solid";
+  /** 24 px or 20 px, the two K-redesign §5.1 names; the dense rows take `sm`. */
+  size?: "sm" | "md";
   children: ReactNode;
 }) {
   const soft: Record<ToneName, string> = {
@@ -192,9 +209,10 @@ export function Badge({
       : variant === "solid"
         ? solid[tone]
         : `border border-line ${soft[tone]}`;
+  const box = size === "sm" ? "h-5 px-1.5" : "h-6 px-2";
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-[var(--ui-radius-pill)] px-2 py-0.5 text-xs font-(--ui-weight-medium) ${look}`}
+      className={`inline-flex shrink-0 items-center rounded-[var(--ui-radius-pill)] text-xs font-(--ui-weight-medium) ${box} ${look}`}
     >
       {children}
     </span>
@@ -270,12 +288,12 @@ const NAV: ReadonlyArray<{ key: keyof Fixtures["copy"]["nav"]; glyph: GlyphName 
 ];
 
 function SessionRow({ item, active, f }: { item: SessionListItem; active: boolean; f: Fixtures }) {
-  const agent = f.agents.find((a) => a.id === item.agentId);
+  const agent = f.agents.find((a) => a.id === item.agentId)!;
   return (
     <li
       className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 ${active ? "bg-accent-muted" : ""}`}
     >
-      <AgentTile id={item.agentId} name={agent?.name ?? item.agentId} />
+      <AgentTile id={item.agentId} name={agent.name} />
       <span
         className={`min-w-0 flex-1 truncate text-sm ${
           active ? "font-(--ui-weight-medium) text-fg" : "text-fg-muted"
@@ -285,7 +303,7 @@ function SessionRow({ item, active, f }: { item: SessionListItem; active: boolea
       </span>
       {item.pinned && <Glyph name="pin" size={12} className="text-tone-neutral-fg" />}
       {item.scheduled && <Glyph name="calendarClock" size={12} className="text-tone-neutral-fg" />}
-      {item.unread && <Dot className="bg-accent" />}
+      {item.unread && <Dot tone="accent" />}
       {item.running ? (
         <Spinner size="sm" tone="success" label={f.copy.chat.runStates.running} />
       ) : (
@@ -336,8 +354,8 @@ export function Sidebar({ f, activeSessionId }: { f: Fixtures; activeSessionId?:
             actions={
               <span className="flex items-center gap-1">
                 <IconButton icon="search" size="sm" label={c.search} />
-                <IconButton icon="sliders" size="sm" label={c.filterSessions} />
-                <IconButton icon="folderPlus" size="sm" label={c.newFolder} />
+                <IconButton icon="sliders" size="sm" label={c.listSettings} />
+                <IconButton icon="folderPlus" size="sm" label={c.newWorkspace} />
               </span>
             }
           />
@@ -448,9 +466,9 @@ export function DockFrame({
           <IconButton
             icon={edge === "right" ? "panelBottom" : "panelRight"}
             size="sm"
-            label={f.copy.dock.movePanel}
+            label={edge === "right" ? f.copy.dock.moveToBottom : f.copy.dock.moveToRight}
           />
-          <IconButton icon="cross" size="sm" label={f.copy.dock.close} />
+          <IconButton icon="cross" size="sm" label={f.copy.dock.hideDock} />
         </span>
       </div>
       <div data-slot="body" className="min-h-0 flex-1 overflow-hidden">

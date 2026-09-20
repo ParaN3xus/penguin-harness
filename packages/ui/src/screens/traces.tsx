@@ -7,7 +7,7 @@
 import { fixturesFor } from "../fixtures";
 import type { FixtureLang, Fixtures, TraceSegmentKind, TraceTurn } from "../fixtures";
 import { ChatTranscript } from "./chat";
-import { bytes, duration, percent, tokens, usd } from "./format";
+import { average, bytes, duration, percent, tokens, usd } from "./format";
 import { Glyph } from "./glyph";
 import { Badge, ChatHeader, DockFrame, NEUTRAL_FILL, Sidebar, StatChip } from "./parts";
 import { Composer } from "./transcript";
@@ -56,7 +56,8 @@ function Overall({ f }: { f: Fixtures }) {
         <div>
           <SummaryRow label={t.turns} value={String(o.turns)} />
           <SummaryRow label={t.toolCalls} value={String(o.toolCalls)} />
-          <SummaryRow label={t.compactions} value={String(o.compactions)} />
+          {/* The app's third count is the two above it divided, so the division checks by eye. */}
+          <SummaryRow label={t.avgToolCalls} value={average(o.toolCalls, o.turns)} />
         </div>
         <div>
           <SummaryRow label={t.inputTokens} value={tokens(o.inputTokens)} />
@@ -199,8 +200,14 @@ function TurnCard({
                   <span className="shrink-0 font-mono text-xs tabular-nums text-fg-subtle">
                     {ev.time}
                   </span>
-                  <Badge tone={TYPE_TONE[ev.messageType]}>{ev.payloadType}</Badge>
-                  {ev.fromSubagent && <Badge tone="done">{t.fromSubagent}</Badge>}
+                  <Badge tone={TYPE_TONE[ev.messageType]} size="sm">
+                    {ev.payloadType}
+                  </Badge>
+                  {ev.fromSubagent && (
+                    <Badge tone="done" size="sm">
+                      {t.fromSubagent}
+                    </Badge>
+                  )}
                   <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-muted">
                     {ev.summary}
                   </span>

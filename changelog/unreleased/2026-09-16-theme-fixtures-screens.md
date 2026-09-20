@@ -22,7 +22,13 @@ Web App imports neither, so it looks exactly as before.
   session groups, and a company with employees, tickets in every column and a week of calendar
   events.
 - Chrome copy taken from the Web App's two dictionaries, and specimen text for the fonts page and
-  the Typography foundation that mixes Chinese, Latin, code and numbers.
+  the Typography foundation that mixes Chinese, Latin, code and numbers. The dock's and the
+  sidebar's labels are the App's own ("Agents panel", "Bottom panel", "Right sidebar", "Hide
+  sidebar", "List options", "New workspace"), and the accent list is the App's six options —
+  `neutral` at `#6b7280` first, then the five presets `theme.css` declares — under the names the
+  App gives them.
+- The catalog rows are the built-in catalog's, `DeepSeek V4 Pro 0813` and `DeepSeek V4.1 Flash`
+  among them; the test that pins them also fails a row the catalog has retired.
 - The sets the gallery's modules compose: a notice per tone and a toast pair, a provider form with
   one invalid and one policy-held field, a message context menu with a shortcut and one destructive
   item, six Vault rows, four installed plugins, the command palette's two groups, and a week of
@@ -38,7 +44,13 @@ Web App imports neither, so it looks exactly as before.
 - `traces`: the Trajectories dock with the Overall summary, a turn's execution timeline, legend and
   event rows.
 - `settings`: the paged settings dialog on Appearance over the chat, with an info popover open.
-- `login`: the sign-in card over the decorative canvas.
+- `login`: the sign-in card over the decorative canvas, with the App's three-option language
+  switch beside its three-option theme switch.
+- The numbers are the product's: the stats line leads with the reply's time and carries input,
+  output, TPS, cost and elapsed — no tool count and no cache share, both of which belong to the
+  Trace page's turn card — the Trace's Overall prints Avg tools / turn, the composer's ring fills
+  against the compaction threshold rather than the model window, and a file size reads `47.1KB`,
+  the way `lib/format.ts` writes it.
 - The screens use token utilities and the declared style hooks only, so each theme restyles them
   through its token values; package components replace their stand-in pieces wave by wave.
 - The package exports them as `@prismshadow/penguin-ui/screens` (`SCREENS`, `screenById`).
@@ -75,3 +87,5 @@ rules ask for rather than the drafts they were written from.
   and draws an arc a theme re-times through `.ui-live[data-live="spinner"]`.
 - The accent swatches' hex values moved into the fixtures, where identity data belongs, and each
   swatch now carries its name in both dictionaries.
+- `Dot` takes a tone (plus `accent`, which the unread mark needs) and paints the tone's ink, and
+  `Badge` takes the `sm` / `md` size K-redesign §5.1 names, so those two swap by rename as well.

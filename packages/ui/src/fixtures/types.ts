@@ -196,8 +196,13 @@ export interface ChatSession {
   running: boolean;
   /** The chat header's three session totals. */
   totals: { tokens: number; costUsd: number; elapsedMs: number };
-  /** Context gauge: tokens in the current context against the model's window. */
-  context: { tokens: number; window: number };
+  /**
+   * Context gauge: tokens in the current context against the **effective compaction threshold**,
+   * which is what the app's ring fills against (`lib/context.ts`'s `contextFillBasis`) — never the
+   * model window, because against a window that dwarfs the threshold every answer looks like
+   * "plenty".
+   */
+  context: { tokens: number; threshold: number };
   /** Composer state: the chips waiting to be sent and the toolbar's current picks. */
   composer: {
     draft: string;
@@ -291,7 +296,6 @@ export interface TraceFixture {
   overall: {
     turns: number;
     toolCalls: number;
-    compactions: number;
     inputTokens: number;
     cacheReadTokens: number;
     outputTokens: number;
@@ -645,7 +649,10 @@ export interface DocsAnswerFixture {
 
 /**
  * The product chrome the screens and the gallery's modules print, copied from the web app's
- * dictionaries so a mock-up reads like the app. Not a second dictionary for the app: it exists
+ * dictionaries (`lib/strings.ts` and `lib/strings-en.ts`) so a mock-up reads like the app.
+ * Nothing guards the two against drifting, so a label read here is worth checking against the
+ * app's before it is trusted: a review of the screens found the dock, sidebar and accent labels
+ * had already drifted, and they were put back. Not a second dictionary for the app: this exists
  * for the gallery only, and components receive their copy as props.
  */
 export interface AppCopy {
@@ -685,8 +692,8 @@ export interface AppCopy {
     collapseSidebar: string;
     expandSidebar: string;
     search: string;
-    filterSessions: string;
-    newFolder: string;
+    listSettings: string;
+    newWorkspace: string;
     pin: string;
   };
   chat: {
@@ -727,16 +734,18 @@ export interface AppCopy {
     outputComplete: string;
   };
   dock: {
-    subagents: (n: number) => string;
+    /** The Agents panel's tab, as `panel-meta.tsx` labels it — a panel tab carries no count. */
+    agentsPanel: string;
     topology: string;
     nodeRunning: string;
     nodeDone: string;
     openAsSession: string;
     newPanel: string;
-    movePanel: string;
+    moveToBottom: string;
+    moveToRight: string;
     bottomDock: string;
     rightDock: string;
-    close: string;
+    hideDock: string;
   };
   traces: {
     filesTitle: string;
@@ -744,7 +753,7 @@ export interface AppCopy {
     overall: string;
     turns: string;
     toolCalls: string;
-    compactions: string;
+    avgToolCalls: string;
     inputTokens: string;
     cacheHits: string;
     outputTokens: string;
@@ -793,7 +802,7 @@ export interface AppCopy {
     launcherInfo: string;
     toolAliases: string;
     toolAliasesInfo: string;
-    moreInfo: string;
+    moreInfoAbout: (subject: string) => string;
     close: string;
     sendWith: string;
     /** The two ways to send, as their keys print. */

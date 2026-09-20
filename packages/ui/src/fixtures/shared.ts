@@ -332,7 +332,7 @@ export const MODEL_ROWS: readonly Omit<ModelFixture, "note">[] = [
     provider: "deepseek",
     providerLabel: "DeepSeek",
     modelId: "deepseek-v4-pro",
-    displayName: "DeepSeek V4 Pro",
+    displayName: "DeepSeek V4 Pro 0813",
     contextWindow: 1_000_000,
     supportsVision: false,
     pricing: cny(0.3, 9, 27),
@@ -341,10 +341,10 @@ export const MODEL_ROWS: readonly Omit<ModelFixture, "note">[] = [
   {
     provider: "deepseek",
     providerLabel: "DeepSeek",
-    modelId: "deepseek-v4-flash",
-    displayName: "DeepSeek V4 Flash",
+    modelId: "deepseek-flash",
+    displayName: "DeepSeek V4.1 Flash",
     contextWindow: 1_000_000,
-    supportsVision: false,
+    supportsVision: true,
     pricing: cny(0.04, 2, 8),
   },
   {
@@ -498,9 +498,13 @@ export const TURN2_LANES: readonly TraceLane[] = [
 // Notices, forms, menus, secrets, plugins, the palette and usage (K-redesign §4.6)
 // ---------------------------------------------------------------------------
 
-/** The accent presets `theme.css` declares, in the order the swatch picker draws them. */
+/**
+ * The accent options the picker draws, in the app's order: the stored `neutral` first — which
+ * leaves the theme's own accent in place, and which the app paints `#6b7280` — then the five
+ * presets `theme.css` declares.
+ */
 export const ACCENT_SWATCHES: readonly { id: string; color: string }[] = [
-  { id: "theme", color: "var(--ui-accent)" },
+  { id: "neutral", color: "#6b7280" },
   { id: "blue", color: "#2563eb" },
   { id: "green", color: "#15803d" },
   { id: "violet", color: "#7c3aed" },
