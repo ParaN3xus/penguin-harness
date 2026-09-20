@@ -887,6 +887,30 @@ describe("organization runtime", () => {
       expect(sessions.findById(ceoDesk)?.client).toBe("org");
       expect(sessions.findById(work)?.client).toBe("org");
     });
+
+    it("opens desk and ticket sessions under the organization's approval mode", async () => {
+      await createOrg();
+      await service.patch(P, ORG, { approvalMode: "read-only" }, "alice");
+      // A desk opened after the change carries the mode; the row is what the session
+      // runtime reads per decision (with `client: "org"`, a call that mode would hand to a
+      // person is denied at once — see session-manager.test.ts).
+      const desk = (await service.desk(P, ORG, CEO, { renew: true })).sessionId;
+      expect(sessions.findById(desk)?.approvalMode).toBe("read-only");
+      const t = await service.createTicket(
+        P,
+        ORG,
+        { title: "Ship it", owner: `agent:${CEO}` },
+        { userId: "alice" },
+      );
+      const { sessionId: work } = await service.startTicket(
+        P,
+        ORG,
+        t.ticketId,
+        {},
+        { userId: "alice" },
+      );
+      expect(sessions.findById(work)?.approvalMode).toBe("read-only");
+    });
   });
 
   describe("who starts a ticket session", () => {
@@ -1819,6 +1843,65 @@ describe("organization runtime", () => {
       expect(
         board.columns.proposed.find((x) => x.ticketId === t.ticketId)?.blocked,
       ).toBeUndefined();
+    });
+
+    it("reports a `# Ticket:` file as an invalid file: listed nowhere, refused on write, never rewritten", async () => {
+      const valid = await service.createTicket(
+        P,
+        ORG,
+        { title: "Launch the site" },
+        { userId: "alice" },
+      );
+      const headedId = "2026-09-01-legacy-launch";
+      const headedPath = ticketPath(orgDir(), headedId, "in_progress");
+      const headed = [
+        "# Ticket: Legacy launch",
+        "",
+        "Status: in_progress",
+        `Initiator: agent:${CEO}`,
+        `Owner: agent:${HR}`,
+        "",
+        "## Goal",
+        "Ship it",
+        "",
+      ].join("\n");
+      await fs.mkdir(path.dirname(headedPath), { recursive: true });
+      await fs.writeFile(headedPath, headed, "utf8");
+      errors.length = 0;
+
+      // The pass carries on past it and records it.
+      await scheduler.tickOnce();
+      expect(errors.filter((e) => e.code === "org_ticket_invalid").length).toBeGreaterThan(0);
+      // The board lists the valid ticket in its column and the file under invalidFiles only.
+      const board = await service.tickets(P, ORG);
+      expect(Object.values(board.columns).flatMap((c) => c.map((x) => x.ticketId))).toEqual([
+        valid.ticketId,
+      ]);
+      expect(board.invalidFiles).toEqual([
+        {
+          path: path.join("tickets", "2026-09", "in_progress", `${headedId}.md`),
+          error: "the file must start with `---` (YAML frontmatter)",
+        },
+      ]);
+      // The overview counts it in no column either.
+      expect((await service.detail(P, ORG, "alice")).board.in_progress).toBe(0);
+      // Not a ticket to read, and a write asks for a repair instead of converting the file.
+      await expect(service.ticket(P, ORG, headedId)).rejects.toMatchObject({
+        status: 404,
+        code: "ticket_not_found",
+      });
+      await expect(
+        service.progressTicket(P, ORG, headedId, "half done", { userId: "alice" }),
+      ).rejects.toMatchObject({ status: 409, code: "ticket_invalid" });
+      // A new ticket that would take its id takes the next free one instead.
+      const next = await service.createTicket(
+        P,
+        ORG,
+        { title: "Legacy launch", slug: "legacy-launch" },
+        { userId: "alice" },
+      );
+      expect(next.ticketId).toBe(`${headedId}-b`);
+      expect(await fs.readFile(headedPath, "utf8")).toBe(headed);
     });
   });
 
