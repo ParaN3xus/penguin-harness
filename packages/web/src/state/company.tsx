@@ -157,8 +157,6 @@ interface CompanyStoreState {
   serverEnabled: boolean;
   /** The user's own switch (`UiPrefs.companyMode`); on until the preferences say otherwise. */
   personalEnabled: boolean;
-  /** The preferences have been read once (before that the mirrors below stand in). */
-  prefsLoaded: boolean;
   /** The mode the user chose, held at development while company mode is unavailable (settleWorkMode). */
   workMode: WorkMode;
   /** `<projectId>/<orgId>` of the organization last opened, or null. */
@@ -279,7 +277,6 @@ export function createCompanyStore(options: { serverEnabled?: boolean } = {}) {
   return createStore<CompanyStoreState>((set, get) => ({
     serverEnabled: options.serverEnabled ?? false,
     personalEnabled: true,
-    prefsLoaded: false,
     workMode: initialWorkMode(),
     lastOrgKey: initialLastOrgKey(),
     currentOrgKey: null,
@@ -344,21 +341,21 @@ export function createCompanyStore(options: { serverEnabled?: boolean } = {}) {
     /**
      * The stored preferences have arrived, and they win over the localStorage mirrors: the
      * user's switch, the mode and the organization last opened. A company choice among them
-     * while company mode is unavailable is settled at once rather than adopted.
+     * while company mode is unavailable is settled back to development (settleWorkMode) before
+     * the mirror is written, so the mirror only ever holds the settled mode — a tab closed in
+     * between must not leave the next load a choice this one has already refused.
      */
     applyPrefs: (prefs) => {
-      const patch: Partial<CompanyStoreState> = { prefsLoaded: true };
+      const patch: Partial<CompanyStoreState> = {};
       if (prefs.companyMode === false) patch.personalEnabled = false;
-      if (prefs.workMode === "company" || prefs.workMode === "dev") {
-        patch.workMode = prefs.workMode;
-        storeWorkMode(prefs.workMode);
-      }
+      if (prefs.workMode === "company" || prefs.workMode === "dev") patch.workMode = prefs.workMode;
       if (typeof prefs.lastOrgKey === "string" && parseOrgKey(prefs.lastOrgKey) !== null) {
         patch.lastOrgKey = prefs.lastOrgKey;
         storeLastOrgKey(prefs.lastOrgKey);
       }
       set(patch);
       settleWorkMode(get());
+      storeWorkMode(get().workMode);
     },
 
     setCurrentOrg: (key) => {
@@ -713,10 +710,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       .then((res) => {
         if (!cancelled) store.getState().applyPrefs(res.prefs);
       })
-      .catch(() => {
-        // Unreachable preferences leave the mirrors standing; nothing here is critical.
-        if (!cancelled) store.setState({ prefsLoaded: true });
-      });
+      // Unreachable preferences leave the localStorage mirrors standing; nothing here is critical.
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };

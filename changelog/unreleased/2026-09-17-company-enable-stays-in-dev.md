@@ -28,4 +28,6 @@ opens the company landing as before.
   company-mode button or an `/org` route, and only while company mode is available.
 - Signing in on the login page adopted the user before `/api/me` had been read again, so the shell
   mounted for a moment on the flags from before the sign-in. The user is now adopted together with
-  that answer, or on its own when the read fails, so signing in keeps a stored company choice.
+  that answer, or on its own when the read fails — except on a 401, which says the session cookie
+  never took, and the login page stays put instead of flashing a shell that has no session behind
+  it. Signing in keeps a stored company choice.

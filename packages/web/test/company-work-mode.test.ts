@@ -23,13 +23,23 @@ import { companyModeAvailable, createCompanyStore, effectiveWorkMode } from "../
 
 const putPrefs = vi.mocked(api.putPrefs);
 let storage: Map<string, string>;
+/**
+ * Every value written to the work-mode mirror, in order. The end state is not the whole story:
+ * a mode the mirror only passes through is a mode the next load finds if the tab closes in that
+ * window, so a settled choice must never be written unsettled first.
+ */
+let modeWrites: string[];
 
 beforeEach(() => {
   // The beta notice counts as shown, so entering company mode raises no toast here.
   storage = new Map([[BETA_NOTICE_KEY, "1"]]);
+  modeWrites = [];
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => storage.get(key) ?? null,
-    setItem: (key: string, value: string) => void storage.set(key, value),
+    setItem: (key: string, value: string) => {
+      if (key === WORK_MODE_KEY) modeWrites.push(value);
+      storage.set(key, value);
+    },
     removeItem: (key: string) => void storage.delete(key),
   });
   putPrefs.mockClear();
@@ -133,6 +143,8 @@ describe("the preferences as they arrive", () => {
     store.getState().applyPrefs({ workMode: "company", lastOrgKey: "p1/acme" });
     expect(store.getState().workMode).toBe("dev");
     expect(storage.get(WORK_MODE_KEY)).toBe("dev");
+    // Never through "company" on the way: the mirror follows the settled mode, not the stored one.
+    expect(modeWrites).not.toContain("company");
     expect(writtenModes()).toEqual(["dev"]);
     expect(store.getState().lastOrgKey).toBe("p1/acme");
 
@@ -145,6 +157,8 @@ describe("the preferences as they arrive", () => {
     store.getState().applyPrefs({ workMode: "company", companyMode: false });
     expect(store.getState().personalEnabled).toBe(false);
     expect(store.getState().workMode).toBe("dev");
+    expect(storage.get(WORK_MODE_KEY)).toBe("dev");
+    expect(modeWrites).not.toContain("company");
     expect(writtenModes()).toEqual(["dev"]);
 
     store.getState().setPersonalEnabled(true);
@@ -157,6 +171,8 @@ describe("the preferences as they arrive", () => {
     store.getState().applyPrefs({ workMode: "company" });
     expect(shown(store)).toBe("company");
     expect(storage.get(WORK_MODE_KEY)).toBe("company");
+    // One write, and it is the choice itself: nothing was adopted and then taken back.
+    expect(modeWrites).toEqual(["company"]);
     expect(writtenModes()).toEqual([]);
   });
 });

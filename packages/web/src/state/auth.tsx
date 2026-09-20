@@ -25,6 +25,21 @@ const DEFAULT_UPLOAD_LIMITS: UploadLimits = {
   attachmentLimitMaxMb: 200,
 };
 
+/**
+ * A GET /api/me issued right after a successful login failed: does the session it was meant to
+ * read still stand? A 401 is the one answer that says it does not — the login held, but the
+ * session cookie never took (blocked cookies, a cross-site context, a proxy dropping
+ * `Set-Cookie`), so there is no session to adopt a user onto, and the client's 401 handler has
+ * already cleared the user. Any other failure (offline, a 5xx) leaves the session standing and
+ * costs only the flags that read would have refreshed.
+ *
+ * Exported as a test seam: this package's vitest runs in node with no DOM, so the decision is
+ * asserted by value rather than by mounting the Provider.
+ */
+export function loginSessionSurvives(error: unknown): boolean {
+  return !(error instanceof ApiError && error.status === 401);
+}
+
 interface AuthContextValue {
   /** undefined = initializing; null = not logged in. */
   user: UserInfo | null | undefined;
@@ -142,9 +157,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSessionVia(me.sessionVia);
       setUploadLimits(me.uploadLimits);
       setCompanyMode(me.companyMode);
-    } catch {
-      // Login itself succeeded; adopt the user and keep the optimistic defaults.
-      setUser(res.user);
+    } catch (e) {
+      // Login itself succeeded; adopt the user and keep the optimistic defaults — unless the
+      // read came back 401, which says the session cookie never took. Adopting a user on a
+      // session that does not exist would undo the 401 handler's setUser(null) in the same
+      // continuation and mount the shell over a dead session.
+      if (loginSessionSurvives(e)) setUser(res.user);
     }
   }, []);
 
