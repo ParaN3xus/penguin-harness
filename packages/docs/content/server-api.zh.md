@@ -158,6 +158,28 @@ listener 只绑 `127.0.0.1`，在创建转发时与平台每次启动时 bind。
 
 事实按层给出，不合成一个标志：`listener` 为 `{listening: true}` 或 `{error}`（端口被别人占用时为 `EADDRINUSE`——记录与端口保持不变）；`dial` 为最近一次拨号，`{answeredAt}` 或 `{failedAt, detail}`，尚无客户端连接时为 `null`；`open` 为当前连接数；`bytesUp` / `bytesDown` 自本进程启动起累计。
 
+### 浏览器
+
+浏览器标签在 App 内、在一个专属主机上显示页面。所有页面一律视为不可信内容——Agent 写出的页面与任意网站同等对待。
+
+| Method | Path | 说明 |
+| --- | --- | --- |
+| POST | /api/browser/sites | 请求体 `{machineId, url}`——`url` 为键入的地址（`localhost:3000`、`example.com` 或完整 URL），`machineId` 为本对话 Workspace 所在机器（`null` = 本服务端）。返回 `{origin, url, address}`：站点所在的 `http://<label>.localhost:<port>` 主机、iframe 加载的 URL、规范化后的地址。`400` `invalid_url` / `unsupported_scheme` / `credentials_in_url` / `workspace_https`；机器端口另有 `403` `admin_required` 与 `404` `unknown_machine`；App 未经 `localhost` 访问时 `409` `browser_unavailable` |
+
+**地址的含义。** 回环名（`localhost`、`127.0.0.1`、`[::1]`、`*.localhost`）指 Workspace 所在机器的回环——经该机器的既有连接到达（自身从不拉起 ssh），Workspace 在本服务端时直连；仅 `http`，且永不指向本服务端自己的端口。其余主机名是公网地址，由本服务端经常规出站通道请求（遵循管理员代理设置）。
+
+**隔离。** Cookie 按主机划分且不区分端口，故每个站点——`(用户, 机器, 上游 Origin)`——获得一个专属主机 `<label>.localhost`，由本服务端在自身端口上反向代理。浏览器原生把 `*.localhost` 解析到回环；App 的会话 Cookie 是 `localhost` 上的 host-only Cookie，不会发往该主机。label 为 128 位随机数，存于 `web.db`（`browser_sites`），是该主机唯一的凭据——因此所有代理响应都带 `Referrer-Policy: no-referrer`。Host 为浏览器主机的请求先于一切 App 中间件与路由分发给代理（`HttpModule.hosts`），且从不落回 App；未知 label 答 `404`。面板的 iframe 沙箱不含 `allow-top-navigation`。
+
+**出站防护。** 对公网目标的每次请求，主机名解析出的全部地址都必须是公网地址——回环、私网、CGNAT、链路本地（含云元数据）、组播 / 保留、IPv6 ULA / 链路本地、IPv4 映射与 NAT64 形态一律拒绝，无法识别的形态同样拒绝。直连时该校验就是 socket 自己的 `lookup`，DNS rebinding 没有第二次作答的机会；经前置代理出站时由代理自行解析，校验并行进行。服务端从不跟随重定向。
+
+**代理改写。** 请求：`Host` 为上游自己的名字，`Origin` / `Referer` 映射回上游 Origin，`Accept-Encoding: identity`。响应：删除 `X-Frame-Options`、CSP 的 `frame-ancestors` 与 HSTS，`Set-Cookie` 去掉 `Domain=`，指向站点自身的 `Location` 改写到浏览器主机，HTML（≤ 8MB）在 `<head>` 最前注入 `<script src="/__penguin/browser.js">`（页面 CSP 带 nonce 时沿用）。
+
+**主题。** 引导脚本在 head 最前维护 `<style id="penguin-theme">`——`:root { color-scheme; --penguin-* }`——页面自己的声明总是胜出。变量为 App 已解析的 token 加 `--penguin-` 前缀——按当前明暗解析好的角色色（`--penguin-bg`、`--penguin-surface`、`--penguin-fg`、`--penguin-muted`、`--penguin-border`、`--penguin-hover`）、accent 对、字体栈与灰阶（`--penguin-color-gray-900`）——在加载完成与每次外观变化时发给 iframe，且只发给该标签的浏览器主机。
+
+**第三方上下文。** 浏览器主机按设计与 App 不同站，因此屏蔽第三方 Cookie 的浏览器环境不会在标签内保留被浏览站点的 Cookie。
+
+**不代理：** WebSocket upgrade（dev server 的热重载通道）；以及——因 runtime shell 先于平台对 `/api/*` 执行 JSON-only 与请求体上限——被浏览站点自己的 `/api/*` 下的非 JSON 写请求。
+
 ### 版本与在线更新
 
 | 方法 | 路径 | 说明 |

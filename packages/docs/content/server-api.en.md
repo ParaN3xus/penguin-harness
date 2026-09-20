@@ -158,6 +158,28 @@ The listener binds `127.0.0.1` only, when the forward is made and whenever the p
 
 The facts are reported by layer, never as one flag: `listener` is `{listening: true}` or `{error}` (`EADDRINUSE` when something else took the port — the record and its port stay as they are); `dial` is the last dial, `{answeredAt}` or `{failedAt, detail}`, `null` until a client has connected; `open` is the connections open now; `bytesUp` / `bytesDown` count since this process started.
 
+### Browser
+
+A Browser tab shows a page inside the app on a host of its own. Every page is treated as untrusted — a page an agent wrote and any web site alike.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| POST | /api/browser/sites | Body `{machineId, url}` — `url` as typed (`localhost:3000`, `example.com`, a full URL), `machineId` the machine the conversation's Workspace is on (`null` = this server). Answers `{origin, url, address}`: the `http://<label>.localhost:<port>` host the site is served on, the URL the frame loads, and the address normalized. `400` `invalid_url` / `unsupported_scheme` / `credentials_in_url` / `workspace_https`; `403` `admin_required` and `404` `unknown_machine` for a port on a machine; `409` `browser_unavailable` when the app is not opened on `localhost` |
+
+**What an address means.** A loopback name (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) is the loopback of the machine the Workspace is on — reached through the connection held to that machine (never opening ssh of its own), or directly for a Workspace on this server; `http` only, and never this server's own port. Any other name is a public address, fetched by this server through its ordinary outbound path (the admin proxy settings apply).
+
+**Isolation.** Cookies are scoped to a host and ignore the port, so each site — `(user, machine, upstream origin)` — gets a host of its own, `<label>.localhost`, reverse-proxied by this server on its own port. Browsers resolve `*.localhost` to the loopback by themselves; the app's session cookie is host-only on `localhost` and is not sent there. The label is 128 random bits, stored in `web.db` (`browser_sites`), and is the only credential that host has — so every proxied response carries `Referrer-Policy: no-referrer`. A request whose Host is a Browser host is dispatched to the proxy ahead of every App middleware and route (`HttpModule.hosts`) and never falls back to the App; an unknown label is `404`. The panel's frame is sandboxed without `allow-top-navigation`.
+
+**Egress guard.** On every request to a public target, every address the name resolves to must be on the public internet — loopback, private, CGNAT, link-local (cloud metadata included), multicast/reserved, IPv6 ULA/link-local, IPv4-mapped and NAT64 forms are refused, as is anything unrecognised. On a direct connection the check is the socket's own `lookup`, so DNS rebinding has no second answer to give; through a forward proxy the proxy resolves the name itself and the check runs beside it. Redirects are never followed server-side.
+
+**What the proxy changes.** Request: `Host` is the upstream's own, `Origin`/`Referer` are mapped back to the upstream origin, `Accept-Encoding: identity`. Response: `X-Frame-Options`, CSP `frame-ancestors` and HSTS are dropped, `Set-Cookie` loses `Domain=`, a `Location` to the site itself is rewritten to the Browser host, and HTML (up to 8MB) gets `<script src="/__penguin/browser.js">` first in `<head>` (with the page's CSP nonce when it has one).
+
+**Theme.** The bootstrap keeps a `<style id="penguin-theme">` first in the head — `:root { color-scheme; --penguin-* }` — so anything the page declares wins. The variables are the app's resolved tokens under a `--penguin-` prefix — the roles resolved for the scheme in force (`--penguin-bg`, `--penguin-surface`, `--penguin-fg`, `--penguin-muted`, `--penguin-border`, `--penguin-hover`), the accent pair, the font stack and the gray scale (`--penguin-color-gray-900`) — posted to the frame on load and on every appearance change, to that tab's Browser host only.
+
+**Third-party context.** A Browser host is a different site from the app, by design, so a browser profile that blocks third-party cookies does not keep a browsed site's cookies inside the tab.
+
+**Not proxied:** WebSocket upgrades (a dev server's hot-reload channel), and — because the runtime shell applies its JSON-only and body-size rules to `/api/*` ahead of the platform — a browsed site's own non-JSON writes under `/api/*`.
+
 ### Version and Self-Update
 
 | Method | Path | Description |

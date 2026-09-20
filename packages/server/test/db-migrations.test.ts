@@ -68,6 +68,8 @@ function dropCompanyModeTables(db: DatabaseSync): void {
  */
 function dropPortForwards(db: DatabaseSync): void {
   db.exec("DROP INDEX IF EXISTS idx_port_forwards_machine; DROP TABLE IF EXISTS port_forwards;");
+  // And migration 14's, which every database older than 13 is older than too.
+  db.exec("DROP TABLE IF EXISTS browser_sites;");
 }
 
 /**
