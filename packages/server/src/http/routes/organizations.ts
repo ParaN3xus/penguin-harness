@@ -3,6 +3,7 @@
  *   GET|POST      /api/projects/:p/organizations
  *   POST          /api/projects/:p/organizations/suggest-id   # a semantic id for a display name
  *   GET|PATCH     /api/projects/:p/organizations/:orgId
+ *   DELETE        …/:orgId                                  # owner only; to the Project's trash
  *   GET           …/:orgId/chart
  *   POST          …/:orgId/employees                        # hire
  *   PATCH|DELETE  …/:orgId/employees/:agentId
@@ -170,7 +171,7 @@ function requireChannelParam(c: Context<AppEnv>): string {
 /** What this route group needs — declared here, at the consumer. */
 export interface OrgRouteDeps {
   orgService: OrgService;
-  projectService: Pick<ProjectLifecycle, "requireProjectAccess">;
+  projectService: Pick<ProjectLifecycle, "requireProjectAccess" | "requireProjectOwner">;
   serverSettingsRepo: Pick<Settings, "getCompanyMode">;
 }
 
@@ -293,6 +294,17 @@ export function organizationRoutes(deps: OrgRouteDeps): Hono<AppEnv> {
   });
 
   // ---- employees ----
+
+  // Deleting is a Project-level management operation, like deleting an Agent: owner only.
+  // The organization itself is what goes (to the Project's trash); its employees' Agents and
+  // its Sessions are left as they are.
+  app.delete("/:orgId", async (c) => {
+    const projectId = requireValidId(c, "projectId");
+    deps.projectService.requireProjectOwner(c.var.user.userId, projectId);
+    const orgId = requireValidId(c, "orgId");
+    await deps.orgService.delete(projectId, orgId);
+    return c.body(null, 204);
+  });
 
   app.get("/:orgId/chart", async (c) => {
     const projectId = requireValidId(c, "projectId");
