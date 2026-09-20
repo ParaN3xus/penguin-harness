@@ -601,7 +601,8 @@ export const LABEL_COMPONENTS: readonly string[] = ["Button", "NavRow", "Heading
 export const PAGE_HEADER_COMPONENTS: readonly string[] = ["PageHeader"];
 
 const BORDER_WIDTH = /^border(?:-(?:2|4|8))?$/;
-const ROUNDED_STEP = /^rounded-(?:sm|md|lg|xl)$/;
+/** Every step `theme.css` bridges onto the theme's radius scale, `--radius-xs` through `--radius-3xl`. */
+const ROUNDED_STEP = /^rounded-(?:xs|sm|md|lg|xl|2xl|3xl)$/;
 const INNER_RADIUS =
   /^rounded-(?:full|control|\[var\(--radius-inner\)\]|\(--radius-inner\)|\[var\(--ui-radius-control\)\]|\(--ui-radius-control\))$/;
 const DURATION_TOKEN = /^var\(\s*--ui-dur-(fast|base|slow)\s*(?:,[^)]*)?\)$/;
@@ -702,9 +703,12 @@ const spacingToken: TokenPredicate = (token) => {
   return /^(?:\[var\(--ui-[\w-]+\)\]|\(--ui-[\w-]+\))$/.test(match[1]!) ? null : token.raw;
 };
 
-/** Rule 13: a literal font size, `text-[11px]` or `text-[0.6875rem]`. */
+/**
+ * Rule 13: a literal font size, `text-[11px]` or `text-[0.6875rem]`, with or without Tailwind's
+ * line-height modifier (`text-[11px]/4`, `text-[0.6875rem]/[1.2]`).
+ */
 const textSizeToken: TokenPredicate = (token) =>
-  /^text-\[(?:length:)?\d*\.?\d+(?:px|rem)\]$/.test(token.utility) ? token.raw : null;
+  /^text-\[(?:length:)?\d*\.?\d+(?:px|rem)\](?:\/\S+)?$/.test(token.utility) ? token.raw : null;
 
 /** Rule 14: `uppercase` and `tracking-wide|wider|widest`. */
 const uppercaseToken: TokenPredicate = (token) =>
@@ -870,7 +874,14 @@ const clippedBorderCheck: Check = (analysis) =>
     });
   });
 
-/** Rule 10: a `<Badge>` whose literal text is a mood word or an emoji. */
+/**
+ * Rule 10: a `<Badge>` whose literal text is a mood word or an emoji.
+ *
+ * Only literal children are read, which is §3's own scope for this rule. A badge whose copy comes
+ * from a dictionary (`<Badge>{S.models.freeBadge}</Badge>`, how the web app spells all but one of
+ * them) is out of reach here; the dictionaries themselves are read by rule 21, for emoji. So in an
+ * app that keeps its copy in `strings.ts` this rule guards the hard-coded badge only.
+ */
 const moodBadgeCheck: Check = (analysis) =>
   analysis.elements.flatMap((element) =>
     element.tag !== "Badge"
@@ -890,7 +901,8 @@ const isEyebrow = (element: JsxElementInfo) =>
   element.classes.some((t) => t.utility === "ui-eyebrow") ||
   (element.tag === "Text" && element.attributes.get("variant") === "eyebrow");
 
-function headingLevel(element: JsxElementInfo): number | null {
+/** The heading level an element states: `h1`–`h6`, or `Heading`'s literal `level` prop. */
+export function headingLevel(element: JsxElementInfo): number | null {
   const intrinsic = /^h([1-6])$/.exec(element.tag);
   if (intrinsic !== null) return Number(intrinsic[1]);
   const level = element.tag === "Heading" ? element.attributes.get("level") : undefined;

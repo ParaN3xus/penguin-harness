@@ -25,6 +25,7 @@ import {
   allowlistProblems,
   analyzeFile,
   deslopHits,
+  matchesPolicyPath,
 } from "../../ui/src/testing/deslop";
 import type { DeslopAllowlist, DeslopPolicy } from "../../ui/src/testing/deslop";
 import { expectEveryRootScanned, scanSources } from "./helpers/roots";
@@ -36,7 +37,9 @@ const WEB = SCAN.files.filter((file) => file.root === "web");
 const POLICY: DeslopPolicy = {
   transformMotion: ["chevron.tsx", "sheet.tsx", "drawer.tsx", "dock-launcher.tsx"],
   entranceMotion: [],
-  pulseHomes: ["dot.tsx", "skeleton.tsx", "streaming-caret.tsx"],
+  // The app's one pulse home: `Dot` and `StreamingCaret` are W1's, in the package, where
+  // `packages/ui/test/deslop.test.ts` already names them.
+  pulseHomes: ["skeleton.tsx"],
   spinnerHomes: [],
   tokensOnly: false,
   hexHomes: [],
@@ -94,7 +97,7 @@ const ALLOWLIST: DeslopAllowlist = {
   "features/benchmark/create-benchmark-modal.tsx": { 13: [1, "W3"] },
   "features/benchmark/evaluation-detail-modal.tsx": { 13: [2, "W3"] },
   "features/chat/agent-topology-view.tsx": { 12: [1, "W6"], 13: [3, "W6"] },
-  "features/chat/chat-input.tsx": { 7: [1, "W6"], 12: [7, "W6"], 13: [5, "W6"] },
+  "features/chat/chat-input.tsx": { 7: [1, "W6"], 12: [6, "W6"], 13: [5, "W6"] },
   "features/chat/chat-page.tsx": { 6: [1, "W1b"], 12: [2, "W6"], 13: [3, "W6"], 15: [1, "W4"] },
   "features/chat/code-block.tsx": { 13: [1, "W5"] },
   "features/chat/context-gauge.tsx": { 12: [5, "W8"] },
@@ -106,6 +109,7 @@ const ALLOWLIST: DeslopAllowlist = {
   "features/chat/memory-view.tsx": { 13: [2, "W6"] },
   "features/chat/message-item.tsx": { 4: [2, "W6"], 6: [1, "W6"], 13: [3, "W6"] },
   "features/chat/message-stream.tsx": { 11: [2, "W1b"] },
+  "features/chat/reference-chip.tsx": { 12: [1, "W6"] },
   "features/chat/shortcuts-folder.tsx": { 12: [1, "W7"] },
   "features/chat/step-banner.tsx": { 13: [1, "W6"], 14: [2, "W6"] },
   "features/chat/subagent-chip.tsx": { 11: [2, "W1b"], 13: [1, "W6"] },
@@ -183,6 +187,25 @@ describe("de-slop rules over packages/web/src", () => {
       gone,
       "An allowlisted file that left packages/web/src moved into the package (whose suite allows " +
         "nothing) or was deleted: remove its entry.",
+    ).toEqual([]);
+  });
+
+  it("names a file the web app has in every policy home", () => {
+    const homes = [
+      ...POLICY.transformMotion,
+      ...POLICY.entranceMotion,
+      ...POLICY.pulseHomes,
+      ...POLICY.spinnerHomes,
+      ...POLICY.hexHomes,
+    ];
+    const missing = homes.filter(
+      (home) => !WEB.some((file) => matchesPolicyPath(file.rel, [home])),
+    );
+    expect(
+      missing,
+      "A home naming no file is an exemption waiting for one: the first file to take that name " +
+        "passes the rule silently, with no allowlist entry and no wave. The package's POLICY is " +
+        "forward-looking on purpose; this list is what the app spells today.",
     ).toEqual([]);
   });
 

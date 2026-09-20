@@ -12,9 +12,10 @@
  * file, the motion files, the pulse of a dot or a skeleton — it is in {@link POLICY}; an occurrence
  * a later wave removes would go in {@link ALLOWLIST} with that wave, and the list starts empty.
  *
- * A rule with nothing to read on this branch is a named skip, never a pass: the markup rules wait
- * for the first `.tsx` (the screens, #763; the modules, #764; the components, W1), and the
- * component rules (15, 16, 22) name the components they read and skip while none exists.
+ * A rule with nothing to read on this branch is a named skip, never a pass: the rules that read
+ * elements or components wait for the first `.tsx` (the screens, #763; the modules, #764; the
+ * components, W1) and the component rules (15, 16, 22) name the components they read, while the
+ * class-token rules run over the `.ts` files the package already has.
  * The rules §3 leaves to review — two badges per row, spacing steps per kind of child, nesting
  * across components, copy voice — are not here; the frontend skill carries them.
  */
@@ -77,18 +78,27 @@ const relOf = (id: string) => id.slice("packages/ui/src/".length);
 const MARKUP = /\.tsx?$/;
 const hasTsx = ACTIVE.some((file) => file.name.endsWith(".tsx"));
 
+/**
+ * The rules whose checks read elements or components, so a package with no `.tsx` gives them
+ * nothing. The rest read class strings, which a `.ts` holds too — a recipe in `parts.ts` or a
+ * catalog entry is guarded from the day it is written, without waiting for the first component.
+ */
+const ELEMENT_RULES: readonly DeslopRule[] = [4, 5, 7, 10, 15, 16, 17, 22];
+const NO_TSX =
+  "no .tsx under packages/ui/src yet — the screens (#763), the modules (#764) and the W1 components are read when they land";
+
 /** Why a rule has nothing to read here yet, or null when it does. */
 function nothingToRead(rule: DeslopRule, surface: "markup" | "stylesheet"): string | null {
   const active = ACTIVE.filter((f) => (surface === "markup" ? MARKUP : /\.css$/).test(f.name));
   if (surface === "stylesheet") return active.length > 0 ? null : "no stylesheet to read";
+  if (active.length === 0) return "no .ts or .tsx to read";
   if (rule === 21) {
     return active.some((f) => f.rel.startsWith("fixtures/") || /^strings.*\.ts$/.test(f.name))
       ? null
       : "no fixtures or strings dictionary yet";
   }
-  if (!hasTsx) {
-    return "no .tsx under packages/ui/src yet — the screens (#763), the modules (#764) and the W1 components are read when they land";
-  }
+  if (!hasTsx && ELEMENT_RULES.includes(rule)) return NO_TSX;
+  if (!hasTsx) return null;
   const named =
     rule === 15
       ? TABULAR_COMPONENTS
@@ -133,6 +143,12 @@ describe("de-slop rules over packages/ui/src", () => {
           `K-redesign §3 rule ${rule}: ${DESLOP_RULES[rule]}.`,
         ).toEqual([]);
       });
+      // Rule 14 reads markup twice: the class token (`uppercase`, `tracking-wide`), which a `.ts`
+      // holds too, and the eyebrow above a heading, which needs elements. Name the second half
+      // while it has nothing to read rather than letting the rule's pass cover both.
+      if (!hasTsx && rule === 14 && surface === "markup") {
+        it.skip(`rule 14: an eyebrow above a heading — PENDING: ${NO_TSX}`, () => {});
+      }
     }
   }
 });
