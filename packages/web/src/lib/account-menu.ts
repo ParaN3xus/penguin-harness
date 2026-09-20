@@ -60,7 +60,16 @@ export function offersChangePassword(session: AccountMenuSession): boolean {
  * `routes/me.ts`: the desktop shell's own window, and a session claimed through a first-login
  * link. In both, the account's current password is a random value that was hashed and
  * discarded unseen — demanding it would dead-end the one flow the session exists for.
+ *
+ * The desktop half is the two-field rule, not `sessionVia` alone, because the server is the
+ * authority and its gate reads `deps.desktop !== null && sessionVia === "desktop"`. The two
+ * used to be indistinguishable — a `desktop` session existed only where a shell had spawned
+ * the server — but the shell now mints one for itself against a server it merely attached to,
+ * and there the server still requires the old password. Keeping the shorter test would hide a
+ * field the request must carry, and the submit would fail on a form that looked complete.
+ * That window has no way to set a password in the UI, which is the point: the account's
+ * password is recovered from the machine with `penguin server reset-admin-password`.
  */
-export function omitsOldPassword(sessionVia: MeResponse["sessionVia"]): boolean {
-  return sessionVia === "desktop" || sessionVia === "setup";
+export function omitsOldPassword(session: AccountMenuSession): boolean {
+  return isDesktopShellWindow(session) || session.sessionVia === "setup";
 }
