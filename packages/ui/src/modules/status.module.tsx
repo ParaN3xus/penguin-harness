@@ -12,8 +12,7 @@
  * `EmptyState`, and W4's `Notice` and `ProgressBar`.
  */
 import type { ToneName } from "../tokens";
-import { fixturesFor } from "../fixtures";
-import { TICKET_STATUSES } from "../fixtures";
+import { TICKET_STATUSES, fixturesFor } from "../fixtures";
 import type { Fixtures, RunState, StopReason, TicketFixture } from "../fixtures";
 import { defineModule, viewFor } from "../module";
 import { duration, liveDuration, usd } from "../screens/format";
