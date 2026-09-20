@@ -144,10 +144,9 @@ describe("theme import order", () => {
   // later in the sheet, so an entry stylesheet must import github.css before the other themes:
   // the other way round, Frost and Console in dark would take Primer's dark values for those
   // tokens.
-  const GALLERY = join(REPO_ROOT, "packages", "ui-gallery");
   const entries: Record<string, string> = {
     web: join(WEB_DIR, "src", "styles.css"),
-    ...(existsSync(GALLERY) ? { gallery: join(GALLERY, "src", "styles.css") } : {}),
+    gallery: join(REPO_ROOT, "packages", "ui-gallery", "src", "styles.css"),
   };
   const IMPORT = /@import\s+["']@prismshadow\/penguin-ui\/themes\/([\w-]+)\.css["']/g;
 
@@ -169,11 +168,10 @@ describe("token reads", () => {
   // still read by a recipe (Frost's glass read the inset highlight) leaves the declaration invalid
   // at computed-value time, silently, in every theme. So every `--ui-*` name the source spells —
   // in stylesheets and in string literals, never in comments — must be in the contract.
-  const GALLERY = join(REPO_ROOT, "packages", "ui-gallery", "src");
   const roots = {
     ui: SRC_DIR,
     web: join(WEB_DIR, "src"),
-    ...(existsSync(GALLERY) ? { gallery: GALLERY } : {}),
+    gallery: join(REPO_ROOT, "packages", "ui-gallery", "src"),
   };
   const scan = scanSourceRoots(roots, { repoRoot: REPO_ROOT });
   const contract = new Set<string>(TOKEN_NAMES);
@@ -201,7 +199,7 @@ describe("token reads", () => {
     );
   };
 
-  it("scans the package, the web app and the gallery when it exists, and finds reads in each", () => {
+  it("scans the package, the web app and the gallery, and finds reads in each", () => {
     expect(unscannedRoots(scan)).toEqual([]);
     // A name pattern or a chunk reader that stopped matching would pass the check below over nothing.
     for (const root of Object.keys(roots)) {

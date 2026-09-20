@@ -38,7 +38,8 @@ export function parseVariantKey(
   key: string | undefined,
 ): VariantPick {
   if (key === undefined) return defaultPick(axes, matrix);
-  if (key === MATRIX_KEY && matrix) return { kind: "matrix" };
+  // A matrix needs axes to lay out, exactly as `defaultPick` requires.
+  if (key === MATRIX_KEY && matrix && Object.keys(axes ?? {}).length > 0) return { kind: "matrix" };
   const names = Object.keys(axes ?? {});
   const values = key.split(".");
   if (names.length === 0 || values.length !== names.length) return defaultPick(axes, matrix);
@@ -110,14 +111,17 @@ export function collectDemos(
       problems.push(`${path}: demo id "${demo.id}" is already used by ${earlier.path}`);
       continue;
     }
+    // `MATRIX_KEY` is a key in the same space as a formatted selection, so an axis value equal to
+    // it would be unaddressable: `?v.<id>=all` would re-open the matrix instead of that pick.
     const badValues = Object.entries(demo.axes ?? {}).flatMap(([axis, values]) =>
       values.length === 0
         ? [`${axis} (empty)`]
-        : values.filter((v) => !AXIS_VALUE.test(v)).map((v) => `${axis}=${v}`),
+        : values.filter((v) => !AXIS_VALUE.test(v) || v === MATRIX_KEY).map((v) => `${axis}=${v}`),
     );
     if (badValues.length > 0) {
       problems.push(
-        `${path}: axis values must be lowercase words joined by "-": ${badValues.join(", ")}`,
+        `${path}: axis values must be lowercase words joined by "-", and never "${MATRIX_KEY}" ` +
+          `(the matrix's own key): ${badValues.join(", ")}`,
       );
       continue;
     }

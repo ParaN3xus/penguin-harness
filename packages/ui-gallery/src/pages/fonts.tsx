@@ -28,8 +28,9 @@ interface FaceRow {
   status: Record<FontFaceLoadStatus, number>;
 }
 
-function useFaces(): FaceRow[] {
-  const [faces, setFaces] = useState<FaceRow[]>([]);
+/** `null` until `document.fonts` has been read once: an unmeasured page is not an empty one. */
+function useFaces(): FaceRow[] | null {
+  const [faces, setFaces] = useState<FaceRow[] | null>(null);
   useEffect(() => {
     const read = () => {
       const rows = new Map<string, FaceRow>();
@@ -157,7 +158,9 @@ export function FontsPage() {
         <section className="g-page-section">
           <h2>{S.fonts.declared}</h2>
           <p className="g-muted">{S.fonts.declaredHint}</p>
-          {faces.length === 0 ? (
+          {faces === null ? (
+            <p className="g-muted">{S.intro.resolving}</p>
+          ) : faces.length === 0 ? (
             <p className="g-muted">{S.fonts.noFaces}</p>
           ) : (
             <table className="g-table">

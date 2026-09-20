@@ -253,6 +253,9 @@ export interface TraceLane {
 }
 
 /** One event row of a Trace file. */
+/** Why a request stopped, as a Trace event reports it. */
+export type StopReason = "completed" | "tool_use" | "max_tokens" | "error";
+
 export interface TraceEvent {
   /** `HH:MM:SS.mmm` as the row prints it. */
   time: string;
@@ -262,7 +265,7 @@ export interface TraceEvent {
   payloadType: string;
   /** The one-line summary after the badge. */
   summary: string;
-  stopReason?: string;
+  stopReason?: StopReason;
   /** From a child Session. */
   fromSubagent?: boolean;
 }
@@ -365,7 +368,9 @@ export interface EmployeeFixture {
   spendUsd: number;
 }
 
-export type TicketStatus = "proposed" | "in_progress" | "review" | "done" | "rejected";
+/** Every state a ticket can be in, in board order: a column list is derived from this, never typed. */
+export const TICKET_STATUSES = ["proposed", "in_progress", "review", "done", "rejected"] as const;
+export type TicketStatus = (typeof TICKET_STATUSES)[number];
 export type TicketPriority = "P0" | "P1" | "P2";
 
 export interface TicketFixture {
@@ -421,8 +426,17 @@ export interface CompanyFixture {
   };
   employees: EmployeeFixture[];
   tickets: TicketFixture[];
-  /** The week the calendar opens on (a Monday, local date) and the events in it. */
-  calendar: { weekStartIso: string; events: CalendarEventFixture[] };
+  /**
+   * The week the calendar draws: its Monday as a local date, the instant it treats as "now" (which
+   * decides what is past and where the now-line sits), the organization's UTC offset in hours — it
+   * works in `org.timezone` — and the events in it.
+   */
+  calendar: {
+    weekStartIso: string;
+    nowIso: string;
+    utcOffsetH: number;
+    events: CalendarEventFixture[];
+  };
   /** The group chat named after `org.id`: the morning's stand-up about the citation ticket. */
   channel: { messages: ChannelMessageFixture[] };
 }
@@ -571,11 +585,21 @@ export interface CommandGroupFixture {
 }
 
 /** A week of token usage: a label per day and one series per bucket, in thousands. */
+/** One day of the usage week: its label and the three series' values for it. */
+export interface UsageDay {
+  /** The weekday's name, as the axis prints it. */
+  day: string;
+  cacheRead: number;
+  cacheWrite: number;
+  output: number;
+}
+
 export interface UsageFixture {
-  days: readonly string[];
-  cacheRead: readonly number[];
-  cacheWrite: readonly number[];
-  output: readonly number[];
+  /**
+   * One row per day, rather than a label array beside three value arrays: a chart reads a row at a
+   * time, and separate arrays can differ in length, which draws a chart of `NaN`-high bars.
+   */
+  days: readonly UsageDay[];
   /** What the legend calls each series, in the series' own order. */
   buckets: Readonly<Record<"cacheRead" | "cacheWrite" | "output", string>>;
 }
@@ -728,7 +752,8 @@ export interface AppCopy {
     approve: string;
     deny: string;
     /** The context gauge's reading, both figures already formatted. */
-    contextOf: (used: string, window: string) => string;
+    /** The context ring's accessible name; `basis` is the compaction threshold, not the window. */
+    contextOf: (used: string, basis: string) => string;
     /** A command log's last line: its exit code and how long it ran. */
     exitStatus: (code: number, duration: string) => string;
     outputComplete: string;
@@ -760,6 +785,8 @@ export interface AppCopy {
     cost: string;
     elapsed: string;
     outputTps: string;
+    /** The rate with its unit, `71 tok/s`. The unit stays English in both locales, as the app's does. */
+    tps: (rate: number) => string;
     turn: (n: number) => string;
     timeline: string;
     modelLane: string;
@@ -881,6 +908,11 @@ export interface AppCopy {
     upload: string;
     added: string;
     modified: string;
+    /** The one-letter mark a changed row carries, beside `added` / `modified` as its tooltip. */
+    addedMark: string;
+    modifiedMark: string;
+    /** The accessible name of a breadcrumb trail. */
+    breadcrumbs: string;
     empty: { title: string; body: string };
     copyPath: string;
     lines: (n: number) => string;

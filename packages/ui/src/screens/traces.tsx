@@ -70,7 +70,7 @@ function Overall({ f }: { f: Fixtures }) {
         <div>
           <SummaryRow label={t.cost} value={usd(o.costUsd)} />
           <SummaryRow label={t.elapsed} value={duration(o.elapsedMs)} />
-          <SummaryRow label={t.outputTps} value={`${o.outputTps} tok/s`} />
+          <SummaryRow label={t.outputTps} value={t.tps(o.outputTps)} />
         </div>
       </div>
     </section>
@@ -180,7 +180,7 @@ function TurnCard({
           />
           <StatChip glyph="cost" value={usd(turn.costUsd)} title={t.cost} />
           <StatChip glyph="clock" value={duration(turn.elapsedMs)} title={t.elapsed} />
-          <StatChip glyph="gauge" value={`${turn.outputTps} tok/s`} title={t.outputTps} />
+          <StatChip glyph="gauge" value={t.tps(turn.outputTps)} title={t.outputTps} />
         </span>
       </div>
       {open && (

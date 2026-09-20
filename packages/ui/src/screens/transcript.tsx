@@ -93,7 +93,7 @@ export function StatsLine({ atIso, stats, f }: { atIso: string; stats: TurnStats
       <span>{messageTime(atIso, f.lang)}</span>
       <StatChip glyph="arrowUpLine" value={tokens(stats.inputTokens)} title={t.inputTokens} />
       <StatChip glyph="arrowDownLine" value={tokens(stats.outputTokens)} title={t.outputTokens} />
-      <StatChip glyph="gauge" value={`${stats.outputTps} tok/s`} title={t.outputTps} />
+      <StatChip glyph="gauge" value={t.tps(stats.outputTps)} title={t.outputTps} />
       <StatChip glyph="cost" value={usd(stats.costUsd)} title={t.cost} />
       <StatChip glyph="clock" value={duration(stats.elapsedMs)} title={t.elapsed} />
       <span className="flex items-center gap-1">

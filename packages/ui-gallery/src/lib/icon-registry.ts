@@ -21,6 +21,12 @@ export interface IconEntry {
   d: string;
   /** Every name the path is declared under, in first-seen order. */
   names: string[];
+  /**
+   * The subset of `names` whose declaration spells the path out. A name that points at another
+   * constant (a lookup table's entry, `NAV_ICONS.agents: AGENT_GROUP_ICON`) is an alias, not a
+   * second copy: only two spelled-out declarations are a duplicate worth de-duplicating.
+   */
+  declaredNames: string[];
   /** The files that declare it, in first-seen order. */
   sources: string[];
 }
@@ -159,14 +165,45 @@ export function extractIconPaths(sources: Readonly<Record<string, string>>): Ico
   for (const decl of all) {
     const d = resolve(decl.expr)?.trim();
     if (!d || !PATH_DATA.test(d)) continue;
+    const spelled = decl.expr.kind === "literal";
     const entry = byPath.get(d);
-    if (!entry) byPath.set(d, { d, names: [decl.name], sources: [decl.source] });
-    else {
+    if (!entry) {
+      byPath.set(d, {
+        d,
+        names: [decl.name],
+        declaredNames: spelled ? [decl.name] : [],
+        sources: [decl.source],
+      });
+    } else {
       if (!entry.names.includes(decl.name)) entry.names.push(decl.name);
+      if (spelled && !entry.declaredNames.includes(decl.name)) entry.declaredNames.push(decl.name);
       if (!entry.sources.includes(decl.source)) entry.sources.push(decl.source);
     }
   }
   return [...byPath.values()];
+}
+
+/** A quoted string, on one line, with no escape in it — how every icon path is written. */
+const QUOTED = new RegExp(String.raw`(["'\x60])([^"'\x60\\\n]*)\1`, "g");
+
+/**
+ * How many path-data strings the files spell that no extracted icon carries. They are the icons
+ * drawn inline in JSX (`<path d="M…" />`), which no constant names, so the board can say how many
+ * of the registry it is not showing rather than presenting its own count as the whole.
+ */
+export function unreadPaths(
+  sources: Readonly<Record<string, string>>,
+  icons: readonly IconEntry[],
+): number {
+  const known = new Set(icons.map((icon) => icon.d));
+  const unread = new Set<string>();
+  for (const text of Object.values(sources)) {
+    for (const match of stripComments(text).matchAll(QUOTED)) {
+      const value = match[2]!.trim();
+      if (PATH_DATA.test(value) && !known.has(value)) unread.add(value);
+    }
+  }
+  return unread.size;
 }
 
 /** `ICON_SIZE = { rowMark: 12, … }` → its rungs, from `lib/icon-scale.ts`'s text. */

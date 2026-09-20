@@ -46,14 +46,36 @@ export function matchableSelector(selector: string, parent: string | null): stri
   return s;
 }
 
-/** The contract tokens the subtree at `root` reads, in contract order. */
-export function tokensReadBy(root: Element): string[] {
-  const doc = root.ownerDocument;
+/** A style rule as this walk reads it: the DOM's own rules satisfy it, and so can a test's. */
+export interface CssRuleLike {
+  readonly selectorText?: string;
+  readonly style?: { readonly cssText: string };
+  readonly cssRules?: ArrayLike<CssRuleLike>;
+}
+
+/** What a measurement found: the tokens, and how many selectors could not be read. */
+export interface TokenReading {
+  readonly names: string[];
+  /** Selectors the probe could not parse. Their rules' tokens are missing from `names`. */
+  readonly unreadable: number;
+}
+
+/**
+ * The contract tokens a set of stylesheets contributes to whatever `probe` accepts, and the count
+ * of selectors `probe` could not read. Pure over its arguments: the DOM is the caller's.
+ */
+export function tokensFromRules(
+  sheets: Iterable<ArrayLike<CssRuleLike>>,
+  probe: (selector: string) => boolean,
+): TokenReading {
   const found = new Set<string>();
+  let unreadable = 0;
   const matches = (selector: string) => {
     try {
-      return root.matches(selector) || root.querySelector(selector) !== null;
+      return probe(selector);
     } catch {
+      // A selector the engine will not parse: counted, never silently read as "does not match".
+      unreadable++;
       return false;
     }
   };
@@ -62,32 +84,43 @@ export function tokensReadBy(root: Element): string[] {
       for (const name of tokenNamesIn(css)) found.add(name);
     }
   };
-  const visit = (rules: CSSRuleList, parent: string | null) => {
+  const visit = (rules: ArrayLike<CssRuleLike>, parent: string | null) => {
     for (const rule of Array.from(rules)) {
-      if ("selectorText" in rule) {
+      if (rule.selectorText !== undefined) {
         // A style rule, possibly nested (Tailwind writes `&:hover { … }` inside its utility).
-        const style = rule as CSSStyleRule;
-        const selector = matchableSelector(style.selectorText, parent);
+        const selector = matchableSelector(rule.selectorText, parent);
         if (selector === null) continue;
-        collect(style.style.cssText, selector);
-        if (style.cssRules?.length) visit(style.cssRules, selector);
-      } else if ("style" in rule && parent !== null) {
+        collect(rule.style?.cssText ?? "", selector);
+        if (rule.cssRules?.length) visit(rule.cssRules, selector);
+      } else if (rule.style !== undefined && parent !== null) {
         // Declarations nested in an at-rule inside a style rule apply to that rule's selector.
-        collect((rule as CSSStyleRule).style.cssText, parent);
-      } else if ("cssRules" in rule) {
-        visit((rule as CSSGroupingRule).cssRules, parent);
+        collect(rule.style.cssText, parent);
+      } else if (rule.cssRules !== undefined) {
+        visit(rule.cssRules, parent);
       }
     }
   };
+  for (const rules of sheets) visit(rules, null);
+  return { names: sortTokens(found), unreadable };
+}
+
+/** The contract tokens the subtree at `root` reads, in contract order. */
+export function tokensReadBy(root: Element): TokenReading {
+  const doc = root.ownerDocument;
+  const sheets: ArrayLike<CssRuleLike>[] = [];
   for (const sheet of Array.from(doc.styleSheets)) {
     try {
-      visit(sheet.cssRules, null);
+      sheets.push(Array.from(sheet.cssRules) as unknown as CssRuleLike[]);
     } catch {
       // A cross-origin sheet hides its rules; the gallery loads none.
     }
   }
+  const reading = tokensFromRules(sheets, (selector) => {
+    return root.matches(selector) || root.querySelector(selector) !== null;
+  });
+  const found = new Set(reading.names);
   for (const el of [root, ...Array.from(root.querySelectorAll("[style]"))]) {
     for (const name of tokenNamesIn(el.getAttribute("style") ?? "")) found.add(name);
   }
-  return sortTokens(found);
+  return { names: sortTokens(found), unreadable: reading.unreadable };
 }

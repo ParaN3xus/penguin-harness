@@ -5,11 +5,12 @@
  * desktop viewport gives them.
  */
 import { useEffect, useRef, useState } from "react";
-import { defineModule } from "../../../ui/src/module";
+import { defineModule, viewFor } from "../../../ui/src/module";
 import { ChromeIcon } from "../chrome/icons";
 import { BASE } from "../lib/location";
 import { formatGalleryQuery } from "../lib/url-state";
 import { SCREENS } from "../screens";
+import { SCREENS as SCREEN_LIST } from "../../../ui/src/screens";
 import { useGallery } from "../state";
 
 /** The desktop viewport a thumbnail lays the screen out at, before scaling it to the card. */
@@ -26,8 +27,8 @@ function Thumbnail({ id }: { id: string }) {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-  const screen = SCREENS[id];
-  if (!screen) return <p className="g-chrome g-muted">{S.screens.notFound(id)}</p>;
+  // The id is a variant key, and the keys are built from SCREENS below, so it always names one.
+  const screen = viewFor(SCREENS, id);
   const query = formatGalleryQuery({ ...state, compare: false, variants: {} });
   const href = `${BASE}/screens/${id}${query}`;
   return (
@@ -57,12 +58,9 @@ export const module = defineModule({
   description:
     "The four full-viewport composites the modules add up to, each opening at full size on its own page.",
   width: "wide",
-  variants: [
-    { key: "chat", title: "Chat" },
-    { key: "traces", title: "Traces" },
-    { key: "settings", title: "Settings" },
-    { key: "login", title: "Login" },
-  ],
+  // The registry is the list: a screen added to `packages/ui/src/screens` shows up here, and a
+  // renamed one cannot fall out of the gallery quietly.
+  variants: SCREEN_LIST.map((screen) => ({ key: screen.id, title: screen.title })),
   parts: [],
   render: (variant) => <Thumbnail id={variant} />,
 });

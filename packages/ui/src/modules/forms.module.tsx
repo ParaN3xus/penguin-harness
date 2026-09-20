@@ -7,7 +7,7 @@
  */
 import { fixturesFor } from "../fixtures";
 import type { Fixtures, FormFieldFixture } from "../fixtures";
-import { defineModule } from "../module";
+import { defineModule, viewFor } from "../module";
 import {
   Button,
   Checkbox,
@@ -241,6 +241,5 @@ export const module = defineModule({
     "forms-pref-row",
     "layout-ruled-section",
   ],
-  render: (variant, { lang }) =>
-    (VARIANTS[variant as keyof typeof VARIANTS] ?? VARIANTS.settings)(fixturesFor(lang)),
+  render: (variant, { lang }) => viewFor(VARIANTS, variant)(fixturesFor(lang)),
 });

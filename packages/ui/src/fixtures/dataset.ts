@@ -920,10 +920,12 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
       icon: command.icon,
     })),
     usage: {
-      days: prose.usage.days,
-      cacheRead: USAGE_SERIES.cacheRead,
-      cacheWrite: USAGE_SERIES.cacheWrite,
-      output: USAGE_SERIES.output,
+      days: prose.usage.days.map((day, i) => ({
+        day,
+        cacheRead: USAGE_SERIES.cacheRead[i]!,
+        cacheWrite: USAGE_SERIES.cacheWrite[i]!,
+        output: USAGE_SERIES.output[i]!,
+      })),
       buckets: prose.usage.buckets,
     },
     company: {
@@ -936,7 +938,13 @@ export function buildFixtures(lang: FixtureLang, prose: FixtureProse): Fixtures 
       },
       employees,
       tickets,
-      calendar: { weekStartIso: "2026-09-14", events },
+      calendar: {
+        weekStartIso: "2026-09-14",
+        // Wednesday 15:10 in Asia/Shanghai: after the morning runs, before the eval run.
+        nowIso: "2026-09-16T07:10:00.000Z",
+        utcOffsetH: 8,
+        events,
+      },
       channel: {
         messages: CHANNEL_MESSAGES.map((message) => ({
           from: message.from,

@@ -32,8 +32,11 @@ export type { SourceFile, SourceScan };
 export const REPO_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 
 /**
- * Every root a guard scans. The gallery (`packages/ui-gallery/src`) joins when that package lands;
- * its chrome is deliberately unthemed, so each guard decides then whether it applies there.
+ * Every root a guard scans. The gallery (`packages/ui-gallery/src`) has landed (#764) and stays
+ * out of this list on purpose: it is a development tool, no app package imports it, and it reuses
+ * the app's file names for its own pieces (`icons.tsx`, `strings.ts`), which `expectSingleHome`
+ * would read as a second home. The guards it does answer to are the package's own — `hooks.test.ts`
+ * and `token-contract.test.ts` scan it for stray `ui-*` and `--ui-*` names.
  */
 export const SOURCE_ROOTS = {
   web: fileURLToPath(new URL("../../src", import.meta.url)),

@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { ACCENT_PRESETS } from "@prismshadow/penguin-ui";
 import { composite, contrastRatio, parseCssColor, toHex, wcagGrade } from "../src/lib/color";
+import { parseAccentPresets } from "../src/foundations/color";
 
 describe("colour maths", () => {
   it("parses hex and rgb() in both syntaxes", () => {
@@ -29,5 +33,34 @@ describe("colour maths", () => {
     const mixed = composite({ r: 0, g: 0, b: 0, a: 0.5 }, { r: 255, g: 255, b: 255, a: 1 });
     expect(toHex(mixed)).toBe("#808080");
     expect(toHex({ r: 17, g: 24, b: 39, a: 0.5 })).toBe("#11182780");
+  });
+});
+
+describe("the accent presets the Colour board draws", () => {
+  const themeCss = readFileSync(
+    fileURLToPath(new URL("../../ui/src/theme.css", import.meta.url)),
+    "utf8",
+  );
+
+  it("are read whole out of theme.css, six values each", () => {
+    const styles = parseAccentPresets(themeCss);
+    expect(Object.keys(styles)).toEqual([...ACCENT_PRESETS]);
+    for (const preset of ACCENT_PRESETS) {
+      expect(Object.keys(styles[preset]!).sort(), preset).toEqual([
+        "--ui-accent",
+        "--ui-accent-active",
+        "--ui-accent-fg",
+        "--ui-accent-hover",
+        "--ui-accent-line",
+        "--ui-accent-muted",
+      ]);
+      expect(parseCssColor(String(styles[preset]!["--ui-accent" as never])), preset).not.toBeNull();
+    }
+  });
+
+  it("fail loudly on a block that is missing or half read, never on a fallback colour", () => {
+    expect(() => parseAccentPresets("")).toThrow(/no \[data-accent="blue"\] block/);
+    const partial = themeCss.replace("--ui-accent-fg: #ffffff;", "");
+    expect(() => parseAccentPresets(partial)).toThrow(/declares no --ui-accent-fg/);
   });
 });

@@ -7,7 +7,7 @@
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { Fixtures, ModelFixture } from "../fixtures";
-import { defineModule } from "../module";
+import { defineModule, viewFor } from "../module";
 import { AgentTile } from "../screens/parts";
 import { tokens, usd } from "../screens/format";
 import {
@@ -24,11 +24,14 @@ import type { IconName } from "./parts";
 
 type ComposerState = "idle" | "running" | "chips" | "slash" | "picker";
 
-/** The 14px context gauge: a ring filled to the share of the model's window in use. */
-function ContextRing({ used, window, label }: { used: number; window: number; label: string }) {
+/**
+ * The 14px context gauge: a ring filled to the share of the **compaction threshold** in use, the
+ * basis the app fills against (`features/chat/context-gauge.tsx`), never the model window.
+ */
+function ContextRing({ used, basis, label }: { used: number; basis: number; label: string }) {
   const r = 5.5;
   const c = 2 * Math.PI * r;
-  const share = Math.min(1, used / window);
+  const share = Math.min(1, used / basis);
   return (
     <svg
       width="14"
@@ -100,7 +103,8 @@ function SendButton({ state, label }: { state: "idle" | "ready" | "running"; lab
 function ComposerCard({ f, state }: { f: Fixtures; state: ComposerState }) {
   const s = f.session;
   const c = f.copy.chat;
-  const model = f.models.find((m) => m.modelId === s.model.modelId);
+  // The session's model is one of the fixture's rows; a fixture that loses it fails the render.
+  const model = f.models.find((m) => m.modelId === s.model.modelId)!;
   const draft = state === "idle" ? "" : state === "slash" ? "/" : s.composer.draft;
   const chips = state === "chips" || state === "picker" ? s.composer.chips : [];
   return (
@@ -137,13 +141,13 @@ function ComposerCard({ f, state }: { f: Fixtures; state: ComposerState }) {
         <span className="min-w-0 flex-1" />
         <ContextRing
           used={s.context.tokens}
-          window={s.context.window}
-          label={c.contextOf(tokens(s.context.tokens), tokens(s.context.window))}
+          basis={s.context.threshold}
+          label={c.contextOf(tokens(s.context.tokens), tokens(s.context.threshold))}
         />
         <ToolbarTrigger icon="sparkle" label={c.thinkingLevels[s.composer.thinkingLevel]} />
         <ToolbarTrigger
-          label={model?.displayName ?? s.model.modelId}
-          lead={<AgentTile id={s.model.provider} name={model?.providerLabel ?? "?"} size={16} />}
+          label={model.displayName}
+          lead={<AgentTile id={s.model.provider} name={model.providerLabel} size={16} />}
         />
         <SendButton
           state={state === "running" ? "running" : draft && state !== "slash" ? "ready" : "idle"}
@@ -184,7 +188,7 @@ function SlashMenu({ f }: { f: Fixtures }) {
   );
 }
 
-function ModelRow({ model, selected }: { model: ModelFixture; selected: boolean }) {
+function ModelRow({ model, selected, f }: { model: ModelFixture; selected: boolean; f: Fixtures }) {
   return (
     <span
       className={`flex items-center gap-2 rounded-[var(--radius-inner)] px-2 py-1.5 ${selected ? "bg-surface-muted" : ""}`}
@@ -195,7 +199,7 @@ function ModelRow({ model, selected }: { model: ModelFixture; selected: boolean 
         {model.note && <span className="block truncate text-xs text-fg-muted">{model.note}</span>}
       </span>
       <span className="shrink-0 text-right font-mono text-xs tabular-nums text-fg-muted">
-        {tokens(model.contextWindow)} · {usd(model.pricing.output)}/M
+        {tokens(model.contextWindow)} · {f.copy.models.perMTok(usd(model.pricing.output))}
       </span>
       <span className="w-4 shrink-0 text-fg-muted">
         {selected && <GlyphIcon name="check" size={14} />}
@@ -222,6 +226,7 @@ function ModelPicker({ f }: { f: Fixtures }) {
                 key={m.modelId}
                 model={m}
                 selected={m.modelId === f.session.model.modelId}
+                f={f}
               />
             ))}
         </div>
@@ -291,6 +296,6 @@ export const module = defineModule({
     "actions-kbd",
   ],
   render: (variant, { lang }) => (
-    <Composition f={fixturesFor(lang)} state={STATES[variant] ?? "idle"} />
+    <Composition f={fixturesFor(lang)} state={viewFor(STATES, variant)} />
   ),
 });

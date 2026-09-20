@@ -16,16 +16,46 @@ const SURFACES = ["--ui-canvas", "--ui-surface", "--ui-surface-muted", "--ui-ins
 const INKS = ["--ui-fg", "--ui-fg-muted", "--ui-fg-subtle"] as const;
 const LINES = ["--ui-line", "--ui-line-muted", "--ui-line-emphasis"] as const;
 
-/** `:root[data-accent="blue"] { --ui-accent: #2563eb; … }` blocks from theme.css, as inline custom properties. */
-function presetStyle(preset: string): CSSProperties {
-  const block =
-    new RegExp(String.raw`\[data-accent="${preset}"\]\s*\{([^}]*)\}`).exec(themeCss)?.[1] ?? "";
-  const style: Record<string, string> = {};
-  for (const match of block.matchAll(/(--ui-accent[\w-]*):\s*([^;]+);/g)) {
-    style[match[1]!] = match[2]!.trim();
+/** The six names every `:root[data-accent="…"]` block declares, so a partial block is a failure. */
+const ACCENT_TOKENS = [
+  "--ui-accent",
+  "--ui-accent-hover",
+  "--ui-accent-active",
+  "--ui-accent-fg",
+  "--ui-accent-muted",
+  "--ui-accent-line",
+] as const;
+
+/**
+ * The `:root[data-accent="blue"] { --ui-accent: #2563eb; … }` blocks of a stylesheet, as inline
+ * custom properties per preset. It throws on a block it cannot read or one that declares fewer
+ * than the six names: a column that fell back would show the theme's own accent under a preset's
+ * label — the exact failure this board exists to catch, rendered as a plausible colour.
+ */
+export function parseAccentPresets(css: string): Record<string, CSSProperties> {
+  const styles: Record<string, CSSProperties> = {};
+  for (const preset of ACCENT_PRESETS) {
+    const block = new RegExp(String.raw`\[data-accent="${preset}"\]\s*\{([^}]*)\}`).exec(css);
+    if (!block) throw new Error(`theme.css declares no [data-accent="${preset}"] block`);
+    const style: Record<string, string> = {};
+    for (const match of block[1]!.matchAll(/(--ui-accent[\w-]*):\s*([^;]+);/g)) {
+      style[match[1]!] = match[2]!.trim();
+    }
+    const missing = ACCENT_TOKENS.filter((name) => style[name] === undefined);
+    if (missing.length > 0) {
+      throw new Error(`[data-accent="${preset}"] declares no ${missing.join(", ")}`);
+    }
+    styles[preset] = style as CSSProperties;
   }
-  return style as CSSProperties;
+  return styles;
 }
+
+/**
+ * Read once, at module load, so a preset that cannot be parsed fails the page rather than one
+ * column. Vitest does not process CSS imports, so `themeCss` is empty there and the parse is the
+ * suite's own (`color.test.ts` reads the file from disk).
+ */
+const PRESET_STYLES = themeCss === "" ? {} : parseAccentPresets(themeCss);
 
 const tone = (name: ToneName, part: string) => `var(--ui-tone-${name}-${part})`;
 
@@ -72,7 +102,11 @@ function Accents() {
   const { S } = useGallery();
   const columns = [
     { key: "theme", label: S.foundations.themeAccent, style: {} },
-    ...ACCENT_PRESETS.map((preset) => ({ key: preset, label: preset, style: presetStyle(preset) })),
+    ...ACCENT_PRESETS.map((preset) => ({
+      key: preset,
+      label: preset,
+      style: PRESET_STYLES[preset]!,
+    })),
   ];
   return (
     <>

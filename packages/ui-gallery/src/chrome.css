@@ -59,8 +59,9 @@
   color: var(--g-ink);
   -webkit-font-smoothing: antialiased;
 }
-.g-chrome ::selection,
-.g-app ::selection {
+/* `.g-chrome` only, never `.g-app`: the page wrapper holds every preview, and an unlayered rule
+   under it would beat theme.css's own `::selection` inside the compositions being judged. */
+.g-chrome ::selection {
   background: color-mix(in srgb, var(--g-accent) 25%, transparent);
 }
 .g-chrome button,
@@ -75,8 +76,8 @@
   outline: 2px solid var(--g-accent);
   outline-offset: 1px;
 }
-.g-chrome code,
-.g-app code {
+/* Same reason: a `<code>` inside a preview is the theme's, at the root size under test. */
+.g-chrome code {
   font-family: var(--g-mono);
   font-size: 12px;
 }
@@ -430,16 +431,19 @@
   border: 1px solid var(--g-line);
   border-radius: 12px;
   overflow: hidden;
-  background: var(--ui-canvas, var(--g-surface));
+  background: var(--ui-canvas);
 }
+/* No fallbacks: this frame is where a missing token has to look broken (foundations/shared.tsx).
+   A second argument would paint the gallery chrome's own surface under a theme that dropped
+   `--ui-canvas`, in the one card the themes are judged in. */
 .g-preview {
   min-height: 24rem;
   padding: 24px;
-  background: var(--ui-canvas, var(--g-surface));
-  color: var(--ui-fg, var(--g-ink));
-  font-family: var(--ui-font-sans, var(--g-font));
-  font-size: var(--ui-text-body-size, 1rem);
-  line-height: var(--ui-text-body-lh, 1.5);
+  background: var(--ui-canvas);
+  color: var(--ui-fg);
+  font-family: var(--ui-font-sans);
+  font-size: var(--ui-text-body-size);
+  line-height: var(--ui-text-body-lh);
 }
 .g-card-foot {
   display: grid;

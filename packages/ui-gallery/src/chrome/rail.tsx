@@ -97,7 +97,9 @@ export function Rail({ activeId }: { activeId: string | null }) {
       <div className="g-switches">
         <SwitchRow
           label={S.rail.compare}
-          checked={state.compare === true}
+          // `compare` is `false`, `true` (every module) or one module's id: a pinned module reads
+          // as on, and turning the switch off clears it.
+          checked={state.compare !== false}
           onChange={(compare) => update({ compare })}
         />
         <SwitchRow

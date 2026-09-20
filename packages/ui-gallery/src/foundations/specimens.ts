@@ -7,15 +7,9 @@
 import { FIXTURES } from "../../../ui/src/fixtures";
 import type { TypeSpecimens } from "../../../ui/src/fixtures";
 
-export interface Specimen extends TypeSpecimens {
-  /** A dense UI line (the fixtures' `ui`), named for where the old pages used it. */
-  short: string;
-}
+export type Specimen = TypeSpecimens;
 
-const specimen = (lang: "en" | "zh"): Specimen => ({
-  ...FIXTURES[lang].specimens,
-  short: FIXTURES[lang].specimens.ui,
-});
+const specimen = (lang: "en" | "zh"): Specimen => FIXTURES[lang].specimens;
 
 export const SPECIMENS: Readonly<Record<"en" | "zh", Specimen>> = {
   en: specimen("en"),

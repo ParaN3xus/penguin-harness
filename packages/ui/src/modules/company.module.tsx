@@ -11,7 +11,7 @@
  * `ChannelBubble` is the one package component here. Static stand-ins until then.
  */
 import type { ToneName } from "../tokens";
-import { fixturesFor } from "../fixtures";
+import { TICKET_STATUSES, fixturesFor } from "../fixtures";
 import type {
   CalendarEventFixture,
   CalendarOutcome,
@@ -20,7 +20,7 @@ import type {
   Fixtures,
   TicketFixture,
 } from "../fixtures";
-import { defineModule } from "../module";
+import { defineModule, viewFor } from "../module";
 import { AgentTile, UserAvatar } from "../screens/parts";
 import { usd } from "../screens/format";
 import { Badge, Count, GlyphIcon, IconButton, ProgressBar, RunSpinner, StatusWord } from "./parts";
@@ -73,9 +73,10 @@ function TicketCard({ f, ticket }: { f: Fixtures; ticket: TicketFixture }) {
 
 function Board({ f }: { f: Fixtures }) {
   const status = f.copy.company.ticketStatus;
-  const columns = ["proposed", "in_progress", "review", "done"] as const;
+  // Every state a ticket can be in gets a column, so a state cannot go missing from the board.
+  const columns = TICKET_STATUSES;
   return (
-    <div className="grid grid-cols-4 items-start gap-3">
+    <div className="grid grid-cols-5 items-start gap-3">
       {columns.map((column) => {
         const tickets = f.company.tickets.filter((t) => t.status === column);
         return (
@@ -110,10 +111,19 @@ const FIRST_HOUR = 9;
 const END_HOUR = 18;
 const HOURS = Array.from({ length: END_HOUR - FIRST_HOUR }, (_, i) => FIRST_HOUR + i);
 const ROW_REM = 2.75;
-/** The org's zone is Asia/Shanghai, UTC+8. */
-const OFFSET_H = 8;
-/** "Now" in the dataset: Wednesday 16, 15:10 local — after the morning runs, before the eval run. */
-const NOW = Date.parse("2026-09-16T07:10:00.000Z");
+
+/**
+ * The mock week, read off the fixture: the Monday it starts on, the instant it calls "now", the
+ * zone's offset, and which column that instant falls in. Nothing about the week is written here,
+ * so moving it in the fixture moves the past/upcoming split and the now-line with it.
+ */
+function week(f: Fixtures) {
+  const { weekStartIso, nowIso, utcOffsetH } = f.company.calendar;
+  const offsetMs = utcOffsetH * 3_600_000;
+  const start = Date.parse(`${weekStartIso}T00:00:00.000Z`) - offsetMs;
+  const now = Date.parse(nowIso);
+  return { start, now, offsetMs, today: Math.floor((now - start) / 86_400_000) };
+}
 
 interface Occurrence {
   event: CalendarEventFixture;
@@ -123,17 +133,17 @@ interface Occurrence {
 }
 
 function occurrences(f: Fixtures): Occurrence[] {
-  const weekStart =
-    Date.parse(`${f.company.calendar.weekStartIso}T00:00:00.000Z`) - OFFSET_H * 3_600_000;
+  const { start: weekStart, now, offsetMs } = week(f);
   const out: Occurrence[] = [];
   for (const event of f.company.calendar.events) {
     const first = Date.parse(event.startAtIso);
     const step = event.period ? Number.parseInt(event.period, 10) * 86_400_000 : 0;
-    for (let at = first; at < weekStart + 7 * 86_400_000; at += step || Infinity) {
+    // A one-off event has no step: the loop below breaks after its single occurrence.
+    for (let at = first; at < weekStart + 7 * 86_400_000; at += step) {
       const day = Math.floor((at - weekStart) / 86_400_000);
-      const local = new Date(at + OFFSET_H * 3_600_000);
+      const local = new Date(at + offsetMs);
       const startH = local.getUTCHours() + local.getUTCMinutes() / 60;
-      const past = at + event.durationMin * 60_000 <= NOW;
+      const past = at + event.durationMin * 60_000 <= now;
       const next = event.nextFireAtIso ? Date.parse(event.nextFireAtIso) : Infinity;
       const outcome: Occurrence["outcome"] = !event.enabled
         ? "paused"
@@ -161,21 +171,24 @@ const OUTCOME_MARK: Record<Occurrence["outcome"], { icon: IconName; tone: string
 function Calendar({ f }: { f: Fixtures }) {
   const c = f.copy.company;
   const all = occurrences(f);
-  // The week's day names with their dates: `Mon 14`, `周一 14`.
-  const start = Date.parse(`${f.company.calendar.weekStartIso}T00:00:00Z`);
+  const { start, now, offsetMs, today } = week(f);
+  // The week's day names with their dates, in the fixture's own language: `Mon 14`.
   const days = f.usage.days.map(
-    (name, i) => `${name} ${new Date(start + i * 86_400_000).getUTCDate()}`,
+    ({ day }, i) => `${day} ${new Date(start + offsetMs + i * 86_400_000).getUTCDate()}`,
   );
   const outcome = (o: Occurrence) =>
     o.outcome === "upcoming" ? c.upcoming : c.outcomes[o.outcome];
-  const nowLocal = new Date(NOW + OFFSET_H * 3_600_000);
+  const nowLocal = new Date(now + offsetMs);
   const nowH = nowLocal.getUTCHours() + nowLocal.getUTCMinutes() / 60;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
       <div className="grid grid-cols-[3rem_repeat(7,minmax(0,1fr))] border-b border-line pb-2 text-xs text-fg-muted">
         <span />
         {days.map((day, i) => (
-          <span key={day} className={`px-1 ${i === 2 ? "font-(--ui-weight-medium) text-fg" : ""}`}>
+          <span
+            key={day}
+            className={`px-1 ${i === today ? "font-(--ui-weight-medium) text-fg" : ""}`}
+          >
             {day}
           </span>
         ))}
@@ -230,7 +243,7 @@ function Calendar({ f }: { f: Fixtures }) {
                   </div>
                 );
               })}
-            {dayIndex === 2 && (
+            {dayIndex === today && (
               <div
                 className="absolute inset-x-0 h-px bg-fg"
                 style={{ top: `${(nowH - FIRST_HOUR) * ROW_REM}rem` }}
@@ -481,7 +494,7 @@ export const module = defineModule({
     "feedback-progress-bar",
   ],
   render: (variant, { lang }) => {
-    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Board;
+    const View = viewFor(VARIANTS, variant);
     return <View f={fixturesFor(lang)} />;
   },
 });

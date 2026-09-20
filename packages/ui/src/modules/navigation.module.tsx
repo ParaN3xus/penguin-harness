@@ -11,7 +11,7 @@
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { Fixtures, SessionListItem } from "../fixtures";
-import { defineModule } from "../module";
+import { defineModule, viewFor } from "../module";
 import { AgentTile, UserAvatar } from "../screens/parts";
 import { duration, tokens, usd } from "../screens/format";
 import {
@@ -128,7 +128,13 @@ function SidebarFrame({ f }: { f: Fixtures }) {
             key={row.key}
             icon={row.icon}
             label={c[row.key]}
-            count={row.key === "agents" ? f.agents.length : row.key === "plugins" ? 4 : undefined}
+            count={
+              row.key === "agents"
+                ? f.agents.length
+                : row.key === "plugins"
+                  ? f.plugins.length
+                  : undefined
+            }
           />
         ))}
       </nav>
@@ -138,7 +144,7 @@ function SidebarFrame({ f }: { f: Fixtures }) {
           actions={
             <span className="flex items-center">
               <IconButton label={c.search} icon="search" size="sm" />
-              <IconButton label={c.filterSessions} icon="sliders" size="sm" />
+              <IconButton label={c.listSettings} icon="sliders" size="sm" />
             </span>
           }
         />
@@ -247,7 +253,10 @@ function TabsAndCrumbs({ f }: { f: Fixtures }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
-        <Breadcrumbs items={[f.copy.nav.models, model.providerLabel, model.displayName]} />
+        <Breadcrumbs
+          items={[f.copy.nav.models, model.providerLabel, model.displayName]}
+          label={f.copy.files.breadcrumbs}
+        />
         <PageHeader
           title={model.displayName}
           info={m.pageInfo}
@@ -290,10 +299,8 @@ function TabsAndCrumbs({ f }: { f: Fixtures }) {
 }
 
 function DockTabs({ f }: { f: Fixtures }) {
-  const subagents = f.session.turns
-    .flatMap((turn) => turn.items)
-    .filter((item) => item.kind === "tool_call" && item.subagent !== undefined).length;
-  const tabs = [f.copy.dock.subagents(subagents), f.copy.nav.traces, f.copy.nav.files];
+  // A dock tab is the panel's name, as `panel-meta.tsx` gives it — no count.
+  const tabs = [f.copy.dock.agentsPanel, f.copy.nav.traces, f.copy.nav.files];
   const glyphs: readonly IconName[] = ["bot", "eye", "folder"];
   return (
     <span role="tablist" className="flex min-w-0 items-center gap-1">
@@ -306,7 +313,7 @@ function DockTabs({ f }: { f: Fixtures }) {
             i === 0 ? "bg-accent-muted text-fg" : "text-fg-muted"
           }`}
         >
-          <GlyphIcon name={glyphs[i] ?? "eye"} size={13} />
+          <GlyphIcon name={glyphs[i]!} size={13} />
           <span className="truncate">{tab}</span>
           {i === 0 && <GlyphIcon name="cross" size={11} className="text-fg-subtle" />}
         </span>
@@ -328,8 +335,8 @@ function DockFrame({ f }: { f: Fixtures }) {
         <DockTabs f={f} />
         <span className="min-w-0 flex-1" />
         <IconButton label={d.newPanel} icon="plus" size="sm" />
-        <IconButton label={d.movePanel} icon="panelRight" size="sm" />
-        <IconButton label={d.close} icon="cross" size="sm" />
+        <IconButton label={d.moveToRight} icon="panelRight" size="sm" />
+        <IconButton label={d.hideDock} icon="cross" size="sm" />
       </div>
       <div data-slot="body" className="grid min-h-0 flex-1 grid-cols-[16rem_minmax(0,1fr)]">
         <div className="grid grid-cols-[minmax(0,1fr)] content-start gap-1 border-r border-line p-3 text-sm">
@@ -452,7 +459,7 @@ export const module = defineModule({
     "overlays-tooltip",
   ],
   render: (variant, { lang }) => {
-    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Sidebar;
+    const View = viewFor(VARIANTS, variant);
     return <View f={fixturesFor(lang)} />;
   },
 });

@@ -10,6 +10,7 @@ import { ChromeIcon } from "../chrome/icons";
 import { formatBreadcrumb } from "../lib/breadcrumb";
 import { BASE } from "../lib/location";
 import { formatGalleryQuery } from "../lib/url-state";
+import { module as screensModule } from "../modules/screens.module";
 import { SCREENS } from "../screens";
 import { useGallery } from "../state";
 
@@ -34,8 +35,10 @@ export function ScreenPage({ name }: { name: string }) {
     lang: state.lang,
     tier: state.tier,
   });
+  // The module's first variant is its default pick, so the link back names the screen only when
+  // it is not that one.
   const variants: Record<string, string> =
-    screen && screen.id !== Object.keys(SCREENS)[0] ? { screens: screen.id } : {};
+    screen && screen.id !== screensModule.variants[0]!.key ? { screens: screen.id } : {};
   const back = `${BASE}/${formatGalleryQuery({ ...state, compare: false, variants })}#screens`;
 
   return (

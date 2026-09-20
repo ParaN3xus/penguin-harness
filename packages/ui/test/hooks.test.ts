@@ -19,7 +19,6 @@
  *   or `pane`.
  *
  */
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HOOKS } from "../src/hooks";
@@ -69,7 +68,7 @@ const GALLERY_DIR = join(REPO_ROOT, "packages", "ui-gallery", "src");
 const ROOTS = {
   ui: SRC_DIR,
   web: join(WEB_DIR, "src"),
-  ...(existsSync(GALLERY_DIR) ? { gallery: GALLERY_DIR } : {}),
+  gallery: GALLERY_DIR,
 };
 const SCAN = scanSourceRoots(ROOTS, { repoRoot: REPO_ROOT });
 const filesOf = (root: string) =>
@@ -163,9 +162,6 @@ describe("style hooks", () => {
           "(wash, grid, grid-dots, ticks, pill-hover, button) were decoration; use tokens instead.",
       ).toEqual([]);
     });
-  }
-  if (!existsSync(GALLERY_DIR)) {
-    it.skip("in the gallery — PENDING: packages/ui-gallery does not exist on this branch (#764)", () => {});
   }
 
   // Hooks are applied in markup; a .ts module that names one (a catalog entry) is data, not a host.

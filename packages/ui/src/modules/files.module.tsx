@@ -13,16 +13,47 @@
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { FileNode, Fixtures } from "../fixtures";
-import { defineModule } from "../module";
+import { defineModule, viewFor } from "../module";
 import { bytes } from "../screens/format";
-import { Breadcrumbs, EmptyState, GlyphIcon, IconButton, SearchInput } from "./parts";
+import { Breadcrumbs, CodeLines, EmptyState, GlyphIcon, IconButton, SearchInput } from "./parts";
 
-/** Folders shown open: the ones leading to this session's changes. */
-const OPEN = new Set(["claude-code-expert", "claude-code-expert/src", "claude-code-expert/test"]);
+/** The folders on the way to a path, `a/b/c.ts` → `a`, `a/b`. */
+const ancestors = (path: string): string[] =>
+  path
+    .split("/")
+    .slice(0, -1)
+    .map((_, i, parts) => parts.slice(0, i + 1).join("/"));
 
-function TreeRow({ node, depth, f }: { node: FileNode; depth: number; f: Fixtures }) {
+/** The folder a file sits in, as the drop overlay names it. */
+const folderOf = (path: string): string => ancestors(path).at(-1) ?? path;
+
+/**
+ * The folders shown open: the root, and the ones leading to what this session touched — the file
+ * being previewed and every file a tool call changed. Read off the fixture's own paths, so
+ * renaming the project cannot leave the tree collapsed.
+ */
+function openFolders(f: Fixtures): Set<string> {
+  const changed = f.session.turns.flatMap((turn) =>
+    turn.items.flatMap((item) =>
+      item.kind === "tool_call" && item.diff ? ancestors(item.diff.path) : [],
+    ),
+  );
+  return new Set([f.fileTree.path, ...ancestors(f.filePreview.path), ...changed]);
+}
+
+function TreeRow({
+  node,
+  depth,
+  open: shown,
+  f,
+}: {
+  node: FileNode;
+  depth: number;
+  open: ReadonlySet<string>;
+  f: Fixtures;
+}) {
   const copy = f.copy.files;
-  const open = node.kind === "dir" && OPEN.has(node.path);
+  const open = node.kind === "dir" && shown.has(node.path);
   const selected = node.path === f.filePreview.path;
   return (
     <>
@@ -50,7 +81,7 @@ function TreeRow({ node, depth, f }: { node: FileNode; depth: number; f: Fixture
             title={node.change === "added" ? copy.added : copy.modified}
             className={`font-mono text-xs ${node.change === "added" ? "text-tone-success-fg" : "text-tone-attention-fg"}`}
           >
-            {node.change === "added" ? "A" : "M"}
+            {node.change === "added" ? copy.addedMark : copy.modifiedMark}
           </span>
         )}
         {node.kind === "file" && node.sizeBytes !== undefined && (
@@ -61,7 +92,7 @@ function TreeRow({ node, depth, f }: { node: FileNode; depth: number; f: Fixture
       </li>
       {open &&
         node.children?.map((child) => (
-          <TreeRow key={child.path} node={child} depth={depth + 1} f={f} />
+          <TreeRow key={child.path} node={child} depth={depth + 1} open={shown} f={f} />
         ))}
     </>
   );
@@ -82,7 +113,7 @@ function TreePane({ f }: { f: Fixtures }) {
         <SearchInput placeholder={copy.search} />
       </div>
       <ul className="min-h-0 flex-1 overflow-hidden p-1">
-        <TreeRow node={f.fileTree} depth={0} f={f} />
+        <TreeRow node={f.fileTree} depth={0} open={openFolders(f)} f={f} />
       </ul>
     </aside>
   );
@@ -94,7 +125,7 @@ function PreviewPane({ f }: { f: Fixtures }) {
   return (
     <section className="flex min-w-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b border-line px-3 py-2">
-        <Breadcrumbs items={f.filePreview.path.split("/")} />
+        <Breadcrumbs items={f.filePreview.path.split("/")} label={f.copy.files.breadcrumbs} />
         <span className="shrink-0 text-xs tabular-nums text-fg-subtle">
           {copy.lines(lines.length)}
         </span>
@@ -102,16 +133,7 @@ function PreviewPane({ f }: { f: Fixtures }) {
         <IconButton label={copy.copyPath} icon="copy" size="sm" />
         <IconButton label={f.copy.common.download} icon="download" size="sm" />
       </div>
-      <pre className="min-h-0 flex-1 overflow-hidden bg-[var(--ui-code-bg)] py-2 font-mono text-xs leading-relaxed text-fg">
-        {lines.slice(0, 26).map((line, i) => (
-          <span key={i} className="flex">
-            <span className="w-10 shrink-0 select-none pr-3 text-right text-[var(--ui-code-gutter)]">
-              {i + 1}
-            </span>
-            <span className="whitespace-pre">{line}</span>
-          </span>
-        ))}
-      </pre>
+      <CodeLines code={lines.slice(0, 26).join("\n")} className="min-h-0 flex-1 overflow-hidden" />
     </section>
   );
 }
@@ -163,7 +185,7 @@ function Drop({ f }: { f: Fixtures }) {
     <Panel f={f}>
       <div className="relative flex min-w-0 flex-1">
         <PreviewPane f={f} />
-        <DropOverlay folder="claude-code-expert/src" f={f} />
+        <DropOverlay folder={folderOf(f.filePreview.path)} f={f} />
       </div>
     </Panel>
   );
@@ -195,7 +217,7 @@ export const module = defineModule({
     "forms-search-input",
   ],
   render: (variant, { lang }) => {
-    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Tree;
+    const View = viewFor(VARIANTS, variant);
     return <View f={fixturesFor(lang)} />;
   },
 });

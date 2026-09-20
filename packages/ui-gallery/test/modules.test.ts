@@ -3,7 +3,9 @@
  * the catalog sections its Parts drawer shows, every section listed by its own module, every demo
  * reachable from some module, and a Chinese title for each module, variant and section.
  */
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
+import { markupStructure, renderStatic } from "../../ui/src/testing/render";
 import { CATALOG, catalogSection } from "../../ui/src/catalog";
 import { MODULE_IDS } from "../../ui/src/module";
 import type { Module } from "../../ui/src/module";
@@ -47,11 +49,39 @@ describe("the collected modules", () => {
 
   it("reach every demo through some module's parts", () => {
     expect(DEMOS.problems).toEqual([]);
+    // The count is asserted so the loop below cannot pass over nothing: a glob that stops
+    // matching (registry.ts's path is relative to the gallery root) fails here instead of going
+    // quiet. Raise it with the demos W1 brings.
+    expect(DEMOS.byId.size, "W1 lands the first *.demo.tsx: update this count with it").toBe(0);
     for (const id of DEMOS.byId.keys()) {
       expect(
         MODULES.list.some(({ module }) => module.parts.includes(id)),
         id,
       ).toBe(true);
+    }
+  });
+
+  it.skip("cover their parts with demos — PENDING: the first *.demo.tsx lands in W1", () => {});
+
+  it("render each variant as its own composition", () => {
+    // Drift between a module's `variants` list and the map its `render` dispatches on would draw
+    // one variant under another's name — in the card, in the compare frames and in the screenshot
+    // the key names. The gallery's own two modules render gallery machinery (a context, an
+    // iframe), so only the package's are rendered here.
+    const owned = MODULES.list.filter(({ path }) => path.includes("/ui/src/modules/"));
+    expect(owned.length).toBe(MODULE_IDS.length - 2);
+    for (const { module } of owned) {
+      const seen = new Map<string, string>();
+      for (const variant of module.variants) {
+        const html = markupStructure(
+          renderStatic(module.render(variant.key, { lang: "en", mode: "light" }) as ReactElement),
+        );
+        const earlier = seen.get(html);
+        expect(earlier, `${module.id}: ${variant.key} renders exactly what ${earlier} does`).toBe(
+          undefined,
+        );
+        seen.set(html, variant.key);
+      }
     }
   });
 

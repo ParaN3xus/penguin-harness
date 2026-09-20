@@ -13,7 +13,7 @@
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { AssistantTextItem, ChatItem, ChatTurn, Fixtures } from "../fixtures";
-import { defineModule } from "../module";
+import { defineModule, viewFor } from "../module";
 import { Turn } from "../screens/transcript";
 
 function item<T extends ChatItem = ChatItem>(turn: ChatTurn, id: string): T {
@@ -121,7 +121,7 @@ export const module = defineModule({
     "data-stat-chip",
   ],
   render: (variant, { lang }) => {
-    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Streaming;
+    const View = viewFor(VARIANTS, variant);
     return <View f={fixturesFor(lang)} />;
   },
 });

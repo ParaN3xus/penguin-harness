@@ -7,7 +7,7 @@
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { Fixtures, ModelFixture } from "../fixtures";
-import { defineModule } from "../module";
+import { defineModule, viewFor } from "../module";
 import { AgentTile } from "../screens/parts";
 import { tokens, usd } from "../screens/format";
 import { Badge, Button, GlyphIcon, GroupHeader, IconButton, KeyValue, Switch } from "./parts";
@@ -338,7 +338,7 @@ export const module = defineModule({
     "feedback-badge",
   ],
   render: (variant, { lang }) => {
-    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Band;
+    const View = viewFor(VARIANTS, variant);
     return <View f={fixturesFor(lang)} />;
   },
 });

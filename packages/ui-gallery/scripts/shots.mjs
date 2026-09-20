@@ -42,6 +42,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { CATALOG } from "../../ui/src/catalog.ts";
 import { MODULE_IDS } from "../../ui/src/module.ts";
+import { THEME_IDS, THEME_MODES } from "../../ui/src/tokens.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONTCONFIG_FILE = path.join(HERE, "fonts.conf");
@@ -79,6 +80,9 @@ const SPECIMEN = {
   en: "Agents that cite their sources 0123456789",
   zh: "构建 Claude Code 文档专家，引用来源",
 };
+/** The languages the font gate can check, and the tiers `/embed` understands (`lib/url-state.ts`). */
+const LANGS = Object.keys(SPECIMEN);
+const TIERS = ["sm", "md", "lg"];
 
 function parseArgs(argv) {
   const args = { _: [] };
@@ -121,16 +125,31 @@ async function shoot() {
   const out = path.resolve(args.out ?? path.join(HERE, "..", "shots"));
   const modules =
     args.modules === undefined || args.modules === "all" ? [...MODULE_IDS] : list(args.modules);
-  const themes = list(args.themes, ["github", "modern", "geek"]);
-  const modes = list(args.modes, ["light", "dark"]);
-  const langs = list(args.langs, ["en", "zh"]);
+  const themes = list(args.themes, [...THEME_IDS]);
+  const modes = list(args.modes, [...THEME_MODES]);
+  const langs = list(args.langs, LANGS);
   const tier = args.tier ?? "md";
   const allVariants = args.variants === "all";
   const width = Number(args.width ?? 758);
 
-  const unknown = modules.filter((id) => !MODULE_IDS.includes(id));
-  if (unknown.length > 0) {
-    console.error(`unknown module ids: ${unknown.join(", ")} (known: ${MODULE_IDS.join(", ")})`);
+  // Every axis is validated against the values `/embed` understands. An unknown one is not a
+  // smaller run: `/embed` falls back to its default, so the shots would be a complete, convincing
+  // set filed under another name — and an unknown language additionally leaves `wanted` empty,
+  // which switches the font gate off without a word.
+  const bad = [
+    ["modules", modules, MODULE_IDS],
+    ["themes", themes, THEME_IDS],
+    ["modes", modes, THEME_MODES],
+    ["langs", langs, LANGS],
+    ["tier", [tier], TIERS],
+  ].flatMap(([name, given, known]) => {
+    const unknown = given.filter((value) => !known.includes(value));
+    return unknown.length > 0
+      ? [`unknown --${name}: ${unknown.join(", ")} (known: ${known.join(", ")})`]
+      : [];
+  });
+  if (bad.length > 0) {
+    console.error(bad.join("\n"));
     return 2;
   }
   try {
@@ -189,6 +208,8 @@ async function shoot() {
   };
 
   let written = 0;
+  /** Modules `/embed` could not render: a failed run, not a smaller one. */
+  const missing = [];
   const skipped = [];
   const t0 = Date.now();
   try {
@@ -225,6 +246,9 @@ async function shoot() {
               embed({ theme, mode, lang, module }),
               (i) => `${module}--${i.variant}`,
             );
+            // A module that does not render writes no PNG. Recorded, never passed over: a short
+            // set that exits 0 reads as a complete one.
+            if (!first.renderable && !missing.includes(module)) missing.push(module);
             if (allVariants) {
               for (const key of first.variants.slice(1)) {
                 await capture(
@@ -264,6 +288,12 @@ async function shoot() {
   if (skipped.length > 0)
     console.log(`parts with no demo yet (${skipped.length}): ${skipped.join(", ")}`);
   let status = 0;
+  if (missing.length > 0) {
+    console.error(
+      `modules that did not render (no shots were written for them): ${missing.join(", ")}`,
+    );
+    status = 1;
+  }
   if (fontFailures.length > 0) {
     console.error(
       `fonts that did not load (the shots fell back to other faces):\n  ${fontFailures.join("\n  ")}`,

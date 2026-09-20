@@ -96,4 +96,13 @@ describe("collectDemos", () => {
     expect(text).toMatch(/size=Large, size=a\.b/);
     expect(text).toMatch(/size \(empty\)/);
   });
+
+  it("reports an axis value that collides with the matrix's own key", () => {
+    const registry = collectDemos(
+      { "g.demo.tsx": { demo: demo("actions-button", { axes: { scope: [MATRIX_KEY, "mine"] } }) } },
+      sections,
+    );
+    expect(registry.byId.size).toBe(0);
+    expect(registry.problems[0]).toMatch(/scope=all/);
+  });
 });

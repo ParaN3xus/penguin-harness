@@ -6,9 +6,19 @@
  */
 import { fixturesFor } from "../fixtures";
 import type { Fixtures } from "../fixtures";
-import { defineModule } from "../module";
+import { defineModule, viewFor } from "../module";
 import { AgentTile } from "../screens/parts";
-import { Button, GlyphIcon, Heading, IconButton, Kbd, Link, Modal, SearchInput } from "./parts";
+import {
+  Button,
+  CodeBlock,
+  GlyphIcon,
+  Heading,
+  IconButton,
+  Kbd,
+  Link,
+  Modal,
+  SearchInput,
+} from "./parts";
 import type { ButtonState, ButtonVariant } from "./parts";
 
 function Toolbar({ f }: { f: Fixtures }) {
@@ -28,7 +38,7 @@ function Toolbar({ f }: { f: Fixtures }) {
       </div>
       <div className="flex items-center gap-2">
         <SearchInput placeholder={a.search} />
-        <IconButton label={f.copy.nav.filterSessions} icon="sliders" />
+        <IconButton label={f.copy.nav.listSettings} icon="sliders" />
         <IconButton label={f.copy.common.more} icon="more" />
       </div>
       <ul className="grid grid-cols-[minmax(0,1fr)]">
@@ -50,7 +60,8 @@ function Toolbar({ f }: { f: Fixtures }) {
 
 function Footer({ f }: { f: Fixtures }) {
   const a = f.copy.agents;
-  const agent = f.agents[1] ?? f.agents[0]!;
+  // The fixture's agents are a record of two, so the reviewer is always there.
+  const agent = f.agents[1]!;
   return (
     <div className="flex min-h-72 items-center justify-center">
       <Modal
@@ -69,28 +80,6 @@ function Footer({ f }: { f: Fixtures }) {
         }
       />
     </div>
-  );
-}
-
-/** A code block's header: the language and its copy button (W5's `CodeBlock`). */
-function CodeBlock({ code, copyLabel }: { code: string; copyLabel: string }) {
-  return (
-    <section className="ui-frame grid overflow-hidden rounded-md border border-line">
-      <div
-        data-slot="head"
-        className="flex items-center gap-2 border-b border-line bg-surface-muted px-3 py-1"
-      >
-        <span className="font-mono text-xs text-fg-muted">bash</span>
-        <span className="min-w-0 flex-1" />
-        <IconButton label={copyLabel} icon="copy" size="sm" />
-      </div>
-      <pre
-        data-slot="body"
-        className="overflow-x-auto bg-[var(--ui-code-bg)] px-3 py-2 font-mono text-xs leading-relaxed text-fg"
-      >
-        {code}
-      </pre>
-    </section>
   );
 }
 
@@ -126,7 +115,7 @@ function DenseRow({ f }: { f: Fixtures }) {
           ))}
         </ul>
       </section>
-      <CodeBlock code={f.session.runCommand} copyLabel={c.copy} />
+      <CodeBlock lang="bash" code={f.session.runCommand} copy={c.copy} />
 
       <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-fg-muted">
         <span className="flex items-center gap-1.5">
@@ -225,7 +214,7 @@ export const module = defineModule({
     "forms-search-input",
   ],
   render: (variant, { lang }) => {
-    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Toolbar;
+    const View = viewFor(VARIANTS, variant);
     return <View f={fixturesFor(lang)} />;
   },
 });

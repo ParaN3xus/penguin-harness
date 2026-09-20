@@ -638,6 +638,10 @@
 .gf-control {
   display: inline-flex;
   align-items: center;
+  /* A control's height is two paddings, a line box AND its two borders — the figure tokens.ts
+     states (29px at the 18px root, 31.25px in Frost and Console). Transparent, because this
+     board measures the box the themes agree on, not the accent button's own outline. */
+  border: var(--ui-border-w) solid transparent;
   border-radius: var(--ui-radius-control);
   background: var(--ui-accent);
   color: var(--ui-accent-fg);

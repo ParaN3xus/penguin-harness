@@ -698,9 +698,9 @@ export function GroupHeader({
   );
 }
 
-export function Breadcrumbs({ items }: { items: readonly string[] }) {
+export function Breadcrumbs({ items, label }: { items: readonly string[]; label: string }) {
   return (
-    <nav aria-label="Breadcrumbs" className="flex min-w-0 items-center gap-1 text-sm">
+    <nav aria-label={label} className="flex min-w-0 items-center gap-1 text-sm">
       {items.map((item, i) => {
         // The leaf keeps its name; only the folders above it give up room.
         const leaf = i === items.length - 1;
@@ -1111,5 +1111,76 @@ export function PrefRow({
       </div>
       <div className="shrink-0">{control}</div>
     </div>
+  );
+}
+
+/**
+ * Numbered source lines on the code surface — the body of a code block and of a file preview.
+ * The gutter is `--ui-code-gutter` and the surface `--ui-code-bg`, so a theme restyles both.
+ */
+export function CodeLines({
+  code,
+  numbered = true,
+  className = "",
+  slot,
+}: {
+  code: string;
+  numbered?: boolean;
+  className?: string;
+  /** `"body"` inside a `.ui-frame`, whose recipes select on the slot. */
+  slot?: "body";
+}) {
+  const body = "bg-[var(--ui-code-bg)] py-2 font-mono text-xs leading-relaxed text-fg";
+  if (!numbered) {
+    return (
+      <pre data-slot={slot} className={`${body} overflow-x-auto px-3 ${className}`}>
+        {code}
+      </pre>
+    );
+  }
+  return (
+    <pre data-slot={slot} className={`${body} ${className}`}>
+      {code.split("\n").map((line, i) => (
+        <span key={i} className="flex">
+          <span className="w-10 shrink-0 select-none pr-3 text-right text-[var(--ui-code-gutter)]">
+            {i + 1}
+          </span>
+          <span className="whitespace-pre pr-4">{line}</span>
+        </span>
+      ))}
+    </pre>
+  );
+}
+
+/**
+ * A code block: the language (and the path, where there is one) in its head, a copy button, and
+ * the source in its body — W5's `CodeBlock`, whose frame is `.ui-frame`'s head and body slots.
+ */
+export function CodeBlock({
+  lang,
+  path,
+  code,
+  copy,
+  numbered = false,
+}: {
+  lang: string;
+  path?: string;
+  code: string;
+  copy: string;
+  numbered?: boolean;
+}) {
+  return (
+    <section className="ui-frame grid overflow-hidden rounded-md border border-line">
+      <div
+        data-slot="head"
+        className="flex items-center gap-2 border-b border-line bg-surface-muted px-3 py-1"
+      >
+        <span className="font-mono text-xs text-fg-muted">{lang}</span>
+        {path && <span className="min-w-0 truncate font-mono text-xs text-fg-subtle">{path}</span>}
+        <span className="min-w-0 flex-1" />
+        <IconButton label={copy} icon="copy" size="sm" />
+      </div>
+      <CodeLines code={code} numbered={numbered} slot="body" className="overflow-x-auto" />
+    </section>
   );
 }

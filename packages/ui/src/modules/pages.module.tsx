@@ -13,7 +13,7 @@
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { Fixtures } from "../fixtures";
-import { defineModule } from "../module";
+import { defineModule, viewFor } from "../module";
 import { AgentTile } from "../screens/parts";
 import { tokens, usd } from "../screens/format";
 import {
@@ -216,7 +216,7 @@ export const module = defineModule({
     "actions-create-buttons",
   ],
   render: (variant, { lang }) => {
-    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Settings;
+    const View = viewFor(VARIANTS, variant);
     return <View f={fixturesFor(lang)} />;
   },
 });

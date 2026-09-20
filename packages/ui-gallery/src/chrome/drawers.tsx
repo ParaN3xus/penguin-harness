@@ -21,6 +21,7 @@ import { THEME_NAMES } from "../lib/themes";
 import { paintColor } from "../lib/token-probe";
 import type { TokenValues } from "../lib/token-probe";
 import { sortTokens, tokensReadBy } from "../lib/tokens-read";
+import type { TokenReading } from "../lib/tokens-read";
 import { withVariant } from "../lib/url-state";
 import { DemoView, useText } from "../preview";
 import { DEMOS, loadSource, repoPath } from "../registry";
@@ -88,9 +89,9 @@ export function PartsDrawer({ module }: { module: Module }) {
   });
   return (
     <div className="g-drawer-panel">
-      <div className="g-drawer-title">{S.section.partsOf(sections.length)}</div>
+      <div className="g-drawer-title g-chrome">{S.section.partsOf(sections.length)}</div>
       {sections.length === 0 ? (
-        <p className="g-muted">{S.section.noParts}</p>
+        <p className="g-muted g-chrome">{S.section.noParts}</p>
       ) : (
         <div className="g-parts">
           {sections.map((section) => {
@@ -106,7 +107,7 @@ export function PartsDrawer({ module }: { module: Module }) {
               .filter(Boolean)
               .join(" · ");
             return (
-              <p key={section.id} className="g-part-line" title={`${section.id}\n${line}`}>
+              <p key={section.id} className="g-part-line g-chrome" title={`${section.id}\n${line}`}>
                 {line}
               </p>
             );
@@ -121,16 +122,23 @@ export function PartsDrawer({ module }: { module: Module }) {
 // Tokens
 // ---------------------------------------------------------------------------------------------
 
-/** Measures the tokens a rendered composition reads, retrying while its root is not mounted yet. */
-function useMeasuredTokens(root: () => Element | null, key: string): string[] | null {
-  const [names, setNames] = useState<string[] | null>(null);
+/**
+ * Measures the tokens a rendered composition reads, retrying while its root is not mounted yet.
+ * `null` is "still measuring" and `"unmounted"` is "it never mounted" — a lazy compare frame the
+ * browser has not begun loading gives that — so the drawer never sits on "Resolving…" for good.
+ */
+type Measurement = TokenReading | "unmounted";
+
+function useMeasuredTokens(root: () => Element | null, key: string): Measurement | null {
+  const [measurement, setMeasurement] = useState<Measurement | null>(null);
   useEffect(() => {
     let tries = 0;
     let timer = 0;
     const measure = () => {
       const el = root();
-      if (el) setNames(tokensReadBy(el));
+      if (el) setMeasurement(tokensReadBy(el));
       else if (tries++ < 20) timer = window.setTimeout(measure, 250);
+      else setMeasurement("unmounted");
     };
     // After paint, so the composition and any frame have mounted.
     timer = window.setTimeout(measure, 50);
@@ -138,13 +146,14 @@ function useMeasuredTokens(root: () => Element | null, key: string): string[] | 
     // `root` is read afresh on every attempt; `key` says when to measure again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
-  return names;
+  return measurement;
 }
 
 function Ratios({ name, values }: { name: string; values: TokenValues }) {
   const targets = contrastTargets(name);
   const floor = contrastFloor(name);
-  const canvas = values["--ui-canvas"] || "#ffffff";
+  // `--ui-canvas` is a contract token: every theme × mode declares it.
+  const canvas = values["--ui-canvas"]!;
   const chips = targets.flatMap((target) => {
     const bgValue = values[target];
     const bg = bgValue ? paintColor(bgValue, canvas) : null;
@@ -179,16 +188,23 @@ export function TokensDrawer({
   const { S, tokens, state, mode } = useGallery();
   const [copied, copy] = useCopy();
   const measured = useMeasuredTokens(root, measureKey);
+  const reading = measured === null || measured === "unmounted" ? null : measured;
   const declared = module.parts.flatMap((id) => DEMOS.byId.get(id)?.demo.tokensUsed ?? []);
-  const names = sortTokens(new Set([...declared, ...(measured ?? [])]));
+  const names = sortTokens(new Set([...declared, ...(reading?.names ?? [])]));
   const values = tokens?.[state.theme][mode] ?? {};
   return (
-    <div className="g-drawer-panel">
+    <div className="g-drawer-panel g-chrome">
       <div className="g-drawer-title">
         {S.section.tokensIn(`${THEME_NAMES[state.theme]} · ${S.rail.modes[mode]}`, names.length)}
+        {/* A measurement that lost rules says so, rather than reading as a thrifty composition. */}
+        {reading !== null && reading.unreadable > 0 && (
+          <span className="g-muted"> · {S.section.unreadRules(reading.unreadable)}</span>
+        )}
       </div>
       {measured === null ? (
         <p className="g-muted">{S.intro.resolving}</p>
+      ) : measured === "unmounted" ? (
+        <p className="g-muted">{S.section.notMeasured}</p>
       ) : names.length === 0 ? (
         <p className="g-muted">{S.section.noTokens}</p>
       ) : (
@@ -237,7 +253,7 @@ export function CodeDrawer({ path }: { path: string }) {
     };
   }, [path]);
   return (
-    <div className="g-drawer-panel">
+    <div className="g-drawer-panel g-chrome">
       <div className="g-drawer-title">{repoPath(path)}</div>
       <pre className="g-code">{source ?? S.section.loadingCode}</pre>
     </div>

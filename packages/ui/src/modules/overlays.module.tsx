@@ -14,7 +14,7 @@
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { ChatTurn, Fixtures } from "../fixtures";
-import { defineModule } from "../module";
+import { defineModule, viewFor } from "../module";
 import { bytes } from "../screens/format";
 import { AgentTile } from "../screens/parts";
 import { Turn } from "../screens/transcript";
@@ -245,7 +245,7 @@ function DrawerPanel({ f }: { f: Fixtures }) {
         <p className="min-w-0 flex-1 truncate text-base font-(--ui-weight-medium) text-fg">
           {t.file(file.label)}
         </p>
-        <IconButton label={f.copy.dock.close} icon="cross" size="sm" />
+        <IconButton label={f.copy.dock.hideDock} icon="cross" size="sm" />
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)] min-h-0 flex-1 content-start gap-6 overflow-hidden p-4">
         <KeyValue
@@ -412,7 +412,7 @@ export const module = defineModule({
     "navigation-command-palette",
   ],
   render: (variant, { lang }) => {
-    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Menus;
+    const View = viewFor(VARIANTS, variant);
     return <View f={fixturesFor(lang)} />;
   },
 });

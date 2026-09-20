@@ -6,7 +6,6 @@
  */
 import { useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { useGallery } from "../state";
 
 /** A titled group on a board: a label rung and its content, ruled from the group above. */
 export function BoardGroup({
@@ -27,11 +26,6 @@ export function BoardGroup({
       {children}
     </section>
   );
-}
-
-export function Resolving() {
-  const { S } = useGallery();
-  return <p className="gf-muted">{S.intro.resolving}</p>;
 }
 
 /** Renders its child and prints the child's rendered height in px, re-measured on resize. */

@@ -81,3 +81,20 @@ export interface Module {
 export function defineModule(module: Module): Module {
   return module;
 }
+
+/**
+ * What a variant key names, out of the map a module dispatches on. Every key that reaches
+ * `render` comes from the module's own `variants` list — the gallery, `/embed` and `shots.mjs`
+ * all pick from it — so a miss is drift between that list and this map. It throws instead of
+ * falling back to the first variant, which would draw one composition under another's name, in
+ * the card, in the compare frames and in the screenshot named after the key.
+ */
+export function viewFor<T>(views: Readonly<Record<string, T>>, variant: string): T {
+  const view = views[variant];
+  if (view === undefined) {
+    throw new Error(
+      `no view for variant "${variant}" (the map has ${Object.keys(views).join(", ")})`,
+    );
+  }
+  return view;
+}

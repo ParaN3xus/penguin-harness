@@ -14,9 +14,9 @@
 import type { ReactNode } from "react";
 import { fixturesFor } from "../fixtures";
 import type { FileDiff, Fixtures, InlineFixture, ToolCallItem } from "../fixtures";
-import { defineModule } from "../module";
+import { defineModule, viewFor } from "../module";
 import { duration } from "../screens/format";
-import { GlyphIcon, IconButton } from "./parts";
+import { CodeBlock, GlyphIcon, IconButton } from "./parts";
 
 function InlineText({ parts }: { parts: readonly InlineFixture[] }) {
   return (
@@ -96,47 +96,6 @@ function Prose({ f }: { f: Fixtures }) {
   );
 }
 
-/** A code block: the language and path in its head, a copy button, numbered lines. */
-function CodeBlock({
-  lang,
-  path,
-  code,
-  copy,
-}: {
-  lang: string;
-  path?: string;
-  code: string;
-  copy: string;
-}) {
-  const lines = code.split("\n");
-  return (
-    <section className="ui-frame overflow-hidden rounded-md border border-line">
-      <div
-        data-slot="head"
-        className="flex items-center gap-2 border-b border-line bg-surface-muted px-3 py-1"
-      >
-        <span className="font-mono text-xs text-fg-muted">{lang}</span>
-        {path && <span className="min-w-0 truncate font-mono text-xs text-fg-subtle">{path}</span>}
-        <span className="min-w-0 flex-1" />
-        <IconButton label={copy} icon="copy" size="sm" />
-      </div>
-      <pre
-        data-slot="body"
-        className="overflow-x-auto bg-[var(--ui-code-bg)] py-2 font-mono text-xs leading-relaxed text-fg"
-      >
-        {lines.map((line, i) => (
-          <span key={i} className="flex">
-            <span className="w-10 shrink-0 select-none pr-3 text-right text-[var(--ui-code-gutter)]">
-              {i + 1}
-            </span>
-            <span className="whitespace-pre pr-4">{line}</span>
-          </span>
-        ))}
-      </pre>
-    </section>
-  );
-}
-
 function Code({ f }: { f: Fixtures }) {
   const copy = f.copy.common.copy;
   const source = f.filePreview.content.split("\n").slice(0, 24).join("\n");
@@ -147,6 +106,7 @@ function Code({ f }: { f: Fixtures }) {
         path={f.filePreview.path}
         code={source}
         copy={copy}
+        numbered
       />
       <CodeBlock lang="bash" code={f.session.runCommand} copy={copy} />
     </div>
@@ -214,12 +174,12 @@ function DiffViewer({ diff, limit }: { diff: FileDiff; limit?: number }) {
 
 function Diff({ f }: { f: Fixtures }) {
   const calls = f.session.turns[1]!.items.filter(
-    (i): i is ToolCallItem => i.kind === "tool_call" && i.diff !== undefined,
+    (i): i is ToolCallItem & { diff: FileDiff } => i.kind === "tool_call" && i.diff !== undefined,
   );
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       {calls.map((call, i) => (
-        <DiffViewer key={call.id} diff={call.diff!} limit={i === 0 ? undefined : 12} />
+        <DiffViewer key={call.id} diff={call.diff} limit={i === 0 ? undefined : 12} />
       ))}
     </div>
   );
@@ -254,16 +214,28 @@ function LogView({ command, output, foot }: { command: string; output: string; f
 
 function Log({ f }: { f: Fixtures }) {
   const c = f.copy.chat;
-  const clone = f.session.turns[0]!.items.find((i): i is ToolCallItem => i.kind === "tool_call")!;
-  const args = JSON.parse(clone.argumentsJson) as { cmd: string };
+  // The corpus clone: an `exec_command`, so its arguments carry `cmd` and its output exists.
+  const clone = f.session.turns[0]!.items.find(
+    (i): i is ToolCallItem => i.kind === "tool_call" && i.name === "exec_command",
+  );
+  if (!clone) throw new Error("fixture: turn 1 has no exec_command to log");
+  const { cmd } = JSON.parse(clone.argumentsJson) as { cmd: string };
+  // The status is the call's own, never a green tick typed in: a failed call looks failed.
+  const failed = clone.state === "failed";
   return (
     <LogView
-      command={`$ ${args.cmd}`}
-      output={clone.output ?? ""}
+      command={`$ ${cmd}`}
+      output={clone.output!}
       foot={
         <>
-          <GlyphIcon name="circleCheck" size={13} className="text-tone-success-fg" />
-          <span className="tabular-nums">{c.exitStatus(0, duration(clone.durationMs ?? 0))}</span>
+          <GlyphIcon
+            name={failed ? "circleCross" : "circleCheck"}
+            size={13}
+            className={failed ? "text-tone-danger-fg" : "text-tone-success-fg"}
+          />
+          <span className="tabular-nums">
+            {c.exitStatus(failed ? 1 : 0, duration(clone.durationMs!))}
+          </span>
           <span className="min-w-0 flex-1" />
           <span>{c.outputComplete}</span>
         </>
@@ -294,7 +266,7 @@ export const module = defineModule({
     "data-log-view",
   ],
   render: (variant, { lang }) => {
-    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Prose;
+    const View = viewFor(VARIANTS, variant);
     return <View f={fixturesFor(lang)} />;
   },
 });

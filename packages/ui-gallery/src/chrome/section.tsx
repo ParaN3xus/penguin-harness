@@ -147,7 +147,7 @@ export const ModuleSection = memo(function ModuleSection({
       </div>
 
       {open.size > 0 && (
-        <div className="g-drawer g-chrome">
+        <div className="g-drawer">
           {open.has("parts") && <PartsDrawer module={module} />}
           {open.has("tokens") && (
             <TokensDrawer

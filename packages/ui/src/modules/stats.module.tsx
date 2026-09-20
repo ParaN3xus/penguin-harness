@@ -13,8 +13,8 @@
  */
 import { fixturesFor } from "../fixtures";
 import type { Fixtures, TraceSegmentKind } from "../fixtures";
-import { defineModule } from "../module";
-import { duration, percent, tokens, usd } from "../screens/format";
+import { defineModule, viewFor } from "../module";
+import { average, duration, percent, tokens, usd } from "../screens/format";
 import { Badge, GlyphIcon, KeyValue, RuledSection } from "./parts";
 import type { IconName } from "./parts";
 
@@ -134,7 +134,7 @@ function Overview({ f }: { f: Fixtures }) {
   const o = f.trace.overall;
   const turn = f.trace.turns[1]!;
   const ctx = f.session.context;
-  const context = f.copy.chat.contextOf(tokens(ctx.tokens), tokens(ctx.window));
+  const context = f.copy.chat.contextOf(tokens(ctx.tokens), tokens(ctx.threshold));
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <div className="flex divide-x divide-line">
@@ -144,7 +144,7 @@ function Overview({ f }: { f: Fixtures }) {
           value={tokens(o.inputTokens + o.outputTokens)}
           detail={`${tokens(o.outputTokens)} ${t.outputTokens}`}
         />
-        <StatTile label={t.elapsed} value={duration(o.elapsedMs)} detail={`${o.outputTps} tok/s`} />
+        <StatTile label={t.elapsed} value={duration(o.elapsedMs)} detail={t.tps(o.outputTps)} />
         <StatTile
           label={t.cacheHitRate}
           value={percent(o.cacheReadTokens, o.inputTokens)}
@@ -156,7 +156,7 @@ function Overview({ f }: { f: Fixtures }) {
           items={[
             { label: t.turns, value: String(o.turns) },
             { label: t.toolCalls, value: String(o.toolCalls) },
-            { label: t.compactions, value: String(o.compactions) },
+            { label: t.avgToolCalls, value: average(o.toolCalls, o.turns) },
             { label: t.inputTokens, value: tokens(o.inputTokens) },
             {
               label: t.cacheHits,
@@ -176,11 +176,14 @@ function Overview({ f }: { f: Fixtures }) {
         </span>
         <span className="flex flex-wrap items-center gap-x-10 gap-y-4">
           <span className="flex items-center gap-3">
-            <Ring share={ctx.tokens / ctx.window} label={context} />
+            <Ring share={ctx.tokens / ctx.threshold} label={context} />
             <span className="text-xs text-fg-muted">{context}</span>
           </span>
           <span className="flex items-center gap-3">
-            <Sparkline values={f.usage.output} label={f.copy.usage.outputThisWeek} />
+            <Sparkline
+              values={f.usage.days.map((d) => d.output)}
+              label={f.copy.usage.outputThisWeek}
+            />
             <span className="text-xs text-fg-muted">{f.copy.usage.outputThisWeek}</span>
           </span>
         </span>
@@ -291,7 +294,7 @@ function Timeline({ f }: { f: Fixtures }) {
 function Usage({ f }: { f: Fixtures }) {
   const copy = f.copy.usage;
   const u = f.usage;
-  const totals = u.days.map((_, i) => u.cacheRead[i]! + u.cacheWrite[i]! + u.output[i]!);
+  const totals = u.days.map((d) => d.cacheRead + d.cacheWrite + d.output);
   const max = Math.ceil(Math.max(...totals) / 100) * 100;
   const spend = f.company.org.spend;
   const share = spend.costUsd / spend.budgetUsd;
@@ -307,29 +310,29 @@ function Usage({ f }: { f: Fixtures }) {
           </div>
           <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 flex-1 gap-1">
             <div className="flex h-44 items-end gap-4 border-b border-[var(--ui-chart-axis)] border-t border-t-[var(--ui-chart-grid)] px-2">
-              {u.days.map((day, i) => (
+              {u.days.map((row, i) => (
                 <span
-                  key={day}
+                  key={row.day}
                   className="flex h-full min-w-0 flex-1 flex-col justify-end"
-                  title={`${day}: ${totals[i]}k`}
+                  title={`${row.day}: ${totals[i]}k`}
                 >
                   <span
                     className="block bg-chart-output"
-                    style={{ height: `${(u.output[i]! / max) * 100}%` }}
+                    style={{ height: `${(row.output / max) * 100}%` }}
                   />
                   <span
                     className="block bg-chart-cache-write"
-                    style={{ height: `${(u.cacheWrite[i]! / max) * 100}%` }}
+                    style={{ height: `${(row.cacheWrite / max) * 100}%` }}
                   />
                   <span
                     className="block bg-chart-cache-read"
-                    style={{ height: `${(u.cacheRead[i]! / max) * 100}%` }}
+                    style={{ height: `${(row.cacheRead / max) * 100}%` }}
                   />
                 </span>
               ))}
             </div>
             <div className="flex gap-4 px-2">
-              {u.days.map((day) => (
+              {u.days.map(({ day }) => (
                 <span key={day} className="min-w-0 flex-1 text-center text-xs text-fg-muted">
                   {day}
                 </span>
@@ -399,7 +402,7 @@ export const module = defineModule({
     "layout-ruled-section",
   ],
   render: (variant, { lang }) => {
-    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Overview;
+    const View = viewFor(VARIANTS, variant);
     return <View f={fixturesFor(lang)} />;
   },
 });

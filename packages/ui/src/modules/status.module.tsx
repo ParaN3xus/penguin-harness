@@ -13,8 +13,9 @@
  */
 import type { ToneName } from "../tokens";
 import { fixturesFor } from "../fixtures";
-import type { Fixtures, TicketFixture } from "../fixtures";
-import { defineModule } from "../module";
+import { TICKET_STATUSES } from "../fixtures";
+import type { Fixtures, RunState, StopReason, TicketFixture } from "../fixtures";
+import { defineModule, viewFor } from "../module";
 import { duration, liveDuration, usd } from "../screens/format";
 import {
   Badge,
@@ -34,7 +35,7 @@ import {
 } from "./parts";
 import type { IconName } from "./parts";
 
-const STATE_MARK: Record<string, { tone: ToneName; icon: IconName | "spinner" }> = {
+const STATE_MARK: Record<RunState, { tone: ToneName; icon: IconName | "spinner" }> = {
   done: { tone: "success", icon: "circleCheck" },
   running: { tone: "success", icon: "spinner" },
   waiting: { tone: "attention", icon: "hourglass" },
@@ -64,14 +65,14 @@ const PRIORITY_TONE: Record<
 
 function Live({ f }: { f: Fixtures }) {
   const states = f.copy.chat.runStates;
-  const [workspace] = f.sessionGroups;
+  const workspace = f.sessionGroups[0]!;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <section className="grid grid-cols-[minmax(0,1fr)] gap-1">
         <Heading level={5}>{f.copy.chat.plan}</Heading>
         <ul className="grid grid-cols-[minmax(0,1fr)]">
           {f.plan.map((step) => {
-            const mark = STATE_MARK[step.state]!;
+            const mark = STATE_MARK[step.state];
             return (
               <li
                 key={step.title}
@@ -118,7 +119,7 @@ function Live({ f }: { f: Fixtures }) {
           <GlyphIcon name="message" size={16} className="text-fg-subtle" />
           <span className="min-w-0 flex-1 truncate">{f.copy.nav.sessions}</span>
           <Dot tone="success" live size="xs" />
-          <span className="text-xs tabular-nums">{workspace?.items.length ?? 0}</span>
+          <span className="text-xs tabular-nums">{workspace.items.length}</span>
         </span>
       </nav>
     </div>
@@ -134,21 +135,27 @@ function StatusIcon({ tone, icon }: { tone: ToneName; icon: IconName }) {
   );
 }
 
+const REASON_TONE: Record<StopReason, ToneName> = {
+  completed: "neutral",
+  tool_use: "info",
+  max_tokens: "attention",
+  error: "danger",
+};
+
 function Settled({ f }: { f: Fixtures }) {
   const company = f.copy.company;
-  const reasons = ["completed", "tool_use", "max_tokens", "error"] as const;
-  const reasonTone: Record<(typeof reasons)[number], ToneName> = {
-    completed: "neutral",
-    tool_use: "info",
-    max_tokens: "attention",
-    error: "danger",
-  };
+  // The reasons this run reported, read off its own events — not a list typed into the module.
+  const reasons = [
+    ...new Set(f.trace.turns.flatMap((t) => t.events.flatMap((e) => e.stopReason ?? []))),
+  ];
+  // One ticket per state, so every state's badge is on screen and none is cut off the end.
+  const tickets = TICKET_STATUSES.map((s) => f.company.tickets.find((t) => t.status === s)!);
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <section className="grid grid-cols-[minmax(0,1fr)] gap-1">
         <Heading level={5}>{company.tickets}</Heading>
         <ul className="grid grid-cols-[minmax(0,1fr)]">
-          {f.company.tickets.slice(0, 6).map((ticket) => {
+          {tickets.map((ticket) => {
             const status = TICKET_TONE[ticket.status];
             const priority = PRIORITY_TONE[ticket.priority];
             return (
@@ -177,7 +184,7 @@ function Settled({ f }: { f: Fixtures }) {
         <Heading level={5}>{f.copy.traces.stopReasons}</Heading>
         <p className="flex flex-wrap items-center gap-2">
           {reasons.map((reason) => (
-            <Badge key={reason} tone={reasonTone[reason]} variant="outline">
+            <Badge key={reason} tone={REASON_TONE[reason]} variant="outline">
               {reason}
             </Badge>
           ))}
@@ -333,7 +340,7 @@ export const module = defineModule({
     "overlays-toaster",
   ],
   render: (variant, { lang }) => {
-    const View = VARIANTS[variant as keyof typeof VARIANTS] ?? Live;
+    const View = viewFor(VARIANTS, variant);
     return <View f={fixturesFor(lang)} />;
   },
 });

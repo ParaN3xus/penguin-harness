@@ -36,7 +36,12 @@ never ships with the product. Nothing in the Web App changed.
 - `/screens/<name>` shows the full-page composites from `packages/ui/src/screens`, and `/fonts` lists each
   theme's families, every declared face grouped per family and weight with its slice count and load
   status, and the licence texts.
-- Chrome copy is in English and Chinese, local to the gallery.
+- Chrome copy is in English and Chinese, local to the gallery. The chrome styles only itself: its
+  rules are scoped to `.g-chrome`, so a preview's inline code and text selection are the theme's,
+  on the page, in the compare frames and in every screenshot alike. The preview frame reads the
+  contract tokens with no fallback, so a dropped token looks broken where the themes are judged.
+- The tokens drawer says what it measured: a composition that never mounted and rules it could not
+  read are both named, rather than reading as a thrifty composition or as "still resolving".
 
 ## Package additions
 
@@ -58,3 +63,15 @@ never ships with the product. Nothing in the Web App changed.
   theme names has no loaded face, and `shots.mjs diff <before> <after>` compares two runs pixel by pixel.
 - The root `pnpm dev:gallery` script starts the gallery; the manual-test skill lists it; CI runs the
   gallery's unit tests in the `rest` shard, and `pnpm -r build` builds it.
+- `shots.mjs` validates every axis it is given against the values `/embed` understands, and fails
+  the run — rather than writing a convincing set under the wrong name — on an unknown theme, mode,
+  language or tier, and on a module that does not render.
+
+## Guards
+
+- `packages/ui/test/app-source-scope.test.ts` holds the Web App's Tailwind sources to the package:
+  every directory under `packages/ui/src` is either shipped with the app or excluded from its
+  scan, so a new gallery-only directory cannot slip its class names into the app's stylesheet.
+- The gallery's own suites gained the walk behind the tokens drawer, the accent presets the Colour
+  board reads out of `theme.css`, the axis value that would collide with the matrix's key, and a
+  render of every module variant — the last one fails if two variants ever draw the same thing.

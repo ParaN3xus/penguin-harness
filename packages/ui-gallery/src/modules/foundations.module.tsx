@@ -4,7 +4,7 @@
  * machinery — the Icons board reads the Web App's source, the Colour board the accent presets in
  * theme.css — and the Hooks board applies all six hooks outside any host component.
  */
-import { defineModule } from "../../../ui/src/module";
+import { defineModule, viewFor } from "../../../ui/src/module";
 import { ColourBoard } from "../foundations/color";
 import { SpacingBoard } from "../foundations/density";
 import { FocusBoard } from "../foundations/focus";
@@ -43,7 +43,7 @@ export const module = defineModule({
   ],
   parts: ["icons-glyph-icon", "icons-registry", "icons-marks"],
   render: (variant) => {
-    const Board = BOARDS[variant as keyof typeof BOARDS] ?? ColourBoard;
+    const Board = viewFor(BOARDS, variant);
     return <Board />;
   },
 });
