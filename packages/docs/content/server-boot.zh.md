@@ -53,7 +53,9 @@ HmrHost · 资源注册表                      TerminalManager（接管寄存�
 插件 host（已 import 的对象）              读插件闭包并 import，插件模块作为树的子节点创建
 ```
 
-**swap 语义：未实现 park 的状态一律硬中止**——待审批全部拒绝、运行中任务中止、scheduler 随旧 App 死掉，新 App 从认领的能力重建一切。只有实现了 park/adopt 的资源（终端 pty）跨 swap 存活。
+**swap 语义：未实现 park 的状态一律硬中止**——调度器、消息桥和机器连接随旧 App 一起停止，新 App 从认领的能力重建。跨 swap 存活的资源有两类：终端 pty（park/adopt），以及 Agent 状态。
+
+**Agent 的运行不被打断。** Session 运行时的内存——已装载的 Session、运行中的任务、待审批、排队的 follow-up——集中在一个节点 `AgentState` 里，它只有数据、没有逻辑。离开的 App 把它登记为 `agentState:state`，同时登记自己这份构建所声明的 `AgentState` 接口的闭包形状：接口本身连同它经接口表触及的一切，打印成一个字符串。后继 App 打印出同一个字符串，就直接在这个对象之上启动：运行中的任务继续，swap 之后到来的一切由新逻辑在同一份状态上处理。已经在途的任务用启动它的那份代码跑完，新代码从该 Session 的下一个任务起生效。后继 App 打印出别的字符串，则销毁这一组——由前一代自己的逻辑停掉运行——再从 Trace 把当时在跑的 Session 重新启动。插件变更重组的是同一份构建，所以总能接手状态。
 
 资源本身也有接口契约，但它不进 kernel 的 iface——声明本身就是注册表里的一个条目（`resource-interfaces`，按 ID 前缀组记版本，如 `{ terminal: 1, platform: 1 }`），由每代 App 的 `create()` 写入并留给继任者。新 App 在 adopt 任何东西之前读前任的声明、与自己编译期的声明比对：同版本的组整体集成存续；版本不同或本代不再声明的组，按**逆注册序**逐一 dispose 后重建（活对象无法像 context 文档那样 strict-parse，声明一致就是集成的判据）。kernel 的 park/validate/swap 机制不参与也不感知这套约定，因此调和策略本身也随平台热推送演进。运行时能力（`runtime:*`）走另一条对称防线：bundle 编译期携带能力契约版本，`claimRuntimeCapabilities` 先与运行时发布的版本握手，不符则整组拒领、退化为 terminals-only，而不是在使用时抛 TypeError。
 
@@ -76,7 +78,7 @@ platformImpl.create
 │    # http 装配是 @Module（导出别人的 class）。先校验它们的 manifest（gen-ifaces 从装饰器
 │    # 读出）——requires 按签名解析、contribution 按槽位校验——再按依赖顺序执行 setup()。
 │    # 插件模块（包里生成的 ifaces.json）是同一棵树的子节点。
-└─ ctx.effect：tree.dispose()（每个模块的 effect，逆序）+ manager.shutdown 排空
+└─ ctx.effect：tree.dispose()（每个模块的 effect，逆序）+ manager.detach()（Agent 状态被移交，而不是被停止）
 ```
 插件是一组模块——与 harness 自身的构成单位相同，写法也相同：`@Component` / `@Module` 类，字段上是 `@Use` / `@Provide` / `@Bind`。它的 manifest 是生成的，不是手写的——包的 build 对自己的 tsconfig 跑 `gen-ifaces`，把 `ifaces.json` 随 `package.json` 一起发布——这张表就是包的模块载荷，包是不是插件由它被列出决定；默认导出是 `{ modules?: [<class>, …], replaces?: [<class>, …] }`——`modules` 是它新增的节点，`replaces` 是它顶替的节点（以被顶替节点为名的类：组件、模块或整个组）——加载时每个类对照表中自己的 manifest 核对。替身放入时不做检查；组装出的树在任何节点运行前作为整体校验，替身提供的少于消费者所需就按名字拒绝。按频率拆开：
 
