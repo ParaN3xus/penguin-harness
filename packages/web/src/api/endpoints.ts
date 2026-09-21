@@ -1743,11 +1743,39 @@ export const patchOrganization = (
   body: OrganizationPatchRequest,
 ) => apiFetch<OrganizationSettings>(orgBase(projectId, orgId), { method: "PATCH", body });
 
+/**
+ * Owner only. The organization itself goes — to the Project's trash, restorable by hand; its
+ * employees' Agents and its desk and ticket Sessions are left as they are.
+ */
+export const deleteOrganization = (projectId: string, orgId: string) =>
+  apiFetch<void>(orgBase(projectId, orgId), { method: "DELETE" });
+
 export const getOrgChart = (projectId: string, orgId: string) =>
   apiFetch<OrgChartResponse>(`${orgBase(projectId, orgId)}/chart`);
 
 export const hireOrgEmployee = (projectId: string, orgId: string, body: OrgHireRequest) =>
   apiFetch<OrgEmployeeItem>(`${orgBase(projectId, orgId)}/employees`, { method: "POST", body });
+
+/** Where an employee's avatar is served from; `rev` (its `avatarRev`) makes the URL the image's own, so it is cached for good. */
+export const orgEmployeeAvatarUrl = (
+  projectId: string,
+  orgId: string,
+  agentId: string,
+  rev: string,
+): string =>
+  `${orgBase(projectId, orgId)}/employees/${encodeURIComponent(agentId)}/avatar?rev=${encodeURIComponent(rev)}`;
+
+/** Sets the employee's avatar from a data URL (png, jpeg or webp); `null` removes it. */
+export const putOrgEmployeeAvatar = (
+  projectId: string,
+  orgId: string,
+  agentId: string,
+  avatar: string | null,
+) =>
+  apiFetch<OrgEmployeeItem>(
+    `${orgBase(projectId, orgId)}/employees/${encodeURIComponent(agentId)}/avatar`,
+    { method: "PUT", body: { avatar } },
+  );
 
 export const patchOrgEmployee = (
   projectId: string,

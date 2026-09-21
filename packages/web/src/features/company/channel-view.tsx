@@ -51,7 +51,7 @@ import { useDocumentTitle } from "../../lib/use-document-title";
 import { toneDot, toneInk, toneStrip } from "../../lib/tone";
 import { useAuth } from "../../state/auth";
 import { useCompany, useCompanyEvents } from "../../state/company";
-import { AgentAvatar } from "../../components/ui/agent-avatar";
+import { EmployeeAvatar, FACE_PX } from "./employee-avatar";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { GlyphIcon } from "../../components/ui/glyph-icon";
@@ -63,6 +63,7 @@ import { useOrg } from "./org-layout";
 import { principalLabel } from "./shared";
 import { orgKey } from "./company-nav";
 import { ChannelComposer } from "./channel-composer";
+import { useChannelDraft } from "./channel-draft";
 import { ChannelHeader } from "./channel-header";
 import { ChannelMessageBody, ChannelReaderProvider, MentionChip } from "./channel-markdown";
 import { noticeText } from "./channel-notices";
@@ -73,6 +74,8 @@ import {
   mentionCandidates,
   mentionIsMe,
   mentionLabel,
+  mentionNameHandles,
+  mentionNote,
   mentionRuns,
 } from "./channel-mentions";
 import {
@@ -102,9 +105,6 @@ interface StreamMeta {
 
 /** Downward arrow on the return-to-latest pill (lucide arrow-down). */
 const ARROW_DOWN_ICON = "M12 5v14M6 13l6 6 6-6";
-
-/** The avatar that leads somebody else's run, in pixels — a tile, so one rung above a line glyph. */
-const RUN_AVATAR_PX = 28;
 
 /**
  * The two bubble surfaces. The reader's own takes the app's brand blue rather than a tone from
@@ -380,9 +380,13 @@ export function ChannelView() {
     syncScrollState();
   };
 
+  // The unsent text outlives the view: leaving a channel (or reloading) must not lose it.
+  const draft = useChannelDraft(projectId, orgId, channelId);
+
   const send = async (text: string): Promise<boolean> => {
     try {
       const msg = await api.sendOrgChannelMessage(projectId, orgId, channelId, { text });
+      draft.discard();
       follow.resume();
       setDays((prev) =>
         prev === null ? prev : appendMessage(prev, meta?.today ?? msg.time.slice(0, 10), msg),
@@ -411,10 +415,15 @@ export function ChannelView() {
   };
 
   const names = useMemo(() => new Map(employees.map((e) => [e.agentId, e.name])), [employees]);
+  const titles = useMemo(() => new Map(employees.map((e) => [e.agentId, e.title])), [employees]);
+  const nameHandles = useMemo(() => mentionNameHandles(names), [names]);
   const employeeIds = useMemo(() => new Set(employees.map((e) => e.agentId)), [employees]);
   // Who the mention chips inside the rendered bodies are measured against. Memoized because it
   // is a context value: a fresh object per render would re-render every message body.
-  const reader = useMemo(() => ({ names, me, employeeIds }), [names, me, employeeIds]);
+  const reader = useMemo(
+    () => ({ names, titles, me, employeeIds }),
+    [names, titles, me, employeeIds],
+  );
   const memberPrincipals = useMemo(
     () => (detail === null ? null : new Set(detail.members.map((m) => m.principal))),
     [detail],
@@ -441,7 +450,7 @@ export function ChannelView() {
     document.getElementById(id)?.scrollIntoView({ block: "center" });
 
   const renderText = (m: OrgChannelMessage) =>
-    mentionRuns(m.text).map((run, i) =>
+    mentionRuns(m.text, nameHandles).map((run, i) =>
       run.mention === null ? (
         <span key={i}>{run.text}</span>
       ) : (
@@ -449,6 +458,7 @@ export function ChannelView() {
           key={i}
           raw={run.text}
           label={mentionLabel(run.mention, names, S.company.principalAll)}
+          note={mentionNote(run.mention, titles)}
           me={mentionIsMe(run.mention, me, employeeIds)}
         />
       ),
@@ -543,6 +553,7 @@ export function ChannelView() {
                   <MentionChip
                     raw={`@${principal}`}
                     label={mentionLabel(principal, names, S.company.principalAll)}
+                    note={mentionNote(principal, titles)}
                     me={mentionIsMe(principal, me, employeeIds)}
                   />
                 </span>
@@ -565,16 +576,17 @@ export function ChannelView() {
             to the run's last bubble instead puts a ten-line message between them. */}
         {!own &&
           (p.kind === "agent" ? (
-            <AgentAvatar
+            <EmployeeAvatar
               id={p.id}
               name={senderLabel}
-              size={RUN_AVATAR_PX}
-              className="shrink-0 rounded-md"
+              size={FACE_PX.message}
+              className="shrink-0 rounded-lg"
             />
           ) : (
             <span
               aria-hidden
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-900 text-xs font-bold text-white dark:bg-gray-200 dark:text-gray-900"
+              // A person's tile, the same size as an employee's face beside it.
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-sm font-bold text-white dark:bg-gray-200 dark:text-gray-900"
             >
               {senderLabel.slice(0, 1).toUpperCase()}
             </span>
@@ -588,7 +600,7 @@ export function ChannelView() {
             <span className="sr-only">{S.company.channels.you}</span>
           ) : (
             <div
-              className={`flex max-w-full flex-wrap items-baseline ${ICON_GAP.row} px-1 text-[11px]`}
+              className={`flex max-w-full flex-wrap items-baseline ${ICON_GAP.row} px-1 text-xs`}
             >
               <span className="truncate font-semibold text-gray-700 dark:text-gray-300">
                 {senderLabel}
@@ -732,7 +744,15 @@ export function ChannelView() {
           </div>
           <div className="mx-auto w-full max-w-5xl">
             {canPost ? (
-              <ChannelComposer candidates={candidates} names={names} onSend={send} />
+              <ChannelComposer
+                // Remounted per draft: the box starts from the text this channel was left with.
+                key={draft.key ?? channelId}
+                candidates={candidates}
+                names={names}
+                initialText={draft.initial}
+                onTextChange={draft.onTextChange}
+                onSend={send}
+              />
             ) : detail !== null && detail.archived ? (
               <p
                 className={`mt-3 rounded-md border px-3 py-2 text-xs ${toneStrip.muted}`}

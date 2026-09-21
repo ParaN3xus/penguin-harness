@@ -2320,6 +2320,43 @@ describe("organization runtime", () => {
       expect(list.desks.map((d) => d.sessionId)).toEqual([renewed.sessionId]);
     });
 
+    it("deletes the organization and nothing else: its files to the trash, its Agents and Sessions left alone", async () => {
+      await createOrg();
+      const desk = await service.desk(P, ORG, CEO, {});
+      await service.createTicket(
+        P,
+        ORG,
+        { title: "Goes with the company", owner: `agent:${CEO}` },
+        { userId: "alice" },
+      );
+      await service.delete(P, ORG);
+
+      // Gone from every surface.
+      expect((await service.list(P)).map((o) => o.orgId)).toEqual([]);
+      await expect(service.detail(P, ORG, "alice")).rejects.toMatchObject({ status: 404 });
+      await expect(service.delete(P, ORG)).rejects.toMatchObject({ status: 404 });
+      // Whole, in the Project's trash: moving the directory back is how it is restored.
+      const bin = path.join(path.dirname(store.dir(P, ORG)), ".trash");
+      const [kept] = await fs.readdir(bin);
+      expect(kept).toMatch(new RegExp(`^${ORG}-\\d{8}T\\d+Z$`));
+      expect(await fs.readFile(path.join(bin, kept!, "org_chart.yaml"), "utf8")).toContain(CEO);
+      // What this server derived from it went with it; what it HAD did not.
+      expect(cache.ownerOfSession(desk.sessionId)).toBeNull();
+      expect(sessions.findById(desk.sessionId)).not.toBeNull();
+      expect(existingAgents.has(CEO)).toBe(true);
+      // A pass over the Project finds nothing to drive and nothing to complain about.
+      const before = created.length;
+      await scheduler.tickOnce();
+      expect(created).toHaveLength(before);
+      expect(errors).toEqual([]);
+      // The id itself is free, but its CEO's Agent was kept — and a new organization's CEO
+      // is `<orgId>_ceo`. Reusing the id means letting that Agent go first.
+      await expect(createOrg()).rejects.toMatchObject({ status: 409, code: "agent_exists" });
+      existingAgents.delete(CEO);
+      await createOrg();
+      expect((await service.list(P)).map((o) => o.orgId)).toEqual([ORG]);
+    });
+
     it("rebuilds the session caches from the files after they are dropped", async () => {
       await createOrg();
       const desk = await service.desk(P, ORG, CEO, {});
@@ -2363,6 +2400,69 @@ describe("organization runtime", () => {
       expect(cache.orgIdsOfProject("other_project").size).toBe(0);
     });
 
+    it("calls an employee what the chart calls it, tells two of a name apart, and delivers @name", async () => {
+      await createOrg();
+      await service.hire(P, ORG, {
+        newAgent: { agentId: HR },
+        name: "小明",
+        title: "HR",
+        reportsTo: CEO,
+      });
+      const hr = () =>
+        service.chart(P, ORG).then((c) => c.employees.find((e) => e.agentId === HR)!);
+      expect(await hr()).toMatchObject({ name: "小明", givenName: "小明" });
+
+      // Two of a name: each is shown — and addressed — with its id noted.
+      await service.patchEmployee(P, ORG, CEO, { name: "小明" });
+      expect((await hr()).name).toBe(`小明 (${HR})`);
+      const ambiguous = await service.sendChannelMessage(P, ORG, "alice", "default_channel", {
+        text: `@小明 (${HR}) 请看一下，@小明 是谁？`,
+      });
+      expect(ambiguous.mentions).toEqual([`agent:${HR}`]);
+
+      // Cleared, the Agent's display name stands in again, and the other name is its own.
+      await service.patchEmployee(P, ORG, CEO, { name: null });
+      expect((await hr()).name).toBe("小明");
+      const byName = await service.sendChannelMessage(P, ORG, "alice", "default_channel", {
+        text: "@小明你好，也 @" + CEO,
+      });
+      expect(byName.mentions).toEqual([`agent:${HR}`, `agent:${CEO}`]);
+      await expect(service.patchEmployee(P, ORG, HR, { name: "a@b" })).rejects.toMatchObject({
+        status: 400,
+      });
+    });
+
+    it("keeps an employee's avatar as a file of the organization, and says when it changes", async () => {
+      await createOrg();
+      // A 1×1 png.
+      const png =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+      const ceo = () =>
+        service.chart(P, ORG).then((c) => c.employees.find((e) => e.agentId === CEO)!);
+      expect((await ceo()).avatarRev).toBeUndefined();
+      await expect(service.employeeAvatar(P, ORG, CEO)).rejects.toMatchObject({ status: 404 });
+
+      const set = await service.setEmployeeAvatar(P, ORG, CEO, png);
+      expect(set.avatarRev).toMatch(/^[0-9a-f]{12}$/);
+      expect(await fs.readdir(path.join(orgDir(), "avatars"))).toEqual([`${CEO}.png`]);
+      expect(await service.employeeAvatar(P, ORG, CEO)).toMatchObject({
+        mime: "image/png",
+        rev: set.avatarRev,
+      });
+      // Not an image, or not one of the three formats: refused, and nothing is written.
+      await expect(
+        service.setEmployeeAvatar(P, ORG, CEO, "data:image/svg+xml;base64,PHN2Zy8+"),
+      ).rejects.toMatchObject({ status: 400 });
+      await expect(service.setEmployeeAvatar(P, ORG, "nobody", png)).rejects.toMatchObject({
+        status: 404,
+      });
+      expect((await ceo()).avatarRev).toBe(set.avatarRev);
+
+      await service.setEmployeeAvatar(P, ORG, CEO, null);
+      expect((await ceo()).avatarRev).toBeUndefined();
+      expect(await fs.readdir(path.join(orgDir(), "avatars"))).toEqual([]);
+    });
+
     it("opens the new employee's desk as it is hired, and starts no run for it", async () => {
       await createOrg();
       const runsAfterCreation = started.length;
@@ -2376,7 +2476,9 @@ describe("organization runtime", () => {
       const deskSessionId = item.desk?.sessionId;
       expect(deskSessionId).toBeTruthy();
       expect(sessions.findById(deskSessionId!)).toMatchObject({ agentId: HR, client: "org" });
-      expect(sessions.findById(deskSessionId!)?.title).toBe(`Name of ${HR}'s desk`);
+      // Named after the employee — the name the hire gave it, which is the chart's now.
+      expect(item.name).toBe("HR");
+      expect(sessions.findById(deskSessionId!)?.title).toBe("HR's desk");
       expect(created.at(-1)).toMatchObject({
         agentId: HR,
         client: "org",
