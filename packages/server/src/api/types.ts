@@ -1479,6 +1479,8 @@ export interface SessionsResponse {
  */
 export interface SessionActivityInfo {
   sessionId: string;
+  /** The Agent the Session belongs to (SessionInfo.agentId): opening it makes that Agent current. */
+  agentId: string;
   /** The Workspace path as the Session carries it (SessionInfo.workspace). */
   workspace: string;
   status: SessionStatus;
@@ -1486,6 +1488,14 @@ export interface SessionActivityInfo {
   hasTrace: boolean;
   /** SessionInfo.lastActiveAt — what the read/unread marker is compared against. */
   lastActiveAt: string;
+  /** SessionInfo.title; absent while none has been generated. */
+  title?: string;
+  /**
+   * SessionInfo.source: how the Session came to be. The dashboard leaves a subagent Session
+   * out of its counts — it belongs to the conversation that spawned it, which is the row the
+   * sidebar shows and the one a person opens.
+   */
+  source?: SessionSource;
 }
 
 /** `GET /api/projects/:projectId/sessions/overview`: every non-archived Session of the Project, over every Agent. */
@@ -4279,8 +4289,20 @@ export interface OrganizationsResponse {
 
 export interface OrgEmployeeItem {
   agentId: string;
-  /** Agent display name (system_config.yaml); falls back to the id. */
+  /**
+   * What this employee goes by in the organization, unique across it: the chart's `name`, else
+   * the Agent's display name, else the id — with the id noted (`name (id)`) when the name is
+   * not this employee's alone. It is what every surface shows and what works after `@`.
+   */
   name: string;
+  /** The `name` as written in the chart, for editing; absent when the entry has none. */
+  givenName?: string;
+  /**
+   * Present when the employee has an avatar: the content revision of the image served at
+   * `GET …/employees/:agentId/avatar` (append it as `?rev=` — the image is cached for good).
+   * Absent, surfaces draw the letter tile.
+   */
+  avatarRev?: string;
   title: string;
   /** null for the CEO (the root). */
   reportsTo: string | null;
@@ -4725,6 +4747,11 @@ export interface OrgHireRequest {
   agentId?: string;
   /** … or create one (the two are exclusive). Plugins default to agent-company + agent-development. */
   newAgent?: { agentId: string; name?: string; description?: string; plugins?: string[] };
+  /**
+   * What the organization calls the employee (any script, one line, no `@`, ≤ 64 characters).
+   * Omitted, a new Agent's `name` is used; with neither, the Agent's display name stands in.
+   */
+  name?: string;
   title: string;
   reportsTo: string;
   workspace?: string;
@@ -4734,6 +4761,8 @@ export interface OrgHireRequest {
 }
 
 export interface OrgEmployeePatchRequest {
+  /** null (or an empty string) clears the name: back to the Agent's display name. */
+  name?: string | null;
   title?: string;
   reportsTo?: string;
   workspace?: string;

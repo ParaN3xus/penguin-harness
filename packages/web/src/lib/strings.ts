@@ -266,6 +266,8 @@ export const zh = {
     emptyHint: "有会话正在运行、或自你上次打开后已完成的工作区会显示在这里。",
     loadFailed: "加载失败",
     silentMachines: (n: number) => `${n} 台机器没有应答——那里的会话没有计入。请到机器页面连接它。`,
+    /** Tooltip on a row's count: it unfolds into the Sessions it counts. */
+    toggleList: "展开或收起这些会话",
   },
 
   settings: {
@@ -696,6 +698,10 @@ export const zh = {
     /** Disclosed by the "?" beside that label: when a picked image takes effect. */
     avatarInfo:
       "选择图片后立即生效，无需另行保存；旁边的昵称是输入的文本，因此保留了自己的保存按钮。",
+    cropAvatar: "裁剪头像",
+    cropAvatarHint: "拖动调整位置，滚轮或滑块缩放",
+    cropZoom: "缩放",
+    useAvatar: "使用",
     changeAvatar: "更换头像",
     /**
      * Shared label of the two buttons that put a field back to what an account with nothing set
@@ -3737,6 +3743,12 @@ Benchmark：
     statusPaused: "已暂停",
     pause: "暂停组织",
     resume: "恢复组织",
+    deleteOrg: "删除组织",
+    deleteOrgDesc: "把组织移入 Project 的回收目录。员工保留为 Agent，对话也保留。",
+    deleteOrgConfirm:
+      "组织会从公司模式里消失。组织的文件移入 Project 的回收目录（organizations/.trash），可以手工移回来恢复。员工仍是 Project 的 Agent；工位与工单的对话会保留，但组织不在了，就没有页面再列出它们。要再次使用这个 id，需先删除旧 CEO 的 Agent。只是想让组织停下来而不丢任何东西，请改用暂停。",
+    deleteOrgTypeId: (orgId: string) => `输入 ${orgId} 以确认`,
+    deleted: (orgId: string) => `组织 ${orgId} 已删除`,
     pauseInfo:
       "暂停后所有自动触发停止——日程不再到点、@ 不再送达员工；你仍可以打开任意工位会话直接对话。组织只会被暂停，不会被删除：它的对话、员工与工单始终可以回去看。",
     settingsLoadFailed: "组织设置读取失败",
@@ -3857,6 +3869,13 @@ Benchmark：
       hire: "招募下属",
       setBudget: "设预算",
       changeReportsTo: "调整汇报线",
+      nameAndAvatar: "名字与头像",
+      profileTitle: (name: string) => `名字与头像——${name}`,
+      employeeName: "名字",
+      employeeNameHint: (agentId: string) =>
+        `大家在这个组织里怎么称呼这位员工，可以是中文；和 id（${agentId}）一样可以用在 @ 后面。两位员工同名时，会各自带上 id 作备注。留空则用 Agent 自己的名字。`,
+      employeeNameHireHint:
+        "大家在这个组织里怎么称呼这位员工，可以是中文；和 id 一样可以用在 @ 后面。留空则用 Agent 自己的名字。",
       renewDesk: "换工位",
       leave: "离任",
       ceoCannotLeave: "CEO 不能离任",
