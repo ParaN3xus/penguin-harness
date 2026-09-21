@@ -31,8 +31,18 @@ interface PendingEntry extends PendingApproval {
   resolve: (decision: ApprovalDecision) => void;
 }
 
+/** A Session runtime's pending approvals, as its holder uses them — what {@link ApprovalRegistry} implements. */
+export interface Approvals {
+  readonly size: number;
+  list(): PendingApproval[];
+  wait(toolCall: OmniMessage<ToolCallPayload>): Promise<ApprovalDecision>;
+  decide(toolCallId: string, decision: ApprovalDecision): boolean;
+  denyAll(): void;
+  denyMain(): void;
+}
+
 /** Pending approval registry (key = tool_call_id), one per Session runtime. */
-export class ApprovalRegistry {
+export class ApprovalRegistry implements Approvals {
   private readonly pending = new Map<string, PendingEntry>();
 
   get size(): number {
@@ -99,7 +109,7 @@ export function makeApprove(args: {
   getMode: () => ApprovalMode;
   /** A tool's permission level, from the running context's toolset (core Session.toolPermission): strict-tier — a permission edit applies when the next context opens. */
   toolPermission: (name: string) => "r" | "rw" | undefined;
-  registry: ApprovalRegistry;
+  registry: Approvals;
   publishRequest: (pending: PendingApproval) => void;
 }): ApproveFn {
   const { getMode, toolPermission, registry, publishRequest } = args;
