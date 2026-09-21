@@ -3,6 +3,7 @@
 - **Date:** 2026-09-22
 - **Type:** fix
 - **Scope:** `model-catalog`, `web`, `docs`
+- **PR:** [#820](https://github.com/Prism-Shadow/penguin-harness/pull/820)
 
 [English](2026-09-22-modelscope-responses-protocol.md)
 
