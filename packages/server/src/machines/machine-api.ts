@@ -13,7 +13,7 @@ import http from "node:http";
 /** The machine's own API, reached through its tunnel as an authenticated caller. */
 export interface MachineApi {
   request(
-    method: "GET" | "POST" | "PUT",
+    method: "GET" | "POST" | "PUT" | "DELETE",
     path: string,
     body?: unknown,
   ): Promise<{ status: number; text: string }>;
