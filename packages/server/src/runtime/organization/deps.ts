@@ -156,7 +156,7 @@ export interface OrgDeps {
 /** One call to a machine's own API, as that machine's authenticated caller (machines/machine-api.ts). */
 export interface OrgMachineApi {
   request(
-    method: "GET" | "POST" | "PUT",
+    method: "GET" | "POST" | "PUT" | "DELETE",
     path: string,
     body?: unknown,
   ): Promise<{ status: number; text: string }>;

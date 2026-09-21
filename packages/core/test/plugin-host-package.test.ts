@@ -97,6 +97,14 @@ describe("the plugin library's host package", () => {
     expect(run(program)).toEqual({ loaded: true, names: ["goal"] });
   });
 
+  it("walks past a package.json it cannot read on the way up", () => {
+    // Somebody else's file in the data root's ancestry: it answers nothing, and it must not
+    // keep the walk from reaching the host package above the program (the test above).
+    fs.writeFileSync(path.join(scratch, "root", "package.json"), "{ not json");
+    const program = path.join(scratch, "install", "lib", "dist", "serve.mjs");
+    expect(run(program)).toEqual({ loaded: true, names: ["goal"] });
+  });
+
   it("prefers the library a push carried over the one installed beside the program", () => {
     // The same old installation as above — it only ever had `goal` — and a push whose assets
     // carry a newer library laid out as a host package (scripts/library-payload.mjs).
