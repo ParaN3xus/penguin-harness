@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 import {
   isDesktopShellWindow,
   offersChangePassword,
+  nagsAboutInitialPassword,
   omitsOldPassword,
 } from "../src/lib/account-menu";
 
@@ -55,6 +56,18 @@ describe("offersChangePassword", () => {
     // The shared data root makes this reachable, and there the server requires the old
     // password like any other session — so the control is live and must stay visible.
     expect(offersChangePassword({ desktopMode: false, sessionVia: "desktop" })).toBe(true);
+  });
+});
+
+describe("nagsAboutInitialPassword", () => {
+  it("keeps quiet in any window the desktop shell signed in", () => {
+    // The trail asks its reader to change a password they hold; a shell-minted session holds
+    // none, and cannot set one on a server it only attached to. Both desktop cases are
+    // therefore silent, while a password session on either kind of server hears it.
+    expect(nagsAboutInitialPassword({ desktopMode: true, sessionVia: "desktop" })).toBe(false);
+    expect(nagsAboutInitialPassword({ desktopMode: false, sessionVia: "desktop" })).toBe(false);
+    expect(nagsAboutInitialPassword({ desktopMode: false, sessionVia: "password" })).toBe(true);
+    expect(nagsAboutInitialPassword({ desktopMode: false, sessionVia: "setup" })).toBe(true);
   });
 });
 

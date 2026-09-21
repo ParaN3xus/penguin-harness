@@ -70,6 +70,21 @@ export function offersChangePassword(session: AccountMenuSession): boolean {
  * That window has no way to set a password in the UI, which is the point: the account's
  * password is recovered from the machine with `penguin server reset-admin-password`.
  */
+/**
+ * Whether to nag that the account still runs on its initial password.
+ *
+ * The trail is advice for an operator who HAS that password — the one a server prints, or the
+ * first-login link it frames — and whose account is therefore claimable by anyone who reaches
+ * it. A session the desktop shell minted has neither half: the shell seeds a random password it
+ * never shows, and the window cannot set one (`omitsOldPassword` follows the server, which asks
+ * for the old password unless the server is the shell's own). Nagging there is a prompt with no
+ * way to act on it, so it is left to the terminal that started the server — the notice it framed
+ * at startup says the same thing to the person who can act.
+ */
+export function nagsAboutInitialPassword(session: AccountMenuSession): boolean {
+  return !session.desktopMode && session.sessionVia !== "desktop";
+}
+
 export function omitsOldPassword(session: AccountMenuSession): boolean {
   return isDesktopShellWindow(session) || session.sessionVia === "setup";
 }

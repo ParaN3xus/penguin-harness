@@ -21,3 +21,6 @@ A desktop app that found another server already holding its data root — a `pen
 - A child window sent to the sign-in page by a dying session closes instead of showing it, which returns a detached terminal's tab to the dock in the main window rather than stranding it behind a form it cannot use.
 - The session cookie's name is a copy of the server's `SESSION_COOKIE`, pinned to that declaration by a test.
 - The desktop quickstart gained a paragraph on what happens when another server owns the data root, and on what to do if a window still shows the login page.
+- The initial-password trail keeps quiet in any window the shell signed in: it asks its reader to
+  change a password they hold, and a shell-minted session holds none and cannot set one on a server it
+  only attached to. The terminal that started that server saw the same notice at startup.
