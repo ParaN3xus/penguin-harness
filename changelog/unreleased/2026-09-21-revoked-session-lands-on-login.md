@@ -3,6 +3,7 @@
 - **Date:** 2026-09-21
 - **Type:** fix
 - **Scope:** `server`, `web`, `docs`
+- **PR:** [#819](https://github.com/Prism-Shadow/penguin-harness/pull/819)
 
 [中文版](2026-09-21-revoked-session-lands-on-login.zh.md)
 
