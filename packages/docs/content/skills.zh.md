@@ -108,6 +108,7 @@ Skill 采用「先索引、后正文」的设计：系统 Prompt 经 `{{SKILL_ME
 | | `skill-porting` | 从外部来源移植 Skill——插件市场、skills.sh 注册表、GitHub 仓库或本地目录——经审阅与规范化后装入 Agent |
 | | `agent-tuning` | 调优闭环的四个 Skill：`agent-initialization`（依据需求初始化 Agent）、`benchmark-design`（设计并校准能力 Benchmark）、`agent-evaluation`（隔离执行并评分单个 Case）、`agent-optimization`（根据测得结果改进 Agent） |
 | Agent 公司 | `agent-company` | [公司模式](/company-mode)的整套工具箱——六个 Skill：`company-setup`（与用户一起创建组织：一次只问一个问题，确认摘要后执行 `penguin org create`；它自己不招募、不建工单）、`company-employee`（每个工位会话与工单会话都遵循的协议：触发块、工单看板、阻塞、频道礼仪、预算）、`company-ceo`（使命拆解为工单、招募、划分工作区、审核、向董事会汇报）、`company-hr`（保证日程有安排、招募与离任、评估）、`company-finance`（预算、每日巡检、告警与暂停处置）、`company-mirror`（数字分身公司：为每位现实同事建一个分身、绑定到他的机器人、只传话不开工单）（不预装：组织创建 CEO 与招募员工时自行安装；想让某个 Agent 能创建组织，从技能库装上它即可） |
+| | `agent-company-proposals` | 公司模式的提案（`company-proposals` 插件的协议）——三个 Skill：`proposal-author`（写一份短小、抽象、可逐段评论的提案，按反馈修订）、`proposal-implementer`（在 `proposal/<n>-<slug>` 分支上实施、开 PR、把提案没料到的事反馈回去）、`proposal-tester`（分批测试 dev 分支：已合并的提案开修复工单，尚未认可的请求整改）（不预装：装到组织委托提案的员工上） |
 
 ## 编写与优化
 
