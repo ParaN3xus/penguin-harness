@@ -181,7 +181,7 @@ import {
 import { FileReveal, WorkspaceFiles } from "./mechanisms/workspace.js";
 import { Settings, UiPrefsStore } from "./mechanisms/settings.js";
 import { MessagingBindings } from "./mechanisms/messaging.js";
-import { OrgCache } from "./mechanisms/organization.js";
+import { OrgCache, OrgGateway } from "./mechanisms/organization.js";
 import { PreviewModule, PreviewTokens } from "./http/routes/preview.js";
 import { Http, HttpModule } from "./http/app.js";
 import { WebModule, WebShell } from "./http/routes/contributions.js";
@@ -435,7 +435,7 @@ export class MessagingHubModule {}
  */
 @Module({
   children: [OrgCacheRepo, OrganizationModule, OrgRoutes],
-  exports: [OrgCache, OrgService, OrgScheduler],
+  exports: [OrgCache, OrgService, OrgScheduler, OrgGateway],
 })
 export class CompanyModule {}
 
