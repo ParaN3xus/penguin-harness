@@ -146,17 +146,17 @@ Refusals decided before any ssh runs have their own codes: `409` `install_runnin
 
 ### Port Forwarding (admin only)
 
-A forward brings a TCP port on a machine's loopback to THIS server's loopback: `(machineId, workspace, remotePort) → localPort`. It belongs to a Workspace — a directory on a machine — not to a Session, and it is stored in `web.db`, so it survives a restart and a hot push on the same local port.
+A forward is ssh's own `-L` (`in`: a machine's port on this server's loopback) or `-R` (`out`: this server's port on the machine's loopback), carried by the one session held to the machine: `(machineId, workspace, direction, remotePort ⇄ localPort)`. It belongs to a Workspace — a directory on a machine — not to a Session, is stored in `web.db`, and survives a restart and a hot push (the held session is delivered to the next platform generation, forwards included).
 
 | Method | Path | Description |
 | --- | --- | --- |
-| GET | /api/port-forwards?machine=&workspace= | The forwards and what is known of each: `{forwards: [{id, machineId, workspace, remotePort, localPort, createdAt, listener, dial, open, bytesUp, bytesDown}]}`. `machine` alone is every forward of that machine; `workspace` needs `machine` (`400` otherwise) |
-| POST | /api/port-forwards | Body `{machineId, workspace, remotePort, localPort?}`; `201` with the forward. `localPort` omitted = chosen here: the remote port's own number when it is free, else the first free port above it. `404` `unknown_machine`, `409` `forward_exists`, `409` `local_port_in_use`. `localPort` must be 1024–65535 |
-| DELETE | /api/port-forwards/:id | Close the listener and the connections through it, and forget the forward; `204`, `404` when there is none |
+| GET | /api/port-forwards?machine=&workspace= | The forwards and their status: `{forwards: [{id, machineId, workspace, direction, remotePort, localPort, createdAt, status}]}`. `machine` alone is every forward of that machine; `workspace` needs `machine` (`400` otherwise) |
+| POST | /api/port-forwards | Body `{machineId, workspace, direction?, remotePort, localPort?}`, `direction` defaulting to `in`; `201` with the forward. `in`: `localPort` omitted = chosen here, the remote port's own number when it is free, else the first free port above it. `out`: `localPort` required (the service being sent), `remotePort` = the port to open on the machine. `404` `unknown_machine`, `409` `forward_exists`, `409` `local_port_in_use`. `localPort` must be 1024–65535 |
+| DELETE | /api/port-forwards/:id | Take it off the session and forget it; `204`, `404` when there is none |
 
-The listener binds `127.0.0.1` only, when the forward is made and whenever the platform starts. It dials the machine only when a client connects, through the ONE connection held to that machine — a forward never opens ssh of its own, so with the machine not connected the client is closed at once and the reason is kept.
+A machine's forwards are its session's wanted set. Where ssh has a control socket (POSIX) the forward is added to the LIVE session with `ssh -O forward` and taken off with `-O cancel` — no second connection, no reconnect. On a Windows hub (no control socket) the session carries its forwards in its start arguments: a change of the set reopens the session with the new set, and ssh's warning about a port it could not bind is read off its stderr. Either way the set is re-applied whenever the session comes back up, and a forward never opens ssh: with the machine not connected it waits, and says so.
 
-The facts are reported by layer, never as one flag: `listener` is `{listening: true}` or `{error}` (`EADDRINUSE` when something else took the port — the record and its port stay as they are); `dial` is the last dial, `{answeredAt}` or `{failedAt, detail}`, `null` until a client has connected; `open` is the connections open now; `bytesUp` / `bytesDown` count since this process started.
+`status` names which layer speaks: `{kind: "not-connected"}` (the session is down), `{kind: "pending"}` (up, ssh has not answered), `{kind: "active"}`, `{kind: "failed", detail}` (ssh's own words — `bind: Address already in use`).
 
 ### Version and Self-Update
 
