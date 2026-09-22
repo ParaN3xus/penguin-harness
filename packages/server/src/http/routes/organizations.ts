@@ -3,9 +3,11 @@
  *   GET|POST      /api/projects/:p/organizations
  *   POST          /api/projects/:p/organizations/suggest-id   # a semantic id for a display name
  *   GET|PATCH     /api/projects/:p/organizations/:orgId
+ *   DELETE        …/:orgId                                  # owner only; to the Project's trash
  *   GET           …/:orgId/chart
  *   POST          …/:orgId/employees                        # hire
  *   PATCH|DELETE  …/:orgId/employees/:agentId
+ *   GET|PUT       …/:orgId/employees/:agentId/avatar         # the employee's picture (PUT { avatar: dataUrl | null })
  *   GET|POST      …/:orgId/employees/:agentId/desk           # the desk session (GET opens it if needed; POST renews)
  *   GET|PUT       …/:orgId/handbook                 (the index, handbook/README.md)
  *   GET           …/:orgId/handbook/files
@@ -170,7 +172,7 @@ function requireChannelParam(c: Context<AppEnv>): string {
 /** What this route group needs — declared here, at the consumer. */
 export interface OrgRouteDeps {
   orgService: OrgService;
-  projectService: Pick<ProjectLifecycle, "requireProjectAccess">;
+  projectService: Pick<ProjectLifecycle, "requireProjectAccess" | "requireProjectOwner">;
   serverSettingsRepo: Pick<Settings, "getCompanyMode">;
 }
 
@@ -206,6 +208,7 @@ export function organizationRoutes(deps: OrgRouteDeps): Hono<AppEnv> {
     const name = optionalString(body, "name", { minLen: 1, maxLen: 100 });
     const timezone = optionalString(body, "timezone", { minLen: 1, maxLen: 64 });
     const workspace = optionalString(body, "workspace", { minLen: 1, maxLen: 4096 });
+    const workspaceMachine = optionalString(body, "workspaceMachine", { minLen: 1, maxLen: 200 });
     const ceoBudget = optionalNumber(body, "ceoBudget", { nonNegative: true });
     const language = optionalEnum(body, "language", LANGUAGES);
     const model = parseModel(body);
@@ -217,13 +220,35 @@ export function organizationRoutes(deps: OrgRouteDeps): Hono<AppEnv> {
         ...(name !== undefined ? { name } : {}),
         ...(timezone !== undefined ? { timezone } : {}),
         ...(workspace !== undefined ? { workspace } : {}),
+        ...(workspaceMachine !== undefined ? { workspaceMachine } : {}),
         ...(ceoBudget !== undefined ? { ceoBudget } : {}),
         ...(language !== undefined ? { language } : {}),
         ...(model !== undefined && model !== null ? { model } : {}),
       },
       c.var.user.userId,
+      { admin: c.var.user.isAdmin === true },
     );
     return c.json(detail, 201);
+  });
+
+  // An organization that runs on another machine is answered THERE (the Web App sends its
+  // requests through `/server/<machineId>/…`). What this server holds is a mirror: a write to
+  // it would be undone by the next copy, so it is refused with where to send it instead. The
+  // mirror's own two routes are the exception — they are how a mirror is read.
+  app.use("/:orgId/*", async (c, next) => {
+    if (c.req.method === "GET" || c.req.method === "HEAD") return next();
+    const projectId = c.req.param("projectId") ?? "";
+    const machineId = await Promise.resolve(
+      deps.orgService.runsOn(projectId, c.req.param("orgId")),
+    ).catch(() => null);
+    if (typeof machineId === "string") {
+      throw new HttpError(
+        409,
+        "org_runs_elsewhere",
+        `This organization runs on machine ${machineId}; send the request there.`,
+      );
+    }
+    return next();
   });
 
   // Before the `/:orgId` routes: a proposal needs no organization, only the Project.
@@ -294,6 +319,35 @@ export function organizationRoutes(deps: OrgRouteDeps): Hono<AppEnv> {
 
   // ---- employees ----
 
+  // What a server holding this organization's mirror copies: the file list by content hash,
+  // and one file's bytes (runtime/organization/mirror.ts).
+  app.get("/:orgId/mirror", async (c) => {
+    const projectId = requireValidId(c, "projectId");
+    member(c, projectId);
+    const orgId = requireValidId(c, "orgId");
+    return c.json({ files: await deps.orgService.mirrorFiles(projectId, orgId) });
+  });
+
+  app.get("/:orgId/mirror/file", async (c) => {
+    const projectId = requireValidId(c, "projectId");
+    member(c, projectId);
+    const orgId = requireValidId(c, "orgId");
+    const rel = c.req.query("path") ?? "";
+    const bytes = await deps.orgService.mirrorFile(projectId, orgId, rel);
+    return c.json({ base64: bytes.toString("base64") });
+  });
+
+  // Deleting is a Project-level management operation, like deleting an Agent: owner only.
+  // The organization itself is what goes (to the Project's trash); its employees' Agents and
+  // its Sessions are left as they are.
+  app.delete("/:orgId", async (c) => {
+    const projectId = requireValidId(c, "projectId");
+    deps.projectService.requireProjectOwner(c.var.user.userId, projectId);
+    const orgId = requireValidId(c, "orgId");
+    await deps.orgService.delete(projectId, orgId);
+    return c.body(null, 204);
+  });
+
   app.get("/:orgId/chart", async (c) => {
     const projectId = requireValidId(c, "projectId");
     const orgId = requireValidId(c, "orgId");
@@ -327,6 +381,7 @@ export function organizationRoutes(deps: OrgRouteDeps): Hono<AppEnv> {
         ...(plugins !== undefined ? { plugins } : {}),
       };
     }
+    const name = optionalString(body, "name", { minLen: 1, maxLen: 64 });
     const title = requireString(body, "title", { minLen: 1, maxLen: 100 });
     const reportsTo = requireString(body, "reportsTo", { minLen: 2, maxLen: 64 });
     const workspace = optionalString(body, "workspace", { minLen: 1, maxLen: 4096 });
@@ -336,6 +391,7 @@ export function organizationRoutes(deps: OrgRouteDeps): Hono<AppEnv> {
     const item = await deps.orgService.hire(projectId, orgId, {
       ...(agentId !== undefined ? { agentId } : {}),
       ...(newAgent !== undefined ? { newAgent } : {}),
+      ...(name !== undefined ? { name } : {}),
       title,
       reportsTo,
       ...(workspace !== undefined ? { workspace } : {}),
@@ -352,6 +408,8 @@ export function organizationRoutes(deps: OrgRouteDeps): Hono<AppEnv> {
     const agentId = requireValidId(c, "agentId");
     member(c, projectId);
     const body = await readJson(c);
+    // null clears the name; so does an empty string, which is what an emptied box sends.
+    const name = body.name === null ? null : optionalString(body, "name", { maxLen: 64 });
     const title = optionalString(body, "title", { minLen: 1, maxLen: 100 });
     const reportsTo = optionalString(body, "reportsTo", { minLen: 2, maxLen: 64 });
     const workspace = optionalString(body, "workspace", { minLen: 1, maxLen: 4096 });
@@ -360,6 +418,7 @@ export function organizationRoutes(deps: OrgRouteDeps): Hono<AppEnv> {
     const duties = optionalString(body, "duties", { maxLen: 2000 });
     const model = parseModel(body);
     const item = await deps.orgService.patchEmployee(projectId, orgId, agentId, {
+      ...(name !== undefined ? { name } : {}),
       ...(title !== undefined ? { title } : {}),
       ...(reportsTo !== undefined ? { reportsTo } : {}),
       ...(workspace !== undefined ? { workspace } : {}),
@@ -368,6 +427,40 @@ export function organizationRoutes(deps: OrgRouteDeps): Hono<AppEnv> {
       ...(model !== undefined ? { model } : {}),
     });
     return c.json(item);
+  });
+
+  // The employee's avatar: an image of the organization's (avatars/<agent_id>.<ext>). The GET
+  // is cached for good because its URL carries the content revision (`avatarRev`).
+  app.get("/:orgId/employees/:agentId/avatar", async (c) => {
+    const projectId = requireValidId(c, "projectId");
+    const orgId = requireValidId(c, "orgId");
+    const agentId = requireValidId(c, "agentId");
+    member(c, projectId);
+    const avatar = await deps.orgService.employeeAvatar(projectId, orgId, agentId);
+    return c.body(new Uint8Array(avatar.bytes), 200, {
+      "content-type": avatar.mime,
+      "cache-control": "private, max-age=31536000, immutable",
+      "x-content-type-options": "nosniff",
+    });
+  });
+
+  app.put("/:orgId/employees/:agentId/avatar", async (c) => {
+    const projectId = requireValidId(c, "projectId");
+    const orgId = requireValidId(c, "orgId");
+    const agentId = requireValidId(c, "agentId");
+    member(c, projectId);
+    const body = await readJson(c);
+    if (body.avatar !== null && typeof body.avatar !== "string") {
+      throw badRequest("avatar must be a data URL, or null to remove it.");
+    }
+    return c.json(
+      await deps.orgService.setEmployeeAvatar(
+        projectId,
+        orgId,
+        agentId,
+        body.avatar as string | null,
+      ),
+    );
   });
 
   app.delete("/:orgId/employees/:agentId", async (c) => {
