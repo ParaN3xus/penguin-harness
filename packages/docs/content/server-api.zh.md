@@ -168,7 +168,7 @@ listener 只绑 `127.0.0.1`，在创建转发时与平台每次启动时 bind。
 
 **地址的含义。** 回环名（`localhost`、`127.0.0.1`、`[::1]`、`*.localhost`）指 Workspace 所在机器的回环——经该机器的既有连接到达（自身从不拉起 ssh），Workspace 在本服务端时直连；走 `http`，那边的服务说 TLS 时走 `https`（不校验证书——这一跳是回环或 ssh 通道）；永不指向本服务端自己的端口。其余主机名是公网地址，由本服务端经常规出站通道请求（遵循管理员代理设置）。
 
-**隔离。** Cookie 按主机划分且不区分端口，故每个站点——`(用户, 机器, 上游 Origin)`——获得一个专属主机 `<label>.localhost`，由本服务端在自身端口上反向代理。浏览器原生把 `*.localhost` 解析到回环；App 的会话 Cookie 是 `localhost` 上的 host-only Cookie，不会发往该主机。label 为 128 位随机数，存于 `web.db`（`browser_sites`），是该主机唯一的凭据——因此所有代理响应都带 `Referrer-Policy: no-referrer`。Host 为浏览器主机的请求先于一切 App 中间件与路由分发给代理（`HttpModule.hosts`），且从不落回 App；未知 label 答 `404`。面板的 iframe 沙箱不含 `allow-top-navigation`。
+**隔离。** Cookie 按主机划分且不区分端口，故每个站点——`(用户, 机器, 上游 Origin)`——获得一个专属主机 `<label>.localhost`，由本服务端在自身端口上反向代理。浏览器原生把 `*.localhost` 解析到回环；App 的会话 Cookie 是 `localhost` 上的 host-only Cookie，不会发往该主机。label 为 128 位随机数，存于 `web.db`（`browser_sites`），是该主机唯一的凭据——因此所有代理响应都带 `Referrer-Policy: no-referrer`。Host 为浏览器主机的请求先于一切 App 中间件与路由分发给代理（`HttpModule.hosts`），且从不落回 App；未知 label 答 `404`。面板的 iframe 沙箱不含 `allow-top-navigation`；弹窗不受沙箱约束（页面打开的窗口是站点主机上的真实窗口，`window.opener` 保留），对话框允许。
 
 **出站防护。** 对公网目标的每次请求，主机名解析出的全部地址都必须是公网地址——回环、私网、CGNAT、链路本地（含云元数据）、组播 / 保留、IPv6 ULA / 链路本地、IPv4 映射与 NAT64 形态一律拒绝，无法识别的形态同样拒绝。直连时该校验就是 socket 自己的 `lookup`，DNS rebinding 没有第二次作答的机会；经前置代理出站时由代理自行解析，校验并行进行。服务端从不跟随重定向。
 
