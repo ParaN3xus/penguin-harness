@@ -146,17 +146,17 @@ curl -H "Authorization: Bearer $(cat ~/.penguin/data/api-token)" \
 
 ### 端口转发（仅管理员）
 
-一条转发把某台机器回环上的一个 TCP 端口带到**本服务端**的回环上：`(machineId, workspace, remotePort) → localPort`。它属于 Workspace（某台机器上的一个目录）而非 Session，记录存于 `web.db`，因此重启与热推送之后仍在同一个本地端口上。
+一条转发就是 ssh 自己的 `-L`（`in`：机器的端口出现在本服务端的回环上）或 `-R`（`out`：本服务端的端口出现在机器的回环上），由持有到该机器的那条会话承载：`(machineId, workspace, direction, remotePort ⇄ localPort)`。它属于 Workspace（某台机器上的一个目录）而非 Session，存于 `web.db`，重启与热推送之后仍在（被持有的会话连同转发一起交给下一代平台）。
 
 | Method | Path | 说明 |
 | --- | --- | --- |
-| GET | /api/port-forwards?machine=&workspace= | 转发列表及各自的已知事实：`{forwards: [{id, machineId, workspace, remotePort, localPort, createdAt, listener, dial, open, bytesUp, bytesDown}]}`。只给 `machine` 即该机器的全部转发；`workspace` 必须与 `machine` 同给（否则 `400`） |
-| POST | /api/port-forwards | 请求体 `{machineId, workspace, remotePort, localPort?}`；`201` 返回该转发。省略 `localPort` 则由服务端选取：与远端端口同号的端口空闲即用它，否则向上取第一个空闲端口。`404` `unknown_machine`、`409` `forward_exists`、`409` `local_port_in_use`。`localPort` 须在 1024–65535 |
-| DELETE | /api/port-forwards/:id | 关闭 listener 与经由它的连接，并删除记录；`204`，不存在则 `404` |
+| GET | /api/port-forwards?machine=&workspace= | 转发列表及各自的状态：`{forwards: [{id, machineId, workspace, direction, remotePort, localPort, createdAt, status}]}`。只给 `machine` 即该机器的全部转发；`workspace` 必须与 `machine` 同给（否则 `400`） |
+| POST | /api/port-forwards | 请求体 `{machineId, workspace, direction?, remotePort, localPort?}`，`direction` 缺省 `in`；`201` 返回该转发。`in`：省略 `localPort` 则由服务端选取——与远端端口同号且空闲即用它，否则向上取第一个空闲端口。`out`：`localPort` 必填（送出去的服务），`remotePort` 为机器上要打开的端口。`404` `unknown_machine`、`409` `forward_exists`、`409` `local_port_in_use`。`localPort` 须在 1024–65535 |
+| DELETE | /api/port-forwards/:id | 从会话上撤下并删除记录；`204`，不存在则 `404` |
 
-listener 只绑 `127.0.0.1`，在创建转发时与平台每次启动时 bind。只有客户端连上时才向机器拨号，且走该机器的**唯一连接**——转发自身从不拉起 ssh：机器未连接时客户端立即被关闭，并记下原因。
+一台机器的转发就是它会话的期望集。ssh 有控制 socket 时（POSIX），转发以 `ssh -O forward` 加到**正在运行的**会话上、以 `-O cancel` 撤下——不开第二条连接、不重连。Windows hub（没有控制 socket）上，会话在启动参数里带上转发：集合变化时用新集合重开会话，ssh 对绑不上的端口的警告从它的 stderr 读出。两种情况下会话重连后期望集都会自动重新申请；转发从不拉起 ssh：机器未连接时它等着，并如实报告。
 
-事实按层给出，不合成一个标志：`listener` 为 `{listening: true}` 或 `{error}`（端口被别人占用时为 `EADDRINUSE`——记录与端口保持不变）；`dial` 为最近一次拨号，`{answeredAt}` 或 `{failedAt, detail}`，尚无客户端连接时为 `null`；`open` 为当前连接数；`bytesUp` / `bytesDown` 自本进程启动起累计。
+`status` 说明是哪一层在说话：`{kind: "not-connected"}`（会话未连接）、`{kind: "pending"}`（已连，ssh 尚未应答）、`{kind: "active"}`、`{kind: "failed", detail}`（ssh 原话——如 `bind: Address already in use`）。
 
 ### 浏览器
 
