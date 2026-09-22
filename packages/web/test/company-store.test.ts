@@ -15,7 +15,12 @@ import type {
   OrgChannelMessage,
   OrganizationSummary,
 } from "@prismshadow/penguin-server/api";
-import { createCompanyStore, isCompanyEvent, subscribeCompanyEvents } from "../src/state/company";
+import {
+  createCompanyStore,
+  isCompanyEvent,
+  machineOfOpenOrg,
+  subscribeCompanyEvents,
+} from "../src/state/company";
 import { applyUserEvent, createSessionsStore } from "../src/state/sessions";
 
 const message = (over: Partial<OrgChannelMessage> = {}): OrgChannelMessage => ({
@@ -374,5 +379,20 @@ describe("applyUserEvent forwarding", () => {
     } finally {
       stop();
     }
+  });
+});
+
+describe("the machine the open organization runs on", () => {
+  const here = summary("p1", "here");
+  const away = { ...summary("p1", "away"), machineId: "m-1" };
+
+  it("is the machine the list names, and this server for an organization without one", () => {
+    expect(machineOfOpenOrg([here, away], "p1/away")).toBe("m-1");
+    expect(machineOfOpenOrg([here, away], "p1/here")).toBeNull();
+  });
+
+  it("is this server while nothing is open or the list has not named the organization", () => {
+    expect(machineOfOpenOrg([here, away], null)).toBeNull();
+    expect(machineOfOpenOrg([], "p1/away")).toBeNull();
   });
 });

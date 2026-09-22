@@ -720,6 +720,10 @@ export const en: Strings = {
     /** Disclosed by the "?" beside that label: when a picked image takes effect. */
     avatarInfo:
       "A picture takes effect as soon as you choose it — there is no separate Save for it. The nickname beside it is typed text, so it keeps a Save of its own.",
+    cropAvatar: "Crop avatar",
+    cropAvatarHint: "Drag to position, scroll or use the slider to zoom",
+    cropZoom: "Zoom",
+    useAvatar: "Use this",
     changeAvatar: "Change avatar",
     /**
      * Shared label of the two buttons that put a field back to what an account with nothing set
@@ -3864,11 +3868,13 @@ Scenarios:
     modelProjectDefaultNamed: (name: string): string => `Project default (${name})`,
     modelsLoadFailed:
       "The model list could not be read; you can still create with the Project default",
+    machineCompanyModeOff:
+      "Company mode is off on that machine. Turn it on in that machine's Settings first, then create the organization on it.",
     workspaceField: "Company workspace",
     workspaceInfo:
-      "The directory the employees work in together: each employee's workspace is one of its sub-directories (or all of it), and desk and ticket sessions run inside it.",
+      "The directory the employees work in together: each employee's workspace is one of its sub-directories (or all of it), and desk and ticket sessions run inside it. It can be on one of the Project's connected machines: the organization then runs on that machine — its Agents and Sessions are there — and still belongs to this Project, which keeps a copy of its files. It cannot be moved afterwards.",
     workspaceHint:
-      "Leave empty for the organization's own workspace/ directory; a path must be an existing directory on the server",
+      "Leave empty for the organization's own workspace/ directory; a path must be an existing directory, on this server or on a connected machine",
     workspaceEmpty: "The organization's own workspace/ directory",
     workspaceMenuHint: "Pick an existing directory as the company workspace",
     workspaceClear: "Back to the organization's own directory",
@@ -3904,6 +3910,13 @@ Scenarios:
     statusPaused: "Paused",
     pause: "Pause organization",
     resume: "Resume organization",
+    deleteOrg: "Delete organization",
+    deleteOrgDesc:
+      "Moves the organization to the Project's trash. Its employees stay as Agents and its conversations are kept.",
+    deleteOrgConfirm:
+      "The organization disappears from company mode. Its files go to the Project's trash (organizations/.trash) and can be moved back by hand. Its employees remain Agents of the Project; its desk and ticket conversations are kept, but with the organization gone no page lists them any more. Its id can be reused only after the old CEO's Agent is deleted. To stop an organization without losing anything, pause it instead.",
+    deleteOrgTypeId: (orgId: string) => `Type ${orgId} to confirm`,
+    deleted: (orgId: string) => `Organization ${orgId} deleted`,
     pauseInfo:
       "Paused stops every automatic trigger — calendar events no longer fire and @-mentions are not delivered to employees; you can still open any desk session and talk directly. An organization is paused, never deleted: its conversations, employees and tickets stay reachable.",
     settingsLoadFailed: "The organization's settings could not be read",
@@ -4023,6 +4036,13 @@ Scenarios:
       hire: "Hire a subordinate",
       setBudget: "Set budget",
       changeReportsTo: "Change reporting line",
+      nameAndAvatar: "Name and avatar",
+      profileTitle: (name: string) => `Name and avatar — ${name}`,
+      employeeName: "Name",
+      employeeNameHint: (agentId: string) =>
+        `What people call this employee here, in any language; it works after @ like the id (${agentId}). Two employees with the same name are shown with their ids noted. Empty: the Agent's own name.`,
+      employeeNameHireHint:
+        "What people call this employee here, in any language — it works after @ like the id. Empty: the Agent's own name.",
       renewDesk: "New desk session",
       leave: "Leave the organization",
       ceoCannotLeave: "The CEO cannot leave",

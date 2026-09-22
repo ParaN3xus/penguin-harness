@@ -272,8 +272,8 @@ export function workspacePluginRoot(
  * running program (`process.argv[1]`): a hot-pushed platform bundle sits in the data root's
  * store, where nothing above it is a package, and the plugins it can offer are the ones
  * installed beside the program that booted it. The first package.json naming a plugin
- * package wins; failing that, the first package.json at all (an empty library, with a root
- * to name in errors); failing that, null.
+ * package wins; failing that, the first package.json that could be read at all (an empty
+ * library, with a root to name in errors); failing that, null.
  *
  * Found on first use and never at import: the bundle has to LOAD on a machine that has no
  * host package, and the library call is then what fails, naming both places it looked.
@@ -291,15 +291,47 @@ function programDir(): string | null {
   return typeof entry === "string" && entry !== "" ? path.dirname(path.resolve(entry)) : null;
 }
 
+/**
+ * The library a hot push carried, when there is one (see {@link usePushedPluginLibrary}). It
+ * outranks the other two places: the plugins a pushed platform offers are the ones it was
+ * BUILT with, not the ones installed beside whatever program happened to boot it.
+ */
+let pushedLibrary: string | null = null;
+
+/**
+ * Points the library at the copy a hot push carried in its assets: a directory holding a
+ * `package.json` whose `dependencies` name the plugin packages, and their `node_modules`.
+ * `null` goes back to looking above this module and above the running program.
+ *
+ * Without it a pushed platform reads the library of the program that booted it — so a machine
+ * installed before a plugin existed never gets that plugin, however new its platform is, and
+ * a feature that seeds an Agent with it fails with "not in the plugin library". (Creating an
+ * organization installs `agent-company` on its CEO; on a program that predates company mode
+ * that was every attempt.) Called by the platform at boot, before anything reads the library.
+ */
+export function usePushedPluginLibrary(dir: string | null): void {
+  pushedLibrary = dir;
+  host = undefined;
+}
+
 function findHostPackage(): HostPackage | null {
   let first: HostPackage | null = null;
-  for (const start of [LOADER_DIR, programDir()]) {
+  for (const start of [pushedLibrary, LOADER_DIR, programDir()]) {
     if (start === null) continue;
     for (let dir = start; ;) {
       const file = path.join(dir, "package.json");
       if (fs.existsSync(file)) {
         const candidate: HostPackage = { root: dir, require: createRequire(file) };
-        if (Object.keys(readDependencies(candidate)).some((d) => d.startsWith(PLUGIN_PKG_PREFIX)))
+        // An unreadable or malformed package.json on the way up is somebody else's file,
+        // not this one's answer: it must not keep the walk from reaching the host package
+        // above the program.
+        let dependencies: Record<string, string> | null = null;
+        try {
+          dependencies = readDependencies(candidate);
+        } catch {
+          break;
+        }
+        if (Object.keys(dependencies).some((d) => d.startsWith(PLUGIN_PKG_PREFIX)))
           return candidate;
         first ??= candidate;
         break;

@@ -4513,6 +4513,12 @@ export interface OrganizationSummary {
   blockedTickets: number;
   createdBy: string;
   spend: OrgSpendSummary;
+  /**
+   * The machine this organization RUNS on, when that is not the server answering: the one its
+   * shared workspace is on. The organization's own requests (`…/organizations/:orgId/…`) are
+   * answered there; this server holds a mirror. Absent or null: it runs here.
+   */
+  machineId?: string | null;
   /** Present when `org_config.toml` / `org_chart.yaml` fail validation: the organization is listed but every automatic trigger is held until it is fixed. */
   invalid?: string;
 }
@@ -4523,8 +4529,20 @@ export interface OrganizationsResponse {
 
 export interface OrgEmployeeItem {
   agentId: string;
-  /** Agent display name (system_config.yaml); falls back to the id. */
+  /**
+   * What this employee goes by in the organization, unique across it: the chart's `name`, else
+   * the Agent's display name, else the id — with the id noted (`name (id)`) when the name is
+   * not this employee's alone. It is what every surface shows and what works after `@`.
+   */
   name: string;
+  /** The `name` as written in the chart, for editing; absent when the entry has none. */
+  givenName?: string;
+  /**
+   * Present when the employee has an avatar: the content revision of the image served at
+   * `GET …/employees/:agentId/avatar` (append it as `?rev=` — the image is cached for good).
+   * Absent, surfaces draw the letter tile.
+   */
+  avatarRev?: string;
   title: string;
   /** null for the CEO (the root). */
   reportsTo: string | null;
@@ -4899,6 +4917,12 @@ export interface OrganizationCreateRequest {
   timezone?: string;
   /** An existing absolute directory to use as the shared workspace; default = the organization's own `workspace/`. */
   workspace?: string;
+  /**
+   * The machine `workspace` is on, by its own id (one of the Project's connected machines);
+   * absent = this server. The organization RUNS there — that server opens its desks and drives
+   * its calendar — and belongs to the Project here, which keeps a mirror of its files.
+   */
+  workspaceMachine?: string;
   /** The model for desks and ticket sessions (a configured pair); default = the Project default. */
   model?: { provider: string; modelId: string };
   /**
@@ -4969,6 +4993,11 @@ export interface OrgHireRequest {
   agentId?: string;
   /** … or create one (the two are exclusive). Plugins default to agent-company + agent-development. */
   newAgent?: { agentId: string; name?: string; description?: string; plugins?: string[] };
+  /**
+   * What the organization calls the employee (any script, one line, no `@`, ≤ 64 characters).
+   * Omitted, a new Agent's `name` is used; with neither, the Agent's display name stands in.
+   */
+  name?: string;
   title: string;
   reportsTo: string;
   workspace?: string;
@@ -4978,6 +5007,8 @@ export interface OrgHireRequest {
 }
 
 export interface OrgEmployeePatchRequest {
+  /** null (or an empty string) clears the name: back to the Agent's display name. */
+  name?: string | null;
   title?: string;
   reportsTo?: string;
   workspace?: string;

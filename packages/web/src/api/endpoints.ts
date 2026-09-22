@@ -232,6 +232,7 @@ import type {
 } from "@prismshadow/penguin-server/api";
 import type { MCPServerConfig } from "@prismshadow/penguin-core/interfaces";
 import { apiFetch, apiFetchWithMeta } from "./client";
+import { rememberSessionsIn, rememberOrgMachine } from "../lib/org-machines";
 import { machineForSession, rememberSessionMachine } from "../lib/session-machines";
 import { apiUrl } from "../lib/server-context";
 
@@ -391,8 +392,11 @@ export const putCommandPolicy = (
 
 // Model configuration -------------------------------------------------------------------
 
-export const getModels = (projectId: string) =>
-  apiFetch<ModelsResponse>(`/api/projects/${encodeURIComponent(projectId)}/models`);
+/** The Project's models on this server, or on the machine named: model config is per server. */
+export const getModels = (projectId: string, machineId: string | null = null) =>
+  apiFetch<ModelsResponse>(`/api/projects/${encodeURIComponent(projectId)}/models`, {
+    server: machineId,
+  });
 
 export const putModels = (projectId: string, body: ModelsUpdateRequest) =>
   apiFetch<ModelsResponse>(`/api/projects/${encodeURIComponent(projectId)}/models`, {
@@ -1745,15 +1749,39 @@ const orgBase = (projectId: string, orgId?: string) =>
     orgId === undefined ? "" : `/${encodeURIComponent(orgId)}`
   }`;
 
+/**
+ * The Project's organizations, from this server. One whose shared workspace is on a machine
+ * RUNS there and says so (`machineId`); that is remembered (lib/org-machines.ts), which is what
+ * routes every organization-scoped call below without any of them naming a machine.
+ */
 export const listOrganizations = (projectId: string) =>
   apiFetch<OrganizationsResponse>(orgBase(projectId));
 
-export const createOrganization = (projectId: string, body: OrganizationCreateRequest) =>
-  apiFetch<OrganizationDetail>(orgBase(projectId), { method: "POST", body });
+/**
+ * Creates the organization in this Project. With `workspaceMachine` it is created ON that
+ * machine — its Agents and Sessions are there — and mirrored here; where it runs (and so where
+ * its CEO desk Session is, which is what opens next) is remembered before the caller navigates.
+ */
+export const createOrganization = async (projectId: string, body: OrganizationCreateRequest) => {
+  const detail = await apiFetch<OrganizationDetail>(orgBase(projectId), { method: "POST", body });
+  rememberOrgMachine(projectId, detail.orgId, detail.machineId ?? null);
+  // This answer came from here, not through the machine, so the Sessions it names (the CEO
+  // desk) are recorded by hand — the client only does it for answers a machine gave.
+  rememberSessionsIn(detail, detail.machineId ?? null);
+  return detail;
+};
 
-/** A semantic id for a display name (organization or channel), from the Project's default model with an ASCII fallback. */
-export const suggestSemanticId = (projectId: string, body: SemanticIdSuggestRequest) =>
-  apiFetch<SemanticIdSuggestResponse>(`${orgBase(projectId)}/suggest-id`, { method: "POST", body });
+/** A semantic id for a display name (organization or channel), from the default model of the server asked, with an ASCII fallback. */
+export const suggestSemanticId = (
+  projectId: string,
+  body: SemanticIdSuggestRequest,
+  machineId: string | null = null,
+) =>
+  apiFetch<SemanticIdSuggestResponse>(`${orgBase(projectId)}/suggest-id`, {
+    method: "POST",
+    body,
+    server: machineId,
+  });
 
 export const getOrganization = (projectId: string, orgId: string) =>
   apiFetch<OrganizationDetail>(orgBase(projectId, orgId));
@@ -1764,11 +1792,39 @@ export const patchOrganization = (
   body: OrganizationPatchRequest,
 ) => apiFetch<OrganizationSettings>(orgBase(projectId, orgId), { method: "PATCH", body });
 
+/**
+ * Owner only. The organization itself goes — to the Project's trash, restorable by hand; its
+ * employees' Agents and its desk and ticket Sessions are left as they are.
+ */
+export const deleteOrganization = (projectId: string, orgId: string) =>
+  apiFetch<void>(orgBase(projectId, orgId), { method: "DELETE" });
+
 export const getOrgChart = (projectId: string, orgId: string) =>
   apiFetch<OrgChartResponse>(`${orgBase(projectId, orgId)}/chart`);
 
 export const hireOrgEmployee = (projectId: string, orgId: string, body: OrgHireRequest) =>
   apiFetch<OrgEmployeeItem>(`${orgBase(projectId, orgId)}/employees`, { method: "POST", body });
+
+/** Where an employee's avatar is served from; `rev` (its `avatarRev`) makes the URL the image's own, so it is cached for good. */
+export const orgEmployeeAvatarUrl = (
+  projectId: string,
+  orgId: string,
+  agentId: string,
+  rev: string,
+): string =>
+  `${orgBase(projectId, orgId)}/employees/${encodeURIComponent(agentId)}/avatar?rev=${encodeURIComponent(rev)}`;
+
+/** Sets the employee's avatar from a data URL (png, jpeg or webp); `null` removes it. */
+export const putOrgEmployeeAvatar = (
+  projectId: string,
+  orgId: string,
+  agentId: string,
+  avatar: string | null,
+) =>
+  apiFetch<OrgEmployeeItem>(
+    `${orgBase(projectId, orgId)}/employees/${encodeURIComponent(agentId)}/avatar`,
+    { method: "PUT", body: { avatar } },
+  );
 
 export const patchOrgEmployee = (
   projectId: string,

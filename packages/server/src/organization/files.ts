@@ -32,6 +32,7 @@ import type {
 import { parseScheduleFile } from "../runtime/schedule-file.js";
 import type { ScheduleDefinition } from "../runtime/schedule-file.js";
 import { SEMANTIC_ID_PATTERN } from "../services/ids.js";
+import { employeeNameProblem } from "./names.js";
 import { DEFAULT_CHANNEL_ID, ceoAgentId, isTicketColumn } from "./paths.js";
 import { parsePrincipal, splitPrincipalList } from "./principal.js";
 import { isValidTimeZone } from "./zoned.js";
@@ -56,6 +57,12 @@ export interface OrgConfig {
   createdBy: string;
   /** The shared workspace root when it is not the organization's own `workspace/`: an absolute directory that exists. */
   workspace?: string;
+  /**
+   * The machine the shared workspace is on, by its own id; absent = the server that holds the
+   * organization. An organization RUNS where its workspace is: that machine's server opens its
+   * desks and drives its calendar, and every other server of the Project holds a mirror.
+   */
+  workspaceMachine?: string;
   /** The model desks and ticket sessions run on when the employee entry names none; absent = the Project default. */
   model?: { provider: string; modelId: string };
   /** The working language everything the organization produces is written in; absent = detected from the mission ({@link orgLanguage}). */
@@ -161,6 +168,13 @@ export function parseOrgConfig(raw: string): ParseResult<OrgConfig> {
   if (workspace !== undefined && (typeof workspace !== "string" || !path.isAbsolute(workspace))) {
     return fail("workspace must be an absolute path");
   }
+  const workspaceMachine = table["workspace_machine"];
+  if (
+    workspaceMachine !== undefined &&
+    (typeof workspaceMachine !== "string" || workspaceMachine === "")
+  ) {
+    return fail("workspace_machine must be a non-empty string");
+  }
   const language = table["language"];
   if (language !== undefined && language !== "zh" && language !== "en") {
     return fail("language must be zh or en");
@@ -194,6 +208,7 @@ export function parseOrgConfig(raw: string): ParseResult<OrgConfig> {
       budgetPauseRatio: pause as number,
       createdBy,
       ...(typeof workspace === "string" ? { workspace } : {}),
+      ...(typeof workspaceMachine === "string" ? { workspaceMachine } : {}),
       ...(model !== undefined ? { model } : {}),
       ...(language !== undefined ? { language } : {}),
     },
@@ -213,6 +228,7 @@ export function serializeOrgConfig(cfg: OrgConfig): string {
     created_by: cfg.createdBy,
     ...(cfg.language !== undefined ? { language: cfg.language } : {}),
     ...(cfg.workspace !== undefined ? { workspace: cfg.workspace } : {}),
+    ...(cfg.workspaceMachine !== undefined ? { workspace_machine: cfg.workspaceMachine } : {}),
     ...(cfg.model !== undefined
       ? { model: { provider: cfg.model.provider, model_id: cfg.model.modelId } }
       : {}),
@@ -223,6 +239,7 @@ export function serializeOrgConfig(cfg: OrgConfig): string {
     "# approval_mode: allow-all | read-only | deny-all for desk and ticket sessions.",
     "# language: zh | en — the working language of everything the organization writes (optional; detected from the mission when absent).",
     "# workspace: an absolute directory used as the shared workspace instead of ./workspace (optional).",
+    "# workspace_machine: the id of the machine that directory is on; the organization runs there (optional; absent = this server).",
     "# [model]: provider + model_id for desks and ticket sessions when the employee names none (optional).",
     stringifyToml(table),
     "",
@@ -235,6 +252,12 @@ export function serializeOrgConfig(cfg: OrgConfig): string {
 
 export interface OrgEmployee {
   agentId: string;
+  /**
+   * What the organization calls this employee: for people, in any script (./names.ts). Absent,
+   * the Agent's display name stands in, then the id. It need not be unique as written — two of
+   * a name are shown, and addressed, with their ids noted.
+   */
+  name?: string;
   title: string;
   /** null for the CEO, the root. */
   reportsTo: string | null;
@@ -260,6 +283,11 @@ function employeeFrom(item: unknown, index: number): ParseResult<OrgEmployee> {
   const title = e["title"];
   if (typeof title !== "string" || title.trim() === "") {
     return fail(`${agentId}: title must be a non-empty string`);
+  }
+  const name = e["name"];
+  if (name !== undefined) {
+    const problem = typeof name === "string" ? employeeNameProblem(name) : "name must be a string";
+    if (problem !== null) return fail(`${agentId}: ${problem}`);
   }
   const reportsTo = e["reports_to"] ?? null;
   if (reportsTo !== null && (typeof reportsTo !== "string" || reportsTo === "")) {
@@ -296,6 +324,7 @@ function employeeFrom(item: unknown, index: number): ParseResult<OrgEmployee> {
     ok: true,
     value: {
       agentId,
+      ...(typeof name === "string" ? { name: name.trim() } : {}),
       title: title.trim(),
       reportsTo: reportsTo as string | null,
       ...(typeof duties === "string" && duties.trim() !== "" ? { duties: duties.trim() } : {}),
@@ -356,6 +385,7 @@ export function serializeOrgChart(chart: OrgChart): string {
   const doc = {
     employees: chart.employees.map((e) => ({
       agent_id: e.agentId,
+      ...(e.name !== undefined ? { name: e.name } : {}),
       title: e.title,
       reports_to: e.reportsTo,
       ...(e.duties !== undefined ? { duties: e.duties } : {}),
@@ -368,6 +398,8 @@ export function serializeOrgChart(chart: OrgChart): string {
   };
   return [
     "# org_chart.yaml — the employee tree: one employee is one Agent (no Agent, no position),",
+    "# name is what people call it (any script; optional — the Agent's display name, then the id,",
+    "# stands in); it and the agent_id both work after @ in a channel.",
     "# joined by reports_to into a tree rooted at the CEO. Budgets are monthly USD caps for an",
     "# employee plus every subordinate; workspace is a sub-directory of the shared workspace",
     "# (. = all of it) or an absolute path that already exists.",
@@ -1252,24 +1284,4 @@ export function serializeChannelMessageLine(msg: OrgChannelMessage): string {
     ...(refs !== undefined && Object.keys(refs).length > 0 ? { refs } : {}),
     ...(msg.notice !== undefined ? { notice: msg.notice } : {}),
   });
-}
-
-export interface MentionToken {
-  /** `agent` / `user` when the writer disambiguated, absent for the short form. */
-  prefix?: "agent" | "user";
-  /** The bare id, or `all`. */
-  id: string;
-}
-
-/** The `@` tokens in a message: `@id`, `@agent:id`, `@user:id`, `@all`; who they resolve to is the service's call. */
-export function extractMentionTokens(text: string): MentionToken[] {
-  const out: MentionToken[] = [];
-  const re = /(^|[^A-Za-z0-9_@])@(?:(agent|user):)?([A-Za-z0-9][A-Za-z0-9_.-]*)/g;
-  for (const m of text.matchAll(re)) {
-    const prefix = m[2] as "agent" | "user" | undefined;
-    const id = m[3]!.replace(/[.-]+$/, "");
-    if (id === "") continue;
-    out.push({ ...(prefix !== undefined ? { prefix } : {}), id });
-  }
-  return out;
 }

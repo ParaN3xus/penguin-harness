@@ -78,7 +78,6 @@ import {
   TICKET_ID_PATTERN,
   defaultTicketNotify,
   detectLanguage,
-  extractMentionTokens,
   historyNote,
   orgLanguage,
   parseCalendarEvent,
@@ -115,10 +114,17 @@ import { latestSlotAt, nextSlotAfter, slotInWindow } from "../schedule-file.js";
 import type { ScheduleDefinition } from "../schedule-file.js";
 import { budgetLine, budgetRatio, computeSpend, pausedEmployees } from "./budget.js";
 import type { OrgSpend } from "./budget.js";
-import { DEFAULT_EMPLOYEE_PLUGINS, OrgRuns, OrgSessions, employeePlugins } from "./deps.js";
+import { machineApi } from "../../machines/machine-api.js";
+import { Machines } from "../../machines/service.js";
+import { DEFAULT_EMPLOYEE_PLUGINS, OrgRuns, OrgSessions, employeePlugins, runsOn } from "./deps.js";
 import type { OrgDeps } from "./deps.js";
-import { loadOrg, sharedWorkspace } from "./model.js";
+import { isMirrorPath, mirrorManifest, pullMirror, readMirrorFile } from "./mirror.js";
+import type { OrgMirrorEntry } from "./mirror.js";
+import { loadOrg, orgEmployeeNames, projectUserIds, sharedWorkspace } from "./model.js";
 import type { LoadedOrg } from "./model.js";
+import { parseAvatarDataUrl, readAvatar, writeAvatar } from "../../organization/avatars.js";
+import { employeeNameProblem, findMentions } from "../../organization/names.js";
+import type { MentionHandle } from "../../organization/names.js";
 import {
   channelArchiveChanged,
   channelCreated,
@@ -344,14 +350,47 @@ export class OrganizationService {
 
   async list(projectId: string): Promise<OrganizationSummary[]> {
     const out: OrganizationSummary[] = [];
+    /** What each machine says of the organizations it runs, asked once per machine. */
+    const told = new Map<string, Promise<Map<string, OrganizationSummary>>>();
     for (const orgId of await this.deps.store.listOrgIds(projectId)) {
       const org = await loadOrg(this.deps, projectId, orgId);
       if (org === null) continue;
       const { tickets } = await listTickets(this.deps, org);
       const spend = await computeSpend(this.deps, org, tickets);
-      out.push(this.summary(org, tickets, spend));
+      const mirrored = this.summary(org, tickets, spend);
+      const machineId = runsOn(this.deps, org.config);
+      if (machineId === null) {
+        out.push(mirrored);
+        continue;
+      }
+      // Who is running and what was spent are facts of the server the Sessions are on; the
+      // mirror has the files only, and answers alone when that machine cannot be asked.
+      if (!told.has(machineId)) told.set(machineId, this.summariesOn(projectId, machineId));
+      const live = (await told.get(machineId)!).get(orgId);
+      out.push({ ...(live ?? mirrored), machineId });
     }
     return out;
+  }
+
+  private async summariesOn(
+    projectId: string,
+    machineId: string,
+  ): Promise<Map<string, OrganizationSummary>> {
+    const found = new Map<string, OrganizationSummary>();
+    try {
+      const api = await this.deps.machines?.api(machineId);
+      if (!api) return found;
+      const res = await api.request(
+        "GET",
+        `/api/projects/${encodeURIComponent(projectId)}/organizations`,
+      );
+      if (res.status !== 200) return found;
+      const body = JSON.parse(res.text) as { organizations: OrganizationSummary[] };
+      for (const item of body.organizations) found.set(item.orgId, item);
+    } catch {
+      // The mirror answers.
+    }
+    return found;
   }
 
   private summary(
@@ -568,6 +607,8 @@ export class OrganizationService {
     projectId: string,
     req: OrganizationCreateRequest,
     userId: string,
+    /** `admin`: the caller administers this server (see createOn for what that allows). */
+    opts: { admin?: boolean } = {},
   ): Promise<OrganizationDetail> {
     const orgId = req.orgId;
     if (!SEMANTIC_ID_PATTERN.test(orgId)) {
@@ -588,6 +629,8 @@ export class OrganizationService {
     if (await this.deps.agents.exists(projectId, ceo)) {
       throw new HttpError(409, "agent_exists", `The CEO's Agent id is already taken: ${ceo}`);
     }
+    const elsewhere = runsOn(this.deps, { workspaceMachine: req.workspaceMachine });
+    if (elsewhere !== null) return this.createOn(elsewhere, projectId, req, opts.admin === true);
     const name = req.name?.trim() || orgId;
     if (req.model !== undefined) await this.validateModel(projectId, req.model);
     const workspace =
@@ -607,6 +650,9 @@ export class OrganizationService {
       budgetPauseRatio: ORG_CONFIG_DEFAULTS.budgetPauseRatio,
       createdBy: userId,
       ...(workspace !== undefined ? { workspace } : {}),
+      // Recorded when the request names this server explicitly: that is what a server holding
+      // this organization's mirror reads to know where it runs.
+      ...(req.workspaceMachine !== undefined ? { workspaceMachine: req.workspaceMachine } : {}),
       ...(req.model !== undefined ? { model: req.model } : {}),
     };
     const dir = this.deps.store.dir(projectId, orgId);
@@ -667,6 +713,161 @@ export class OrganizationService {
     });
     await this.scheduler.reconcile(projectId, orgId);
     return this.detail(projectId, orgId, userId);
+  }
+
+  /** The files a server holding this organization's mirror copies (runtime/organization/mirror.ts). */
+  async mirrorFiles(projectId: string, orgId: string): Promise<OrgMirrorEntry[]> {
+    const org = await this.requireOrg(projectId, orgId);
+    return mirrorManifest(org.dir);
+  }
+
+  async mirrorFile(projectId: string, orgId: string, rel: string): Promise<Buffer> {
+    const org = await this.requireOrg(projectId, orgId);
+    const bytes = isMirrorPath(rel) ? await readMirrorFile(org.dir, rel) : null;
+    if (bytes === null) throw new HttpError(404, "not_found", `No such file: ${rel}`);
+    return bytes;
+  }
+
+  /**
+   * The machine an organization runs on when that is not this server. Its requests belong
+   * there: a write made to the mirror would be undone by the next copy, and a read of it
+   * knows nothing of the Sessions.
+   */
+  async runsOn(projectId: string, orgId: string): Promise<string | null> {
+    const config = (await this.deps.store.readConfig(this.deps.store.dir(projectId, orgId)))
+      ?.parsed;
+    return config?.ok === true ? runsOn(this.deps, config.value) : null;
+  }
+
+  /**
+   * Creates the organization on the machine its shared workspace is on, and takes it into
+   * this Project as a mirror. The machine's own server does the creating — the CEO's Agent,
+   * its desk and the first work round are all Sessions and state over THERE — with the
+   * request as it came, so whatever it refuses (a taken id, a directory that does not exist,
+   * a Model it does not have, company mode switched off) is refused in its own words.
+   */
+  private async createOn(
+    machineId: string,
+    projectId: string,
+    req: OrganizationCreateRequest,
+    admin: boolean,
+  ): Promise<OrganizationDetail> {
+    if (req.workspace === undefined) {
+      throw badRequest("An organization on a machine needs its shared workspace named.");
+    }
+    const api = await this.deps.machines?.api(machineId);
+    if (!api) {
+      throw new HttpError(
+        409,
+        "machine_not_connected",
+        "That machine is not connected; connect it on the Machines page first.",
+      );
+    }
+    const path = `/api/projects/${encodeURIComponent(projectId)}/organizations`;
+    let answer = await api.request("POST", path, req);
+    // Company mode is a switch per server, off until someone turns it on — and the machine's
+    // own Settings page is not one a person here can open. An administrator of THIS server,
+    // where the switch is on (or this route would not exist), is who connected that machine
+    // and whom this server speaks to it as: the create turns the switch on over there and
+    // asks again. Anyone else is told where it stands.
+    if (answer.status === 404 && admin && errorCodeOf(answer.text) === "company_mode_off") {
+      const switched = await api.request("PUT", "/api/admin/settings", { companyMode: true });
+      if (switched.status >= 200 && switched.status < 300) {
+        this.deps.log?.(`[organization] company mode switched on on machine ${machineId}`);
+        answer = await api.request("POST", path, req);
+      }
+    }
+    if (answer.status !== 201) {
+      let error: { code?: string; message?: string } = {};
+      try {
+        error = (JSON.parse(answer.text) as { error?: typeof error }).error ?? {};
+      } catch {
+        // Not the API's envelope.
+      }
+      throw new HttpError(
+        answer.status >= 400 && answer.status < 500 ? (answer.status as 400) : 502,
+        error.code ?? "machine_refused",
+        error.message ?? `The machine answered ${answer.status}.`,
+      );
+    }
+    const pulled = await this.scheduler.withLock(projectId, req.orgId, () =>
+      pullMirror(this.deps, projectId, req.orgId, machineId, api),
+    );
+    const created = JSON.parse(answer.text) as OrganizationDetail;
+    if (pulled.kind !== "mirrored") {
+      // The organization exists over there; what this Project needs is a place to copy it
+      // into, or no pass would ever look for it. Its settings are enough to say where it runs.
+      const dir = this.deps.store.dir(projectId, req.orgId);
+      await this.deps.store.createLayout(dir, new Date(this.now()).toISOString());
+      await this.deps.store.writeConfig(dir, {
+        name: created.settings.name,
+        mission: created.settings.mission,
+        status: created.settings.status,
+        timezone: created.settings.timezone,
+        language: created.settings.language,
+        approvalMode: created.settings.approvalMode,
+        mentionChainLimit: created.settings.mentionChainLimit,
+        budgetWarnRatio: created.settings.budgetWarnRatio,
+        budgetPauseRatio: created.settings.budgetPauseRatio,
+        createdBy: created.settings.createdBy,
+        workspace: req.workspace,
+        workspaceMachine: machineId,
+        ...(created.settings.model !== undefined ? { model: created.settings.model } : {}),
+      });
+      this.deps.log?.(
+        `[organization] ${req.orgId} was created on ${machineId}; its first copy did not arrive (${pulled.kind}) and the next pass retries`,
+      );
+    }
+    return { ...created, machineId };
+  }
+
+  /**
+   * Deletes the organization — and ONLY the organization: its directory goes to the Project's
+   * trash (store.trash), whole and restorable, and the rows this server derived from it go
+   * with it, since a new organization under the same id must not inherit
+   * another's read cursors, calendar state or pending notices.
+   *
+   * What it had is left exactly as it is. Its employees stay Agents of the Project, with
+   * everything they learned. Its desk and ticket Sessions stay too, still marked as an
+   * organization's (`client = org`), so they do not spill into development mode's list;
+   * with the organization gone no page lists them either, which is the price of not
+   * deleting conversations along with a company.
+   *
+   * Under the organization's lock, so a pass in flight finishes first and the next one finds
+   * no directory — the same state a hand-removed directory always was.
+   */
+  async delete(projectId: string, orgId: string): Promise<void> {
+    const org = await this.requireOrg(projectId, orgId);
+    // One that runs on a machine is deleted THERE first — that is where it is driven from, and
+    // a mirror trashed alone would leave a company running that no Project lists. Gone over
+    // there already (404) is as good as deleted; a machine that cannot be asked is not.
+    const machineId = runsOn(this.deps, org.config);
+    if (machineId !== null) {
+      const api = await this.deps.machines?.api(machineId);
+      if (!api) {
+        throw new HttpError(
+          409,
+          "machine_not_connected",
+          "This organization runs on a machine that is not connected; connect it first.",
+        );
+      }
+      const answer = await api.request(
+        "DELETE",
+        `/api/projects/${encodeURIComponent(projectId)}/organizations/${encodeURIComponent(orgId)}`,
+      );
+      if (answer.status !== 204 && answer.status !== 404) {
+        throw new HttpError(
+          502,
+          "machine_refused",
+          `The machine answered ${answer.status} to the delete: ${answer.text.slice(0, 200)}`,
+        );
+      }
+    }
+    await this.scheduler.withLock(projectId, orgId, async () => {
+      await this.deps.store.trash(projectId, orgId, new Date(this.now()).toISOString());
+      this.deps.cache.deleteOrg(projectId, orgId);
+    });
+    this.deps.log?.(`[organization] ${projectId}/${orgId} deleted (moved to the trash)`);
   }
 
   async patch(
@@ -731,6 +932,7 @@ export class OrganizationService {
     const paused = pausedEmployees(this.deps, org, spend.period);
     const out: OrgEmployeeItem[] = [];
     const shared = sharedWorkspace(org);
+    const names = await orgEmployeeNames(this.deps, org);
     for (const e of org.chart.employees) {
       const exists = await this.deps.agents.exists(org.projectId, e.agentId);
       // A relative sub-directory that is not there yet is not a broken entry: it is created
@@ -751,9 +953,12 @@ export class OrganizationService {
       const own = spend.own.get(e.agentId) ?? 0;
       const cumulative = spend.cumulative.get(e.agentId) ?? 0;
       const desk = org.desks[e.agentId];
+      const avatarRev = (await readAvatar(org.dir, e.agentId))?.rev;
       out.push({
         agentId: e.agentId,
-        name: exists ? await this.deps.agents.displayName(org.projectId, e.agentId) : e.agentId,
+        name: names.get(e.agentId) ?? e.agentId,
+        ...(e.name !== undefined ? { givenName: e.name } : {}),
+        ...(avatarRev !== undefined ? { avatarRev } : {}),
         title: e.title,
         reportsTo: e.reportsTo,
         ...(e.duties !== undefined ? { duties: e.duties } : {}),
@@ -887,8 +1092,16 @@ export class OrganizationService {
           }),
         );
       }
+      // The name the organization gives this employee: said outright, else the one a new
+      // Agent was just created under (so the two start out the same).
+      const given = (req.name ?? req.newAgent?.name)?.trim();
+      if (given !== undefined && given !== "") {
+        const problem = employeeNameProblem(given);
+        if (problem !== null) throw badRequest(problem);
+      }
       const employee: OrgEmployee = {
         agentId,
+        ...(given !== undefined && given !== "" ? { name: given } : {}),
         title,
         reportsTo: req.reportsTo,
         ...(req.duties !== undefined && req.duties.trim() !== ""
@@ -931,6 +1144,41 @@ export class OrganizationService {
     return item;
   }
 
+  /** The employee's avatar image (organization/avatars.ts); 404 when it has none. */
+  async employeeAvatar(
+    projectId: string,
+    orgId: string,
+    agentId: string,
+  ): Promise<{ bytes: Buffer; mime: string; rev: string }> {
+    const org = await this.requireOrg(projectId, orgId);
+    const avatar = org.byId.has(agentId) ? await readAvatar(org.dir, agentId) : null;
+    if (avatar === null) throw new HttpError(404, "not_found", "This employee has no avatar.");
+    return avatar;
+  }
+
+  /** Sets the employee's avatar from a data URL; `null` removes it. */
+  async setEmployeeAvatar(
+    projectId: string,
+    orgId: string,
+    agentId: string,
+    avatar: string | null,
+  ): Promise<OrgEmployeeItem> {
+    return this.scheduler.withLock(projectId, orgId, async () => {
+      const org = await this.requireOrg(projectId, orgId);
+      if (!org.byId.has(agentId))
+        throw new HttpError(404, "employee_not_found", `${agentId} is not an employee.`);
+      let image: { ext: string; bytes: Buffer } | null = null;
+      if (avatar !== null) {
+        const parsed = parseAvatarDataUrl(avatar);
+        if (!parsed.ok) throw badRequest(parsed.error);
+        image = parsed;
+      }
+      await writeAvatar(org.dir, agentId, image);
+      const spend = await computeSpend(this.deps, org, (await listTickets(this.deps, org)).tickets);
+      return (await this.employeeItems(org, spend)).find((i) => i.agentId === agentId)!;
+    });
+  }
+
   async patchEmployee(
     projectId: string,
     orgId: string,
@@ -962,6 +1210,12 @@ export class OrganizationService {
       else if (req.budget !== undefined) next.budget = req.budget;
       if (req.model === null) delete next.model;
       else if (req.model !== undefined) next.model = req.model;
+      if (req.name === null || req.name?.trim() === "") delete next.name;
+      else if (req.name !== undefined) {
+        const problem = employeeNameProblem(req.name);
+        if (problem !== null) throw badRequest(problem);
+        next.name = req.name.trim();
+      }
       if (next.duties === "") delete next.duties;
       if (next.title === "") throw badRequest("title must not be empty.");
       await this.writeChart(
@@ -1865,15 +2119,7 @@ export class OrganizationService {
 
   /** The Project's people: its owner and its members, the `user:` half of the all-hands channel. */
   private projectUserIds(org: LoadedOrg): string[] {
-    const project = this.deps.projects.findById(org.projectId);
-    const out: string[] = [];
-    for (const id of [
-      ...(project ? [project.ownerUserId] : []),
-      ...this.deps.members.list(org.projectId).map((m) => m.userId),
-    ]) {
-      if (!out.includes(id)) out.push(id);
-    }
-    return out;
+    return projectUserIds(this.deps, org.projectId);
   }
 
   /** A channel's membership as principals: the all-hands channel resolves to everyone, the rest to their list. */
@@ -1996,13 +2242,11 @@ export class OrganizationService {
 
   private async channelMembers(org: LoadedOrg, cfg: ChannelConfig): Promise<OrgChannelMember[]> {
     const out: OrgChannelMember[] = [];
+    const names = await orgEmployeeNames(this.deps, org);
     for (const principal of this.channelMemberPrincipals(org, cfg)) {
       const parsed = parsePrincipal(principal);
       if (parsed?.kind === "agent") {
-        const name = (await this.deps.agents.exists(org.projectId, parsed.id))
-          ? await this.deps.agents.displayName(org.projectId, parsed.id)
-          : parsed.id;
-        out.push({ principal, name, kind: "agent" });
+        out.push({ principal, name: names.get(parsed.id) ?? parsed.id, kind: "agent" });
       } else if (parsed?.kind === "user") {
         out.push({ principal, name: parsed.id, kind: "user" });
       }
@@ -2301,28 +2545,38 @@ export class OrganizationService {
     };
   }
 
-  /** Resolves `@` tokens: employees first, then Project members; the writer disambiguates with a prefix. */
-  private resolveMentions(org: LoadedOrg, text: string): string[] {
+  /**
+   * Whom a message addresses (organization/names.ts): an employee by id or by name, a Project
+   * member by user id, `all` — an id before a name, an employee before a member of the same
+   * id — and the explicit `@agent:<id>` / `@user:<id>` for a writer who has to say which.
+   */
+  private async resolveMentions(org: LoadedOrg, text: string): Promise<string[]> {
     const users = new Set(this.projectUserIds(org));
+    const names = await orgEmployeeNames(this.deps, org);
+    // Listed in order of precedence: of two handles of one length, the first one wins.
+    const handles: MentionHandle[] = [
+      { handle: "all", principal: "all" },
+      ...org.chart.employees.map((e) => ({
+        handle: e.agentId,
+        principal: agentPrincipal(e.agentId),
+      })),
+      ...org.chart.employees.map((e) => ({
+        handle: names.get(e.agentId) ?? e.agentId,
+        principal: agentPrincipal(e.agentId),
+      })),
+      ...[...users].map((id) => ({ handle: id, principal: userPrincipal(id) })),
+    ];
     const out: string[] = [];
-    const add = (p: string): void => {
-      if (!out.includes(p)) out.push(p);
-    };
-    for (const token of extractMentionTokens(text)) {
-      if (token.id === "all" && token.prefix === undefined) {
-        add("all");
-        continue;
-      }
-      if (token.prefix === "agent") {
-        if (org.byId.has(token.id)) add(agentPrincipal(token.id));
-      } else if (token.prefix === "user") {
-        if (users.has(token.id)) add(userPrincipal(token.id));
-      } else if (org.byId.has(token.id)) {
-        add(agentPrincipal(token.id));
-      } else if (users.has(token.id)) {
-        add(userPrincipal(token.id));
-      }
-    }
+    const found = findMentions(text, handles, (kind, id) =>
+      kind === "agent"
+        ? org.byId.has(id)
+          ? agentPrincipal(id)
+          : null
+        : users.has(id)
+          ? userPrincipal(id)
+          : null,
+    );
+    for (const { principal } of found) if (!out.includes(principal)) out.push(principal);
     return out;
   }
 
@@ -2356,7 +2610,7 @@ export class OrganizationService {
       }
       const members = this.channelMemberPrincipals(org, cfg);
       if (!members.includes(sender)) throw notAMember(channelId, sender);
-      const mentions = this.resolveMentions(org, text);
+      const mentions = await this.resolveMentions(org, text);
       // `@all` is the channel's own membership, so only named principals can be outsiders.
       const outsiders = mentions.filter((m) => m !== "all" && !members.includes(m));
       if (outsiders.length > 0) {
@@ -2405,14 +2659,13 @@ export class OrganizationService {
       this.deps.cache.listBudgetStates(projectId, orgId, spend.period).map((s) => [s.agentId, s]),
     );
     const employees: OrgFinanceResponse["employees"] = [];
+    const names = await orgEmployeeNames(this.deps, org);
     for (const e of org.chart.employees) {
       const cumulative = spend.cumulative.get(e.agentId) ?? 0;
       const mark = marks.get(e.agentId);
       employees.push({
         agentId: e.agentId,
-        name: (await this.deps.agents.exists(projectId, e.agentId))
-          ? await this.deps.agents.displayName(projectId, e.agentId)
-          : e.agentId,
+        name: names.get(e.agentId) ?? e.agentId,
         title: e.title,
         reportsTo: e.reportsTo,
         own: spend.own.get(e.agentId) ?? 0,
@@ -2454,15 +2707,14 @@ export class OrganizationService {
     const { tickets } = await listTickets(this.deps, org);
     syncCaches(this.deps, org, tickets);
     const desks: OrgSessionsResponse["desks"] = [];
+    const names = await orgEmployeeNames(this.deps, org);
     for (const e of org.chart.employees) {
       const desk = org.desks[e.agentId];
       if (!desk) continue;
       const row = this.deps.sessions.findById(desk.sessionId);
       desks.push({
         agentId: e.agentId,
-        name: (await this.deps.agents.exists(projectId, e.agentId))
-          ? await this.deps.agents.displayName(projectId, e.agentId)
-          : e.agentId,
+        name: names.get(e.agentId) ?? e.agentId,
         sessionId: desk.sessionId,
         ...(row?.title ? { title: row.title } : {}),
         status: this.deps.runner.statusOf(desk.sessionId),
@@ -2703,12 +2955,18 @@ export abstract class OrgService extends Interface<
     OrganizationService,
     | "list"
     | "create"
+    | "mirrorFiles"
+    | "mirrorFile"
+    | "runsOn"
     | "detail"
+    | "delete"
     | "patch"
     | "leave"
     | "suggestId"
     | "chart"
     | "hire"
+    | "employeeAvatar"
+    | "setEmployeeAvatar"
     | "patchEmployee"
     | "desk"
     | "sessions"
@@ -2744,6 +3002,15 @@ export abstract class OrgService extends Interface<
   >
 >() {}
 
+/** The `error.code` of an API error envelope, or null for any other text. */
+function errorCodeOf(text: string): string | null {
+  try {
+    return (JSON.parse(text) as { error?: { code?: string } }).error?.code ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** The organization scheduler as the boot sequence drives it (the pass itself is internal). */
 export abstract class OrgScheduler extends Interface<
   Pick<OrganizationScheduler, "start" | "stop">
@@ -2775,6 +3042,7 @@ export class OrganizationModule {
   @Use() private readonly usage!: UsageQueries;
   @Use() private readonly errors!: Errors;
   @Use() private readonly settings!: Settings;
+  @Use() private readonly machines!: Machines;
   @Provide() orgService!: OrgService;
   @Provide() orgScheduler!: OrgScheduler;
   setup({ effect }: ClassCtx) {
@@ -2829,6 +3097,13 @@ export class OrganizationModule {
         }
       },
       companyModeEnabled: () => this.settings.getCompanyMode(),
+      machines: {
+        ownId: () => this.machines.ownId(),
+        api: async (machineId) => {
+          const target = await this.machines.proxyTarget(machineId);
+          return target === null ? null : machineApi(target.agent, target.port, target.cookie);
+        },
+      },
       now: () => this.clock.now().getTime(),
       log: (line: string) => this.log.line(line),
     };
