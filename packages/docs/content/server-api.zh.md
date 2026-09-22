@@ -178,7 +178,7 @@ listener 只绑 `127.0.0.1`，在创建转发时与平台每次启动时 bind。
 
 **页面内。** 除主题外，引导脚本按代理改写 `Set-Cookie` 的同一方式改写对 `document.cookie` 的写入，并把页面写死的完整地址（`fetch("http://localhost:3000/…")`、`new WebSocket("ws://localhost:3000")`）带回浏览器主机——覆盖 `fetch`、`XMLHttpRequest`、`WebSocket` 与 `EventSource`。
 
-**不代理：** WebSocket upgrade（dev server 的热重载通道）；以及——因 runtime shell 先于平台对 `/api/*` 执行 JSON-only 与请求体上限——被浏览站点自己的 `/api/*` 下的非 JSON 写请求。
+**WebSocket。** 浏览器主机上的 Upgrade 走隧道：runtime 把每个 upgrade 先交给平台（upgrade seam，`PlatformApi.upgrade`），浏览器认领其主机上的那些，按 fetch 的方式到达站点，把请求行与头上送（Host 与 Origin 改为站点自己的），再把两条 socket 接通。其他主机上的 upgrade 仍归终端流。App 在 `/api/*` 上的 JSON-only 规则与请求体上限不作用于浏览器主机（`/api/hmr` 除外）。
 
 ### 版本与在线更新
 

@@ -178,7 +178,7 @@ A Browser tab shows a page inside the app on a host of its own. Every page is tr
 
 **In the page.** Besides the theme, the bootstrap rewrites `document.cookie` writes the way the proxy rewrites `Set-Cookie`, and brings an address the page wrote out in full (`fetch("http://localhost:3000/…")`, `new WebSocket("ws://localhost:3000")`) back to the Browser host — in `fetch`, `XMLHttpRequest`, `WebSocket` and `EventSource`.
 
-**Not proxied:** WebSocket upgrades (a dev server's hot-reload channel), and — because the runtime shell applies its JSON-only and body-size rules to `/api/*` ahead of the platform — a browsed site's own non-JSON writes under `/api/*`.
+**WebSockets.** An Upgrade on a Browser host is tunnelled: the runtime offers every upgrade to the platform first (the upgrade seam, `PlatformApi.upgrade`), the Browser claims those on its hosts, reaches the site the way a fetch does, sends the request line and headers up with Host and Origin as the site's own, and pipes the two sockets together. Upgrades on any other host are the terminal stream's, as before. The App's JSON-only rule and body cap on `/api/*` do not apply on a Browser host (they do on `/api/hmr`).
 
 ### Version and Self-Update
 
