@@ -115,6 +115,22 @@ penguin org channel send -m "@<employee> …" [--channel <id>]   # default: defa
 penguin org finance                               # spend per employee (cumulative) and per ticket
 ```
 
+## Proposals
+
+A **proposal** is a change written for a person to read: what is changed and why, in terms of interfaces, plus one test that shows it. A person delegates it to an employee; that employee writes it and, at once, asks a colleague to build it, so the reading and the building overlap — the implementation's findings revise the text, the person comments paragraph by paragraph and sends the comments as one batch, and approval requests the merge. Work that is built but not yet approved is merged into a `dev` branch that a test team checks in batches: a finding on a merged proposal becomes a fix ticket, one on an open proposal a runtime feedback to its author and implementer.
+
+It is a plugin, off by default: install `company-proposals` on the Project (the Plugins page) for the page, its sidebar entry and the routes, and `agent-company-proposals` on the employees that hold the roles (`proposal-author`, `proposal-implementer`, `proposal-tester`). The page lists the queue with each proposal's unread events beside the selected proposal; `proposal:<n>` in a channel or a conversation renders as a capsule with the title and the unread count. Everything the employees do goes through the CLI:
+
+```text
+penguin org proposal create --author <agent_id> --brief <s>       # the delegation; the author is told in the proposals channel
+penguin org proposal publish <n> --file proposal.md                # a revision (frontmatter title + scope, then the sections)
+penguin org proposal implement <n> --agent <agent_id> [-m <note>]  # an implementation session for a colleague
+penguin org proposal ready <n> | approve <n> | reject <n> --reason <s> | merged <n>
+penguin org proposal material <n> add pr=<url>                     # the PR, an issue, a branch, a document, a ticket
+penguin org proposal feedback <n> -m <text> [--runtime]            # from the implementation, or from testing dev
+penguin org proposal comments <n> --pending | resolve <n> <comment_id> -m <text>
+```
+
 ## The pages
 
 An organization opens on its **overview**: the mission folded to one line, this period's spend against the CEO's budget, a KPI strip, and then three full-width runs — the inbox (the all-hands messages that name you or `@all`, every blocked ticket whoever it waits on, and the tickets closed this period), today's timeline, and the budget alerts. No card is a link; each carries one corner button naming the page it summarizes.

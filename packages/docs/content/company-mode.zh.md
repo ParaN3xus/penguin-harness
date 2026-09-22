@@ -115,6 +115,22 @@ penguin org channel send -m "@<employee> …" [--channel <id>]   # 缺省 defaul
 penguin org finance                               # 按员工（累计）与按工单的支出
 ```
 
+## 提案
+
+**提案**是写给人读的一份改动：改了什么、为什么，只以接口说话，再加一个能证明它的测试例。人把它委托给一名员工；该员工写它，并立刻请一位同事把它做出来，于是读与做并行——实施中的发现反过来修订正文，人逐段评论、攒成一批发回，认可即请求合并。做好但还没被认可的实施并入 `dev` 分支，由测试团队分批测试：已合并提案上的问题变成修复工单，未合并提案上的问题变成给作者与实施者的运行时反馈。
+
+它是一个缺省不启用的插件：在 Project 上装 `company-proposals`（插件页）才有提案页、侧栏入口与路由，在承担相应角色的员工上装 `agent-company-proposals`（`proposal-author`、`proposal-implementer`、`proposal-tester`）。提案页左边是带未读事件数的队列、右边是选中的提案；频道或对话里的 `proposal:<n>` 渲染为带标题与未读数的胶囊。员工的一切操作都走 CLI：
+
+```text
+penguin org proposal create --author <agent_id> --brief <s>       # 委托；作者在提案频道里被告知
+penguin org proposal publish <n> --file proposal.md                # 一次修订（frontmatter 的 title 与 scope，然后是各节）
+penguin org proposal implement <n> --agent <agent_id> [-m <note>]  # 为同事开一个实施会话
+penguin org proposal ready <n> | approve <n> | reject <n> --reason <s> | merged <n>
+penguin org proposal material <n> add pr=<url>                     # PR、issue、分支、文档、工单
+penguin org proposal feedback <n> -m <text> [--runtime]            # 来自实施，或来自对 dev 的测试
+penguin org proposal comments <n> --pending | resolve <n> <comment_id> -m <text>
+```
+
 ## 页面
 
 组织打开时落在**概览**：折成一行的使命、本期支出对照 CEO 预算、一条 KPI 带，然后是三段通栏——收件箱（全员频道里 @ 我或 `@all` 的消息、全部被阻塞的工单——无论它在等谁、以及本期内关闭的工单）、今日日程、告警。卡片本身都不是链接，而是各带一个角上的按钮，写明跳到哪一页。
