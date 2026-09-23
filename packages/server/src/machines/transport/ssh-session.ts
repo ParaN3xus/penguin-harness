@@ -44,7 +44,7 @@
  * forward it could not bind is read off its stderr.
  *
  * A HOT PUSH keeps a held session. The shell object is registered in the runtime's resource
- * registry under `machineSession:<address>` and claimed back by the next generation, the way
+ * registry under `machineSession.v2:<address>` and claimed back by the next generation, the way
  * a pty is: the ssh child, its SOCKS channels, its forwards and its relays all outlive the
  * swap. A transient session is not: it belongs to the generation that opened it.
  */
@@ -54,6 +54,7 @@ import { createHash, randomBytes } from "node:crypto";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { Interface } from "@prismshadow/penguin-core/kernel";
 import type { Resources } from "@prismshadow/penguin-core/kernel";
 import { forwardControlArgs, sessionArgs } from "../commands.js";
 import type { ForwardSpec, RemoteTarget } from "../commands.js";
@@ -92,8 +93,26 @@ export function forwardKey(spec: ForwardSpec): string {
   return `${spec.direction}:${spec.localPort}:${spec.remotePort}`;
 }
 
-/** The registry id a held session is delivered under. */
-const sessionResourceId = (address: string): string => `machineSession:${address}`;
+/**
+ * The registry group a held session is delivered under — VERSIONED, because a delivered
+ * object keeps the CODE of the generation that made it: a successor that claims it runs the
+ * predecessor's methods, whatever this file says now. The resource-interface check
+ * (hmr/platform.ts DECLARED_RESOURCES) refuses a group whose declared members the successor
+ * cannot find, never one whose members merely BEHAVE differently — so whenever this class
+ * changes in a way an old object must not keep (how forwards are carried, what a fact means),
+ * bump the suffix here and in DECLARED_RESOURCES: the successor then declares a group the
+ * predecessor did not, the predecessor's group is disposed (its sessions closed), and the
+ * successor re-holds each machine with objects of its own. One reconnect per machine, once.
+ *
+ * v2 (2026-09-22): forwards ride the session on a Windows hub too (start arguments, reopen
+ * on change); a v1 object recorded the wanted set and never asked ssh for it.
+ */
+export const SESSION_GROUP = "machineSession.v2";
+const sessionResourceId = (address: string): string => `${SESSION_GROUP}:${address}`;
+/** Registry id of the leaving build's closed shape of MachineSession — in the group, so it goes with it. */
+export const SESSION_SHAPE_ID = `${SESSION_GROUP}:shape`;
+/** MachineSession's key in the generated interface table (ifaces.json). */
+export const MACHINE_SESSION_IFACE = "@prismshadow/penguin-server#MachineSession";
 
 /**
  * Where the control socket goes: the temp directory, under a short name — a unix socket path
@@ -530,29 +549,54 @@ const sessions = new Map<string, MachineShell>();
  * one — every session then belongs to the generation that opened it, as before.
  */
 let registry: Resources | null = null;
+/** Whether the predecessor's delivered sessions may be claimed at all (hmr/platform.ts decided). */
+let adoptDelivered = true;
 
 /**
- * Hands this module the registry. Called by the machines module at setup — BEFORE it
- * re-holds anything — so a held session the previous generation delivered is claimed back
- * rather than opened again beside it.
+ * Hands this module the registry, and the platform's verdict on the predecessor's delivered
+ * sessions. Called by the machines module at setup — BEFORE it re-holds anything — so a
+ * session the previous generation delivered is claimed back rather than opened again
+ * beside it; or, when the verdict is no (the contract changed), never claimed: the platform
+ * disposes that group at its commit, and this generation opens its own.
  */
-export function attachSessionRegistry(resources: Resources | null): void {
+export function attachSessionRegistry(resources: Resources | null, adoptable = true): void {
   registry = resources;
+  adoptDelivered = adoptable;
 }
 
-/** The shape of a held session as a successor claims it — the members it will call. */
-export type HeldSession = Pick<
-  MachineShell,
-  "hold" | "held" | "run" | "session" | "close" | "setForwards" | "forwardFacts"
->;
+/**
+ * A held session as a successor claims it: the contract between two builds of this file.
+ *
+ * An INTERFACE, so the generated table (ifaces.json) carries its signatures and everything
+ * they reach, and hmr/platform.ts can compare the leaving build's closed shape of it with
+ * the booting build's before adopting anything: a member added, removed or retyped — or a
+ * type behind one — dooms the delivered group, and the machines are re-held with objects
+ * of the new code. What the shape cannot see is a change of BEHAVIOR behind an unchanged
+ * signature; that is what the version in SESSION_GROUP's name is for.
+ */
+@Interface()
+export abstract class MachineSession {
+  abstract hold(): void;
+  abstract held(): boolean;
+  abstract run(command: string, opts?: ShellRunOptions): Promise<ShellResult>;
+  abstract session(): ShellSession | null;
+  abstract close(): void;
+  abstract setForwards(specs: readonly ForwardSpec[]): Promise<void>;
+  abstract forwardFacts(): ReadonlyMap<string, ForwardFact>;
+}
+
+/** The delivered contract, by the name the declaration and the adopter use. */
+export type HeldSession = MachineSession;
 
 function shellFor(machineAddress: string, target: RemoteTarget): MachineShell {
   let shell = sessions.get(machineAddress);
   if (shell === undefined) {
-    // A predecessor's held session first: same address, same ssh child, still up.
+    // A predecessor's held session first: same address, same ssh child, still up — unless
+    // the platform judged the predecessor's contract another one.
     shell =
-      registry?.claim<MachineShell>(sessionResourceId(machineAddress)) ??
-      new MachineShell(target, machineAddress);
+      (adoptDelivered
+        ? registry?.claim<MachineShell>(sessionResourceId(machineAddress))
+        : undefined) ?? new MachineShell(target, machineAddress);
     sessions.set(machineAddress, shell);
     if (shell.held()) shell.hold(); // re-registers under THIS generation (registry ownership)
   }

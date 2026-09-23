@@ -49,6 +49,11 @@ import { TerminalManager } from "../terminal/manager.js";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import type { TerminalSession } from "../terminal/session.js";
+import {
+  MACHINE_SESSION_IFACE,
+  SESSION_GROUP,
+  SESSION_SHAPE_ID,
+} from "../machines/transport/index.js";
 import type { HeldSession } from "../machines/transport/index.js";
 import type { RemoteTerminals } from "../machines/terminal-relay.js";
 import { identityFrom } from "../terminal/identity.js";
@@ -212,7 +217,12 @@ function parkedSelf(modules: Record<string, Json>, node: string): Record<string,
 interface ParkedInterfaces extends Interfaces {
   family: string;
   terminal: MembersOf<TerminalSession>;
-  machineSession: MembersOf<HeldSession>;
+  /**
+   * Versioned in its NAME (transport/ssh-session.ts SESSION_GROUP): a delivered object runs old
+   * code. Judged by STRUCTURE too, at create(): the closed shape of MachineSession registered
+   * beside the sessions (SESSION_SHAPE_ID) must equal this build's, or the group is doomed.
+   */
+  [SESSION_GROUP]: MembersOf<HeldSession>;
   agentState: MembersOf<HandedAgentState>;
 }
 
@@ -270,8 +280,11 @@ export const DECLARED_RESOURCES: ParkedInterfaces = {
   ],
   // A held ssh session to a machine, as the successor's transport claims it back
   // (machines/transport/ssh-session.ts): commands, the SOCKS port, and the forwards it
-  // carries. Every member the adopter calls, for the same reason as `terminal`.
-  machineSession: ["hold", "held", "run", "session", "close", "setForwards", "forwardFacts"],
+  // carries. Every member the adopter calls, for the same reason as `terminal` — and the
+  // group's NAME carries a version, because a member that exists on an old object still runs
+  // the old object's code: a behavior change bumps the name, so the old group is disposed
+  // here (its sessions closed) and the machines are re-held fresh.
+  [SESSION_GROUP]: ["hold", "held", "run", "session", "close", "setForwards", "forwardFacts"],
   agentState: ["state", "shape", "stopped"],
 };
 
@@ -353,6 +366,20 @@ async function createInner(
     (agentStateShape === null || handed.shape !== agentStateShape)
   ) {
     doomedGroups.push("agentState");
+  }
+  // The delivered machine sessions, by structure too: the leaving build registered the
+  // closed shape of MachineSession beside them; equal means the objects answer the calls
+  // this build's transport makes, as this build types them. Anything else dooms the group —
+  // the sessions are closed at the commit and every machine is re-held with objects of this
+  // build. (A behavior change behind an unchanged shape is the group NAME's version to catch.)
+  const handedSessionShape = ctx.resources.claim<string | null>(SESSION_SHAPE_ID);
+  const sessionShape = closedShape(ifaceTable as unknown as IfaceTable, MACHINE_SESSION_IFACE);
+  if (
+    inherited?.[SESSION_GROUP] !== undefined &&
+    !doomedGroups.includes(SESSION_GROUP) &&
+    (sessionShape === null || handedSessionShape !== sessionShape)
+  ) {
+    doomedGroups.push(SESSION_GROUP);
   }
   const adoptable = (group: string) => !doomedGroups.includes(group);
   const takenOver = handed !== undefined && adoptable("agentState");
@@ -441,7 +468,7 @@ async function createInner(
   //
   // DELIVERED (survives the swap; the successor adopts it at load):
   //   - pty sessions        registry `terminal:*` + the terminal module's parked ids
-  //   - machine sessions    registry `machineSession:*` — the held `ssh -T -D` child, its
+  //   - machine sessions    registry `machineSession.v2:*` — the held `ssh -T -D` child, its
   //                         SOCKS channels and its port forwards; the successor's transport
   //                         claims each by address (transient sessions are closed instead)
   //   - runtime singletons  db / auth-state / channels / config / proxy / desktop —
@@ -489,6 +516,10 @@ async function createInner(
   // doc) so the NEXT App reads this build's.
   for (const group of doomedGroups) ctx.resources.disposeGroup?.(group);
   ctx.resources.register(RESOURCE_IFACES_RESOURCE_ID, DECLARED_RESOURCES);
+  // What THIS build's machine sessions look like, for the next build to compare against —
+  // in the sessions' own group, so it is disposed with them. The sessions themselves are
+  // registered by the transport as each is held.
+  ctx.resources.register(SESSION_SHAPE_ID, sessionShape);
   // The Agent state changes hands here and not a line earlier, for the reason the plugin
   // host below does: a create() that threw leaves the previous App's entry, and the runs
   // behind it, exactly as they were. The disposer is THIS App's way of stopping — it runs
