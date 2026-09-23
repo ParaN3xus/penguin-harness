@@ -19,7 +19,7 @@ A Workspace on a machine can bring that machine's ports to this server (`in`) or
 
 ## Held sessions survive a hot push
 
-The `ssh -T -D` session held to a machine used to be closed by the generation that opened it and reopened by the next — so every forward, every Browser dial and every terminal relay through it broke on every push. A held session is now delivered through the resource registry (`machineSession:<address>`), the way a pty is: the next generation claims the same ssh child by address and hands it the same wanted set. Transient sessions are still closed with their generation.
+The `ssh -T -D` session held to a machine used to be closed by the generation that opened it and reopened by the next — so every forward, every Browser dial and every terminal relay through it broke on every push. A held session is now delivered through the resource registry (`machineSession:<address>`), the way a pty is: the next generation claims the same ssh child by address and hands it the same wanted set. Transient sessions are still closed with their generation. The registry group is versioned in its name (`machineSession.v2`): a delivered object runs the code of the generation that made it, so a change in how sessions behave bumps the name, the old group is disposed on the push and every machine is re-held once with objects of the new code.
 
 ## API
 
